@@ -1,17 +1,17 @@
 import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
 import {
   autoTable,
-  createPdfDoc,
-  drawDocTitle,
   drawKeyValueBlock,
   drawSignatureBlock,
+  findPointsRecord,
   formatDeDate,
+  getLastTableY,
   pdfGrade,
   pdfPoints,
   pdfText,
-  getLastTableY,
   PDF_MARGIN,
   savePdf,
+  startPdfWithHeader,
 } from "@/lib/pdf/pdf-common";
 
 export function filterFailerRows(
@@ -26,23 +26,51 @@ export function filterFailerRows(
     });
 }
 
+/** Zweitkorrektur-Punkte für alle Durchfaller erfasst? */
+export function secondCorrectionComplete(
+  project: ExamProject,
+  rows: EnrichedStudentRow[]
+): { total: number; filled: number; ready: boolean } {
+  const failers = filterFailerRows(rows);
+  let filled = 0;
+  for (const r of failers) {
+    const rec = findPointsRecord(project, r.key);
+    if (rec?.secondCorrectionPoints != null) filled++;
+  }
+  return {
+    total: failers.length,
+    filled,
+    ready: failers.length > 0 && filled === failers.length,
+  };
+}
+
 /**
- * Zweitkorrektur / Durchfallerliste – analog Vorlage Zweitkorrektur, modernisiert.
+ * Zweitkorrektur / Durchfallerliste – mit erfassten Zweitpunkten.
  */
 export function exportFailersPdf(
   project: ExamProject,
   rows: EnrichedStudentRow[]
 ): void {
   const failers = filterFailerRows(rows);
-  const doc = createPdfDoc();
-  let y = drawDocTitle(doc, "Ergebnis der Zweitkorrektur");
+  const { ready } = secondCorrectionComplete(project, rows);
+  if (!ready) {
+    throw new Error(
+      "Bitte für alle Durchfaller die Punkte der Zweitkorrektur erfassen."
+    );
+  }
+
+  const { doc, y: y0 } = startPdfWithHeader(
+    project,
+    "Ergebnis der Zweitkorrektur"
+  );
+  let y = y0;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(60);
   doc.text(
     pdfText(
-      "Interne Prüferunterlage · Durchfaller (Note > 4,0) mit Feldern für die Zweitkorrektur."
+      "Interne Prüferunterlage · Durchfaller (Note > 4,0) mit Ergebnis der Zweitkorrektur."
     ),
     PDF_MARGIN,
     y
@@ -81,22 +109,18 @@ export function exportFailersPdf(
   );
   y += 8;
 
-  if (failers.length === 0) {
-    doc.setFont("helvetica", "normal");
-    doc.text(pdfText("Keine Durchfaller vorhanden."), PDF_MARGIN, y + 4);
-    savePdf(doc, `Zweitkorrektur_${project.name || "Pruefung"}`);
-    return;
-  }
-
-  const body = failers.map((r) => [
-    pdfText(r.student.lastName),
-    pdfText(r.student.firstName),
-    pdfText(r.key),
-    pdfPoints(r.totalPoints),
-    pdfGrade(r.finalGrade),
-    "", // Punkte Zweitkorrektur – handschriftlich
-    "", // Anmerkungen – handschriftlich
-  ]);
+  const body = failers.map((r) => {
+    const rec = findPointsRecord(project, r.key);
+    return [
+      pdfText(r.student.lastName),
+      pdfText(r.student.firstName),
+      pdfText(r.key),
+      pdfPoints(r.totalPoints),
+      pdfGrade(r.finalGrade),
+      pdfPoints(rec?.secondCorrectionPoints),
+      pdfText(rec?.secondCorrectionNotes ?? ""),
+    ];
+  });
 
   autoTable(doc, {
     startY: y,
@@ -129,7 +153,7 @@ export function exportFailersPdf(
       2: { cellWidth: 24 },
       3: { halign: "right", cellWidth: 18 },
       4: { halign: "right", cellWidth: 14 },
-      5: { cellWidth: 22 },
+      5: { halign: "right", cellWidth: 20 },
       6: { cellWidth: 36 },
     },
     alternateRowStyles: { fillColor: [252, 245, 245] },
@@ -137,7 +161,6 @@ export function exportFailersPdf(
   });
 
   let finalY = getLastTableY(doc, y + 40);
-
   finalY += 8;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);

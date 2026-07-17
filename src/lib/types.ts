@@ -88,12 +88,23 @@ export interface PointsRecord {
   /** @deprecated nicht mehr über UI */
   totalOverride?: number | null;
   gradeOverride?: number | null;
+  /**
+   * Note vor manueller Korrektur (Klausureinsicht).
+   * Wird beim ersten Setzen von gradeOverride aus der berechneten Note übernommen.
+   */
+  previousGrade?: number | null;
   comment?: string;
   source: PointsSource;
   /** Punkte pro Aufgabe (questionId) */
   byQuestion?: Record<string, number | null>;
   /** Offene manuelle Bewertungen */
   needsGrading?: string[];
+  /** Manueller Studiengang, wenn nicht aus HIS ableitbar */
+  manualProgramCode?: string | null;
+  /** Zweitkorrektur-Punkte (Durchfaller) */
+  secondCorrectionPoints?: number | null;
+  /** Anmerkungen zur Zweitkorrektur */
+  secondCorrectionNotes?: string;
 }
 
 export interface HISTemplateRow {

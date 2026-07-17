@@ -146,9 +146,15 @@ export default function GradesPage() {
               totalPoints: null,
               source: "manual",
             };
+      const calculated = editRow?.calculatedGrade ?? null;
+      const previousGrade =
+        gradeOverride != null
+          ? (base.previousGrade ?? calculated)
+          : base.previousGrade;
       const next: PointsRecord = {
         ...base,
         gradeOverride,
+        previousGrade: gradeOverride != null ? previousGrade : null,
         comment: comment.trim() || undefined,
         source: base.source === "moodle" ? "mixed" : base.source,
       };
@@ -174,6 +180,7 @@ export default function GradesPage() {
       points[idx] = {
         ...points[idx],
         gradeOverride: null,
+        previousGrade: null,
         comment: comment.trim() || undefined,
       };
       return { ...prev, points };

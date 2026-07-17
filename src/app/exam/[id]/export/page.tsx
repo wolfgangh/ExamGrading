@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -17,17 +18,8 @@ import {
   projectArchiveFilename,
   projectArchiveSummary,
 } from "@/lib/project-archive";
-import { downloadJson } from "@/lib/utils";
+import { cn, downloadJson } from "@/lib/utils";
 import { exportExamJson } from "@/lib/storage";
-import { exportGradesListPdf } from "@/lib/pdf/export-grades-pdf";
-import {
-  exportManualGradesPdf,
-  filterManualGradeRows,
-} from "@/lib/pdf/export-manual-grades-pdf";
-import {
-  exportFailersPdf,
-  filterFailerRows,
-} from "@/lib/pdf/export-failers-pdf";
 import {
   Download,
   FileJson,
@@ -35,26 +27,16 @@ import {
   FileText,
   HardDrive,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export default function ExportPage() {
+  const { id } = useParams<{ id: string }>();
   const { project, rows, stats } = useExamContext();
   const [exporting, setExporting] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const items = useMemo(
     () => (project && rows ? validateForExport(project, rows) : []),
     [project, rows]
-  );
-
-  const manualCount = useMemo(
-    () => (rows ? filterManualGradeRows(rows).length : 0),
-    [rows]
-  );
-  const failerCount = useMemo(
-    () => (rows ? filterFailerRows(rows).length : 0),
-    [rows]
   );
 
   if (!project || !stats) return null;
@@ -79,21 +61,8 @@ export default function ExportPage() {
   const doProjectBackup = () => {
     downloadJson(projectArchiveFilename(project), exportExamJson(project));
     setMessage(
-      `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}). Bitte neben den Klausur-Excel-Dateien ablegen.`
+      `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}).`
     );
-  };
-
-  const runPdf = (key: string, fn: () => void, okMsg: string) => {
-    setPdfBusy(key);
-    setMessage(null);
-    try {
-      fn();
-      setMessage(okMsg);
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "PDF-Export fehlgeschlagen");
-    } finally {
-      setPdfBusy(null);
-    }
   };
 
   return (
@@ -101,8 +70,14 @@ export default function ExportPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Export</h1>
         <p className="text-muted-foreground">
-          HIS/QIS-Noteneintrag, PDF-Listen für Akte und Unterschrift sowie
-          Projektsicherung.
+          HIS/QIS-Noteneintrag und Projektsicherung. PDF-Listen unter{" "}
+          <Link
+            href={`/exam/${id}/documents`}
+            className="font-medium text-foreground underline"
+          >
+            Dokumente
+          </Link>
+          .
         </p>
       </div>
 
@@ -137,133 +112,66 @@ export default function ExportPage() {
         </CardContent>
       </Card>
 
-      <Card className="surface-panel">
-        <CardHeader>
-          <CardTitle className="text-base">HIS/QIS Excel</CardTitle>
-          <CardDescription>
-            Noteneintragsdatei(en) für den Upload ins Campus-System
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            onClick={() => void doHisExport()}
-            disabled={exporting || hasError}
-          >
-            <FileSpreadsheet className="size-4" />
-            {exporting ? "Exportiere…" : "HIS/QIS Excel exportieren"}
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">HIS/QIS Excel</CardTitle>
+            <CardDescription>
+              Noteneintragsdatei(en) für den Upload
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              size="sm"
+              onClick={() => void doHisExport()}
+              disabled={exporting || hasError}
+            >
+              <FileSpreadsheet className="size-4" />
+              {exporting ? "Exportiere…" : "Excel exportieren"}
+            </Button>
+          </CardContent>
+        </Card>
 
-      <Card className="surface-panel">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <FileText className="size-4" />
-            PDF-Export
-          </CardTitle>
-          <CardDescription>
-            Druckbare Listen mit Kopfdaten und Unterschriftsfeldern
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
+        <Card id="sicherung" className="surface-panel scroll-mt-20">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <HardDrive className="size-4" />
+              Projektsicherung
+            </CardTitle>
+            <CardDescription>
+              JSON-Archiv für Ablage neben den Klausurdateien
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
             <Button
+              size="sm"
               type="button"
               variant="outline"
-              disabled={pdfBusy != null || rows.length === 0}
-              onClick={() =>
-                runPdf(
-                  "grades",
-                  () => exportGradesListPdf(project, rows),
-                  "Notenliste-PDF wurde heruntergeladen."
-                )
-              }
+              onClick={doProjectBackup}
             >
-              <FileText className="size-4" />
-              {pdfBusy === "grades" ? "…" : "Notenliste"}
+              <FileJson className="size-4" />
+              Projekt sichern
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pdfBusy != null || manualCount === 0}
-              onClick={() =>
-                runPdf(
-                  "manual",
-                  () => exportManualGradesPdf(project, rows),
-                  "Manuelle Notenmeldung-PDF wurde heruntergeladen."
-                )
-              }
-            >
-              <FileText className="size-4" />
-              {pdfBusy === "manual"
-                ? "…"
-                : `Manuelle Notenmeldung${manualCount ? ` (${manualCount})` : ""}`}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pdfBusy != null || failerCount === 0}
-              onClick={() =>
-                runPdf(
-                  "failers",
-                  () => exportFailersPdf(project, rows),
-                  "Zweitkorrektur-/Durchfaller-PDF wurde heruntergeladen."
-                )
-              }
-            >
-              <FileText className="size-4" />
-              {pdfBusy === "failers"
-                ? "…"
-                : `Durchfaller / Zweitkorrektur${failerCount ? ` (${failerCount})` : ""}`}
-            </Button>
-          </div>
-          <ul className="space-y-1.5 text-xs text-muted-foreground">
-            <li>
-              <strong className="text-foreground">Notenliste:</strong> alle
-              Teilnehmer inkl. No-Shows und ohne HIS; Punkte, Note,
-              Unterschriftsfelder.
-            </li>
-            <li>
-              <strong className="text-foreground">Manuelle Notenmeldung:</strong>{" "}
-              nur Sonderfälle ohne HISinOne-Anmeldung (Formular für den
-              Fachbereich).
-              {manualCount === 0 && " – derzeit keine passenden Kandidaten."}
-            </li>
-            <li>
-              <strong className="text-foreground">Zweitkorrektur:</strong>{" "}
-              Durchfaller mit leeren Feldern für Zweitkorrektur und Anmerkungen.
-              {failerCount === 0 && " – derzeit keine Durchfaller."}
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
-
-      <Card id="sicherung" className="surface-panel scroll-mt-20">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <HardDrive className="size-4" />
-            Projektsicherung
-          </CardTitle>
-          <CardDescription>
-            Vollständiges Archiv (JSON) zum Ablegen neben den
-            Klausur-Excel-Dateien. Auf der{" "}
-            <Link href="/" className="font-medium text-foreground underline">
-              Startseite
-            </Link>{" "}
-            wieder importierbar.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <Button type="button" variant="outline" onClick={doProjectBackup}>
-            <FileJson className="size-4" />
-            Projekt sichern (.json)
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Dateiname:{" "}
-            <span className="font-mono">
+            <p className="break-all font-mono text-xs text-muted-foreground">
               {projectArchiveFilename(project)}
-            </span>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="surface-panel">
+        <CardContent className="flex flex-wrap items-center gap-3 pt-4">
+          <FileText className="size-4 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            Notenliste, manuelle Notenmeldung, Zweitkorrektur und
+            Notenänderungen als PDF:
           </p>
+          <Link
+            href={`/exam/${id}/documents`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+          >
+            Zu Dokumente
+          </Link>
         </CardContent>
       </Card>
 

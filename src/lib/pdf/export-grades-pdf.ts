@@ -1,18 +1,17 @@
 import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
 import {
   autoTable,
-  createPdfDoc,
-  drawDocTitle,
   drawKeyValueBlock,
   drawSignatureBlock,
   examHeaderLines,
+  getLastTableY,
   pdfGrade,
   pdfPoints,
   pdfText,
-  getLastTableY,
   PDF_MARGIN,
   savePdf,
   shortStatus,
+  startPdfWithHeader,
 } from "@/lib/pdf/pdf-common";
 
 function sortRows(rows: EnrichedStudentRow[]): EnrichedStudentRow[] {
@@ -28,9 +27,8 @@ export function exportGradesListPdf(
   project: ExamProject,
   rows: EnrichedStudentRow[]
 ): void {
-  const doc = createPdfDoc();
-  let y = drawDocTitle(doc, "Notenliste");
-  y = drawKeyValueBlock(doc, examHeaderLines(project), y);
+  const { doc, y: y0 } = startPdfWithHeader(project, "Notenliste");
+  let y = drawKeyValueBlock(doc, examHeaderLines(project), y0);
 
   doc.setFontSize(8);
   doc.setTextColor(80);
@@ -62,13 +60,9 @@ export function exportGradesListPdf(
       ["Nachname", "Vorname", "Matrikel-Nr.", "Punkte", "Note", "Status"],
     ],
     body: data,
-    styles: {
-      font: "helvetica",
-      fontSize: 8,
-      cellPadding: 1.5,
-    },
+    styles: { font: "helvetica", fontSize: 8, cellPadding: 1.5 },
     headStyles: {
-      fillColor: [40, 60, 100],
+      fillColor: [68, 112, 153],
       textColor: 255,
       fontStyle: "bold",
     },
@@ -83,7 +77,6 @@ export function exportGradesListPdf(
   });
 
   const finalY = getLastTableY(doc, 200);
-
   let sigY = finalY + 8;
   if (sigY > 240) {
     doc.addPage();

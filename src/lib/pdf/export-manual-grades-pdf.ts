@@ -1,17 +1,17 @@
 import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
 import {
   autoTable,
-  createPdfDoc,
-  drawDocTitle,
   drawKeyValueBlock,
   drawSignatureBlock,
   formatDeDate,
+  getLastTableY,
   pdfGrade,
   pdfPoints,
   pdfText,
-  getLastTableY,
   PDF_MARGIN,
+  resolveProgramCode,
   savePdf,
+  startPdfWithHeader,
 } from "@/lib/pdf/pdf-common";
 
 /** Kandidaten ohne HIS-Anmeldung (Sonderfälle) */
@@ -32,16 +32,18 @@ export function filterManualGradeRows(
 }
 
 /**
- * Manuelle Notenmeldung – modernisierte Form analog notenmeldung.pdf
- * (Sonderfälle ohne HISinOne-Anmeldung).
+ * Manuelle Notenmeldung – Sonderfälle ohne HISinOne-Anmeldung.
  */
 export function exportManualGradesPdf(
   project: ExamProject,
   rows: EnrichedStudentRow[]
 ): void {
   const specials = filterManualGradeRows(rows);
-  const doc = createPdfDoc();
-  let y = drawDocTitle(doc, "Manuelle Notenmeldung");
+  const { doc, y: y0 } = startPdfWithHeader(
+    project,
+    "Manuelle Notenmeldung"
+  );
+  let y = y0;
 
   doc.setFont("helvetica", "italic");
   doc.setFontSize(9);
@@ -84,14 +86,17 @@ export function exportManualGradesPdf(
     return;
   }
 
-  const body = specials.map((r) => [
-    pdfText(r.student.lastName),
-    pdfText(r.student.firstName),
-    pdfText(r.key),
-    pdfPoints(r.totalPoints),
-    pdfGrade(r.finalGrade),
-    pdfText(r.programCode || "–"),
-  ]);
+  const body = specials.map((r) => {
+    const prog = resolveProgramCode(r, project);
+    return [
+      pdfText(r.student.lastName),
+      pdfText(r.student.firstName),
+      pdfText(r.key),
+      pdfPoints(r.totalPoints),
+      pdfGrade(r.finalGrade),
+      pdfText(prog || "–"),
+    ];
+  });
 
   autoTable(doc, {
     startY: y + 2,
@@ -108,7 +113,7 @@ export function exportManualGradesPdf(
     body,
     styles: { font: "helvetica", fontSize: 9, cellPadding: 2 },
     headStyles: {
-      fillColor: [70, 90, 50],
+      fillColor: [68, 112, 153],
       textColor: 255,
       fontStyle: "bold",
     },
@@ -117,7 +122,6 @@ export function exportManualGradesPdf(
   });
 
   let finalY = getLastTableY(doc, y + 40);
-
   finalY += 6;
   doc.setFontSize(9);
   doc.text(
