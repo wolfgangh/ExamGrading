@@ -18,6 +18,7 @@ import {
   pickPointsWorksheet,
   worksheetToMatrix,
 } from "@/lib/excel/workbook";
+import { fileToBase64 } from "@/lib/excel/binary";
 import { parseHisMatrix } from "@/lib/excel/parse-his";
 import { parseAttendanceMatrix } from "@/lib/excel/parse-attendance";
 import { parsePointsMatrix } from "@/lib/excel/parse-moodle-points";
@@ -101,8 +102,11 @@ export default function ImportPage() {
     at: new Date().toISOString(),
   });
 
-  const handleHisFile = async (file: File) => {
-    const wb = await loadWorkbookFromFile(file);
+  const parseHisFile = async (file: File) => {
+    const [wb, originalXlsxBase64] = await Promise.all([
+      loadWorkbookFromFile(file),
+      fileToBase64(file),
+    ]);
     const sheet =
       wb.worksheets.find((s) => /noteneintrag|his|qis/i.test(s.name)) ??
       wb.worksheets[0];
@@ -110,9 +114,19 @@ export default function ImportPage() {
     const result = parseHisMatrix(matrix, { fileName: file.name });
     const source = buildHisSourceFromParse({
       rows: result.rows,
-      meta: result.meta,
+      meta: {
+        ...result.meta,
+        sheetName: sheet.name,
+      },
       fileName: file.name,
+      originalXlsxBase64,
+      sheetName: sheet.name,
     });
+    return { result, source, sheetName: sheet.name };
+  };
+
+  const handleHisFile = async (file: File) => {
+    const { result, source } = await parseHisFile(file);
 
     const warnings = [...result.log.warnings];
     if (result.meta.examNumber) {
@@ -121,6 +135,9 @@ export default function ImportPage() {
     if (source.programCode) {
       warnings.unshift(`Studiengang: ${source.programCode}`);
     }
+    warnings.unshift(
+      "Originaldatei gespeichert – Export bleibt HisinOne-kompatibel."
+    );
 
     setPreview({
       type: "his",
@@ -163,27 +180,14 @@ export default function ImportPage() {
   };
 
   const handleHisFiles = async (files: File[]) => {
-    // nacheinander: erste Datei Preview, weitere nach Bestätigung manuell
-    // Einfach: alle sequentiell ohne Preview-Stapel – Preview nur erste,
-    // rest direkt mergen wenn eine Datei; bei mehreren die erste previewen
     if (files.length === 1) {
       await handleHisFile(files[0]);
       return;
     }
     // Mehrere Dateien: nacheinander einlesen und ohne Einzel-Preview hinzufügen
     for (const file of files) {
-      const wb = await loadWorkbookFromFile(file);
-      const sheet =
-        wb.worksheets.find((s) => /noteneintrag|his|qis/i.test(s.name)) ??
-        wb.worksheets[0];
-      const matrix = worksheetToMatrix(sheet);
-      const result = parseHisMatrix(matrix, { fileName: file.name });
+      const { result, source } = await parseHisFile(file);
       if (result.log.errors.length) continue;
-      const source = buildHisSourceFromParse({
-        rows: result.rows,
-        meta: result.meta,
-        fileName: file.name,
-      });
       setProject((prev) => {
         const students = mergeStudents(
           prev.students,
@@ -202,7 +206,13 @@ export default function ImportPage() {
           lecturers,
           students,
           importLogs: [
-            pushLog("his", file.name, result.log),
+            pushLog("his", file.name, {
+              ...result.log,
+              warnings: [
+                "Originaldatei gespeichert – Export bleibt HisinOne-kompatibel.",
+                ...result.log.warnings,
+              ],
+            }),
             ...prev.importLogs,
           ].slice(0, 30),
         };

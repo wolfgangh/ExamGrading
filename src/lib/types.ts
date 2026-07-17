@@ -114,6 +114,8 @@ export interface HISTemplateRow {
   orderIndex: number;
   /** Verweis auf HisSource.id (Multi-Studiengang) */
   sourceId?: string;
+  /** 1-basierte Excel-Zeile in der Originalvorlage */
+  sourceExcelRow?: number;
   examPlanId?: string;
   examNumber?: string;
   title?: string;
@@ -136,11 +138,18 @@ export interface HisTemplateMeta {
   semesterLabel?: string;
   examPeriod?: string;
   originalFileName?: string;
+  /** 0-basiert (Matrix) – Header-Zeile */
   headerRowIndex?: number;
   dataStartRowIndex?: number;
   format?: HisFileFormat;
   /** Original-Header für Re-Export */
   headerColumns?: string[];
+  /** 0-basierter Spaltenindex Matrikelnummer */
+  matriculationColIndex?: number;
+  /** 0-basierter Spaltenindex Note (Leistung/bewertung) */
+  leistungColIndex?: number;
+  /** Blattname der Originalvorlage */
+  sheetName?: string;
 }
 
 /** Eine HISinOne-Quelle = ein Studiengang / eine Prüfungsnummer */
@@ -152,6 +161,10 @@ export interface HisSource {
   examNumber: string;
   label: string;
   originalFileName?: string;
+  /** Original-.xlsx (Base64) für formatgetreuen HisinOne-Export */
+  originalXlsxBase64?: string;
+  /** Arbeitsblatt der Vorlage beim Import */
+  sheetName?: string;
   meta: HisTemplateMeta;
   rows: HISTemplateRow[];
 }

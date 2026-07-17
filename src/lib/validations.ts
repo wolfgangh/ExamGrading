@@ -3,6 +3,10 @@ import {
   countOpenGradingTasks,
   hasOpenGrading,
 } from "@/lib/grades/open-grading";
+import {
+  getHisSources,
+  sourcesMissingOriginalTemplate,
+} from "@/lib/his-sources";
 
 export interface ValidationItem {
   level: "error" | "warning" | "info";
@@ -20,6 +24,16 @@ export function validateForExport(
     items.push({
       level: "error",
       message: "Keine HIS-Masterliste importiert – Export unvollständig.",
+    });
+  }
+
+  const missingOriginal = sourcesMissingOriginalTemplate(project);
+  if (missingOriginal.length > 0 && getHisSources(project).length > 0) {
+    items.push({
+      level: "error",
+      message:
+        "Original-HIS-Datei fehlt für formatgetreuen HisinOne-Export – bitte HIS-Datei(en) unter Import erneut einlesen.",
+      count: missingOriginal.length,
     });
   }
 

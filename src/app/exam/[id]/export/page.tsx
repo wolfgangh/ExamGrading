@@ -57,7 +57,9 @@ export default function ExportPage() {
     setMessage(null);
     try {
       await exportHisExcel(project, rows, stats);
-      setMessage("HIS-Excel wurde heruntergeladen.");
+      setMessage(
+        "HIS-Excel (formatgetreu aus Originalvorlage) wurde heruntergeladen."
+      );
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : "Export fehlgeschlagen"
@@ -177,7 +179,9 @@ export default function ExportPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">2. HIS/QIS Excel</CardTitle>
           <CardDescription>
-            Noteneintragsdatei(en) für den Upload – erst nach Sicherung
+            Formatgetreu aus der importierten HisinOne-Vorlage – nur die
+            Notenspalte wird gesetzt. Eine Datei pro Studiengang, erst nach
+            Sicherung.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -189,6 +193,17 @@ export default function ExportPage() {
             <FileSpreadsheet className="size-4" />
             {exporting ? "Exportiere…" : "Excel exportieren"}
           </Button>
+          <p className="text-xs text-muted-foreground">
+            Die exportierte Datei entspricht der Originalstruktur (kein
+            zusätzliches Statistik-Blatt). Bei älteren Projekten HIS-Datei unter{" "}
+            <Link
+              href={`/exam/${id}/import`}
+              className="font-medium text-foreground underline"
+            >
+              Import
+            </Link>{" "}
+            erneut einlesen.
+          </p>
           {!backupOk && (
             <p className="text-xs text-amber-800 dark:text-amber-200">
               Bitte zuerst die Projektsicherung durchführen.
@@ -196,7 +211,8 @@ export default function ExportPage() {
           )}
           {hasError && backupOk && (
             <p className="text-xs text-destructive">
-              Export blockiert – siehe Validierung (z. B. offene Bewertungen).
+              Export blockiert – siehe Validierung (z. B. offene Bewertungen
+              oder fehlende Original-HIS-Datei).
             </p>
           )}
         </CardContent>

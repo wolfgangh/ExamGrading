@@ -1,280 +1,252 @@
-import { getHisSources } from "@/lib/his-sources";
-import { datedExportFilename, downloadBlob, formatGrade } from "@/lib/utils";
+import { base64ToArrayBuffer } from "@/lib/excel/binary";
+import { worksheetToMatrix } from "@/lib/excel/workbook";
+import { parseHisMatrix } from "@/lib/excel/parse-his";
+import {
+  getHisSources,
+  hasOriginalHisTemplate,
+  sourcesMissingOriginalTemplate,
+} from "@/lib/his-sources";
+import { normalizeMatriculation } from "@/lib/matching/matriculation";
+import { downloadBlob } from "@/lib/utils";
 import type {
   EnrichedStudentRow,
   ExamProject,
   ExamStatistics,
   HisSource,
 } from "@/lib/types";
+import type { Worksheet } from "exceljs";
 
-function gradeByMat(
+function gradeForMat(
   rows: EnrichedStudentRow[],
   mat: string
-): EnrichedStudentRow | undefined {
-  return rows.find((r) => r.key === mat && r.inHis);
+): { grade: number | null; isNoShow: boolean } {
+  const enriched = rows.find((r) => r.key === mat && r.inHis);
+  const isNoShow =
+    enriched?.status === "no_show" || enriched?.attended === false;
+  if (isNoShow) return { grade: null, isNoShow: true };
+  if (enriched?.finalGrade != null && Number.isFinite(enriched.finalGrade)) {
+    return { grade: enriched.finalGrade, isNoShow: false };
+  }
+  return { grade: null, isNoShow: false };
+}
+
+function resolveWorksheet(
+  wb: { worksheets: Worksheet[]; getWorksheet(name: string): Worksheet | undefined },
+  source: HisSource
+): Worksheet {
+  const preferred =
+    source.sheetName ||
+    source.meta.sheetName ||
+    "";
+  if (preferred) {
+    const byName = wb.getWorksheet(preferred);
+    if (byName) return byName;
+  }
+  const byPattern = wb.worksheets.find((s) =>
+    /noteneintrag|his|qis/i.test(s.name)
+  );
+  return byPattern ?? wb.worksheets[0];
 }
 
 /**
- * Exportiert alle HIS-Quellen als separate Dateien (QIS erwartet pro Studiengang eine Datei).
+ * Findet 1-basierte Excel-Spalte der Noten (Leistung/bewertung) und Matrikel.
  */
-export async function exportHisExcel(
-  project: ExamProject,
-  rows: EnrichedStudentRow[],
-  stats: ExamStatistics
-): Promise<void> {
-  const sources = getHisSources(project);
-  if (sources.length === 0) {
-    await exportLegacySingle(project, rows, stats);
-    return;
+function resolveGradeColumns(
+  sheet: Worksheet,
+  source: HisSource
+): {
+  headerRow: number;
+  matCol: number;
+  gradeCol: number;
+} {
+  const meta = source.meta;
+  if (
+    meta.headerRowIndex != null &&
+    meta.matriculationColIndex != null &&
+    meta.leistungColIndex != null
+  ) {
+    return {
+      headerRow: meta.headerRowIndex + 1,
+      matCol: meta.matriculationColIndex + 1,
+      gradeCol: meta.leistungColIndex + 1,
+    };
   }
 
-  for (const source of sources) {
-    await exportOneSource(project, source, rows, stats);
+  const matrix = worksheetToMatrix(sheet);
+  const parsed = parseHisMatrix(matrix, {
+    fileName: source.originalFileName,
+  });
+  if (
+    parsed.headerRowIndex == null ||
+    parsed.columnMap.matriculation == null
+  ) {
+    throw new Error(
+      `In „${source.originalFileName ?? source.label}“ keine Matrikel-Spalte gefunden.`
+    );
   }
+
+  const headers = parsed.headers.map((h) => h.toLowerCase().trim());
+  let leistungIdx = parsed.meta.leistungColIndex;
+  if (leistungIdx == null) {
+    leistungIdx = headers.findIndex(
+      (h) =>
+        h === "leistung" ||
+        h === "bewertung" ||
+        h === "note" ||
+        h.includes("bewertung")
+    );
+  }
+  if (leistungIdx == null || leistungIdx < 0) {
+    throw new Error(
+      `In „${source.originalFileName ?? source.label}“ keine Notenspalte (Leistung/bewertung) gefunden.`
+    );
+  }
+
+  return {
+    headerRow: parsed.headerRowIndex + 1,
+    matCol: parsed.columnMap.matriculation + 1,
+    gradeCol: leistungIdx + 1,
+  };
 }
 
-async function exportOneSource(
-  project: ExamProject,
-  source: HisSource,
-  rows: EnrichedStudentRow[],
-  stats: ExamStatistics
-): Promise<void> {
-  const ExcelJS = await import("exceljs");
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "ExamGrade";
-  wb.created = new Date();
-
-  const format = source.meta.format ?? "legacy";
-  const sourceRows = [...source.rows].sort(
-    (a, b) => a.orderIndex - b.orderIndex
-  );
-
-  if (format === "hisinone_v2") {
-    const ws = wb.addWorksheet("Noteneintrag");
-    const title =
-      source.meta.titleCell ||
-      `${source.examNumber} - ${project.name}`.trim();
-    ws.getCell("A1").value = title;
-
-    if (source.meta.examCheckToken) {
-      ws.getCell("A3").value = "EXAM_CHECK_TOKEN";
-      ws.getCell("B3").value = source.meta.examCheckToken;
-    }
-
-    ws.getCell("A5").value = "startHISsheet";
-
-    const headers = source.meta.headerColumns?.length
-      ? source.meta.headerColumns
-      : [
-          "Examplan.id",
-          "PrüfungsNr.",
-          "Titel",
-          "Nachname",
-          "Vorname",
-          "Matrikelnummer",
-          "Leistung",
-          "Status",
-          "Semester",
-          "Jahr",
-          "Vermerk",
-        ];
-
-    const headerRow = 6;
-    headers.forEach((h, i) => {
-      const cell = ws.getCell(headerRow, i + 1);
-      cell.value = h;
-      cell.font = { bold: true };
-    });
-
-    const col = (name: string) => {
-      const i = headers.findIndex(
-        (h) => h.toLowerCase().trim() === name.toLowerCase()
-      );
-      return i >= 0 ? i + 1 : -1;
-    };
-
-    sourceRows.forEach((his, idx) => {
-      const r = headerRow + 1 + idx;
-      const mat = his.matriculationNumber;
-      const enriched = gradeByMat(rows, mat);
-      const isNoShow =
-        enriched?.status === "no_show" || enriched?.attended === false;
-      const grade =
-        !isNoShow && enriched?.finalGrade != null
-          ? enriched.finalGrade
-          : null;
-
-      const setIf = (headerNames: string[], value: unknown) => {
-        for (const hn of headerNames) {
-          const c = col(hn);
-          if (c > 0) {
-            ws.getCell(r, c).value = value as string | number | null;
-            return;
-          }
-        }
-      };
-
-      setIf(["Examplan.id", "examplan.id"], his.examPlanId ?? "");
-      setIf(
-        ["PrüfungsNr.", "Prüfungsnr.", "PruefungsNr."],
-        his.examNumber || source.examNumber
-      );
-      setIf(["Titel", "Title"], his.title ?? project.name);
-      setIf(["Nachname", "Name"], his.lastName);
-      setIf(["Vorname"], his.firstName);
-      setIf(
-        ["Matrikelnummer"],
-        Number(mat) || mat
-      );
-      setIf(["Leistung", "bewertung", "Note"], grade);
-      setIf(["Status"], his.status ?? "");
-      setIf(["Semester"], his.semester ?? "");
-      setIf(["Jahr"], his.year ?? "");
-      setIf(["Vermerk"], his.vermerk ?? "");
-    });
+function cellMatKey(value: unknown): string {
+  if (value == null || value === "") return "";
+  let raw: string;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    raw = String(Math.trunc(value));
+  } else if (typeof value === "object" && value !== null && "result" in value) {
+    return cellMatKey((value as { result: unknown }).result);
+  } else if (typeof value === "object" && value !== null && "text" in value) {
+    raw = String((value as { text: string }).text);
   } else {
-    // Legacy-Format
-    const ws = wb.addWorksheet("Noteneintrag");
-    const title =
-      source.meta.titleCell ||
-      `${source.examNumber}  ${project.name}`.trim();
-    ws.getCell("A1").value = title;
-    ws.getCell("I1").value = "Auf Antritte OHNE Prüfungsteilnahme prüfen!!";
-    ws.getCell("A4").value = "Datum";
-    ws.getCell("C4").value = new Date().toLocaleDateString("de-DE");
-    ws.getCell("I5").value = "Anmeldungen HISin One";
-    ws.getCell("J5").value = "Antritt Prüfung";
-    ws.getCell("K5").value = "No-Show Quote";
+    raw = String(value);
+  }
+  return normalizeMatriculation(raw) ?? "";
+}
 
-    const inSource = rows.filter(
-      (r) =>
-        r.inHis &&
-        (r.hisSourceId === source.id ||
-          (!r.hisSourceId && sourcesOnlyOne(project)))
+/**
+ * Schreibt Noten in die Originalvorlage – nur die Notenspalte.
+ * Struktur, Format und übrige Zellen bleiben erhalten (HisinOne-kompatibel).
+ */
+async function exportOneSourceFromTemplate(
+  source: HisSource,
+  rows: EnrichedStudentRow[]
+): Promise<void> {
+  if (!hasOriginalHisTemplate(source) || !source.originalXlsxBase64) {
+    throw new Error(
+      `Für „${source.label}“ fehlt die Original-HIS-Datei. Bitte unter Import erneut einlesen.`
     );
-    const registered = sourceRows.length;
-    const attended = inSource.filter((r) => r.attended === true).length;
-    const noShow = inSource.filter(
-      (r) => r.status === "no_show" || r.attended === false
-    ).length;
-
-    ws.getCell("I6").value = registered;
-    ws.getCell("J6").value = attended;
-    ws.getCell("K6").value =
-      registered > 0 ? Math.round((noShow / registered) * 1000) / 1000 : null;
-
-    const lecturers = project.lecturers;
-    if (lecturers[0]) ws.getCell("A7").value = lecturers[0];
-    if (lecturers[1]) ws.getCell("C7").value = lecturers[1];
-
-    ws.getCell("A9").value = "startHISsheet";
-    ws.getCell("F9").value = "endHISsheet";
-
-    const headerRow = 10;
-    ["Nachname", "Vorname", "Matrikelnummer", "bewertung", "Antritt", "Test"].forEach(
-      (h, i) => {
-        const cell = ws.getCell(headerRow, i + 1);
-        cell.value = h;
-        cell.font = { bold: true };
-      }
-    );
-
-    sourceRows.forEach((his, idx) => {
-      const r = headerRow + 1 + idx;
-      const enriched = gradeByMat(rows, his.matriculationNumber);
-      const isNoShow =
-        enriched?.status === "no_show" || enriched?.attended === false;
-      const hasTest = enriched?.hasPoints === true;
-
-      ws.getCell(r, 1).value = his.lastName;
-      ws.getCell(r, 2).value = his.firstName;
-      ws.getCell(r, 3).value =
-        Number(his.matriculationNumber) || his.matriculationNumber;
-      if (!isNoShow && enriched?.finalGrade != null) {
-        ws.getCell(r, 4).value = enriched.finalGrade;
-      }
-      ws.getCell(r, 5).value = enriched?.attended === true ? "Ja" : "-";
-      ws.getCell(r, 6).value = hasTest ? "Ja" : "-";
-    });
   }
 
-  // Statistik-Blatt (pro Datei)
-  const wsStat = wb.addWorksheet("Statistik");
-  wsStat.getCell(1, 1).value = "Studiengang";
-  wsStat.getCell(1, 2).value = source.programCode;
-  wsStat.getCell(2, 1).value = "Prüfungsnummer";
-  wsStat.getCell(2, 2).value = source.examNumber;
-  wsStat.getCell(3, 1).value = "Anmeldungen (diese Datei)";
-  wsStat.getCell(3, 2).value = sourceRows.length;
-  wsStat.getCell(4, 1).value = "Aktives Notenszenario (Bestehen)";
-  wsStat.getCell(4, 2).value = project.gradeSchema.passThreshold;
-  wsStat.getCell(5, 1).value = "Gesamt-Anmeldungen (alle Studiengänge)";
-  wsStat.getCell(5, 2).value = stats.registered;
-  wsStat.getCell(6, 1).value = "Ø Note";
-  wsStat.getCell(6, 2).value = stats.averageGrade;
-  wsStat.getCell(7, 1).value = "Median Note";
-  wsStat.getCell(7, 2).value = stats.medianGrade;
-  wsStat.getCell(8, 1).value = "Stabw. Note";
-  wsStat.getCell(8, 2).value = stats.stdDevGrade;
-  wsStat.getCell(9, 1).value = "Bestehensquote";
-  wsStat.getCell(9, 2).value =
-    stats.passRate != null ? stats.passRate : null;
+  const ExcelJS = await import("exceljs");
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(base64ToArrayBuffer(source.originalXlsxBase64));
+
+  const sheet = resolveWorksheet(wb, source);
+  if (!sheet) {
+    throw new Error(
+      `Arbeitsblatt in „${source.originalFileName ?? source.label}“ nicht gefunden.`
+    );
+  }
+
+  const { headerRow, matCol, gradeCol } = resolveGradeColumns(sheet, source);
+
+  // Primär: bekannte Zeilen aus dem Parse
+  const byExcelRow = new Map<number, string>();
+  for (const his of source.rows) {
+    if (his.sourceExcelRow != null) {
+      const mat = normalizeMatriculation(his.matriculationNumber) ?? "";
+      if (mat) byExcelRow.set(his.sourceExcelRow, mat);
+    }
+  }
+
+  const maxRow = Math.max(sheet.rowCount, headerRow + source.rows.length + 5);
+  let updated = 0;
+
+  for (let r = headerRow + 1; r <= maxRow; r++) {
+    const firstVal = sheet.getCell(r, 1).value;
+    if (
+      typeof firstVal === "string" &&
+      /^endHISsheet$/i.test(firstVal.trim())
+    ) {
+      break;
+    }
+
+    const mat =
+      byExcelRow.get(r) ??
+      cellMatKey(sheet.getCell(r, matCol).value);
+    if (!mat) {
+      // leere Vorlagenzeilen belassen
+      continue;
+    }
+
+    const { grade, isNoShow } = gradeForMat(rows, mat);
+    const cell = sheet.getCell(r, gradeCol);
+
+    if (isNoShow || grade == null) {
+      // No-Show / keine Note: Zelle leeren (wie HisinOne-Vorlage)
+      cell.value = null;
+    } else {
+      // Numerische Note wie in Originalvorlagen (1.3, 2, …)
+      cell.value = grade;
+    }
+    updated++;
+  }
+
+  if (updated === 0) {
+    throw new Error(
+      `In „${source.originalFileName ?? source.label}“ keine Datenzeilen aktualisiert.`
+    );
+  }
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+
+  const fileName = exportFileName(source);
+  downloadBlob(fileName, blob);
+}
+
+function exportFileName(source: HisSource): string {
+  const original = source.originalFileName?.trim();
+  if (original && /\.xlsx?$/i.test(original)) {
+    // Originalname beibehalten (HisinOne-Workflow), optional Präfix entbehrlich
+    return original.replace(/[\\/:*?"<>|]+/g, "_");
+  }
   const safeCode = source.programCode || "HIS";
   const safeNum = (source.examNumber || "export")
     .replace(/[^\w\-]+/g, "_")
     .slice(0, 40);
-  downloadBlob(
-    datedExportFilename(`Noteneintrag_${safeCode}_${safeNum}`, "xlsx"),
-    blob
-  );
+  return `Noteneintrag_${safeCode}_${safeNum}.xlsx`;
 }
 
-function sourcesOnlyOne(project: ExamProject): boolean {
-  return getHisSources(project).length <= 1;
-}
-
-async function exportLegacySingle(
+/**
+ * Exportiert alle HIS-Quellen als separate Dateien – formatgetreu aus der
+ * jeweiligen Originalvorlage (nur Notenspalte wird gesetzt).
+ */
+export async function exportHisExcel(
   project: ExamProject,
   rows: EnrichedStudentRow[],
-  stats: ExamStatistics
+  stats?: ExamStatistics
 ): Promise<void> {
-  const ExcelJS = await import("exceljs");
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Noteneintrag");
-  const title = `${project.examNumber}  ${project.name}`.trim();
-  ws.getCell("A1").value = title;
-  const headerRow = 10;
-  ["Nachname", "Vorname", "Matrikelnummer", "bewertung", "Antritt", "Test"].forEach(
-    (h, i) => {
-      ws.getCell(headerRow, i + 1).value = h;
-    }
-  );
-  rows
-    .filter((r) => r.inHis)
-    .forEach((row, idx) => {
-      const r = headerRow + 1 + idx;
-      const isNoShow = row.status === "no_show" || row.attended === false;
-      ws.getCell(r, 1).value = row.student.lastName;
-      ws.getCell(r, 2).value = row.student.firstName;
-      ws.getCell(r, 3).value = Number(row.key) || row.key;
-      if (!isNoShow && row.finalGrade != null) {
-        ws.getCell(r, 4).value = row.finalGrade;
-      }
-      ws.getCell(r, 5).value = row.attended === true ? "Ja" : "-";
-      ws.getCell(r, 6).value = row.hasPoints ? "Ja" : "-";
-    });
-  const buffer = await wb.xlsx.writeBuffer();
-  downloadBlob(
-    datedExportFilename(`Noteneintrag_${project.name || "Pruefung"}`, "xlsx"),
-    new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    })
-  );
-  void formatGrade;
   void stats;
+  const sources = getHisSources(project);
+  if (sources.length === 0) {
+    throw new Error(
+      "Keine HIS-Quelle vorhanden. Bitte zuerst die HisinOne-Noteneintragsdatei(en) importieren."
+    );
+  }
+
+  const missing = sourcesMissingOriginalTemplate(project);
+  if (missing.length > 0) {
+    const labels = missing.map((s) => s.label || s.originalFileName || s.id);
+    throw new Error(
+      `Für formatgetreuen HisinOne-Export fehlt die Originaldatei bei: ${labels.join(", ")}. Bitte die HIS-Datei(en) unter Import erneut einlesen.`
+    );
+  }
+
+  for (const source of sources) {
+    await exportOneSourceFromTemplate(source, rows);
+  }
 }

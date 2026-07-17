@@ -271,6 +271,8 @@ export function parseHisMatrix(
       lastName,
       firstName,
       orderIndex: rows.length,
+      /** Matrix 0-basiert → Excel 1-basiert */
+      sourceExcelRow: r + 1,
       examPlanId:
         examPlanIdx != null
           ? cellToString(row[examPlanIdx]) || undefined
@@ -309,6 +311,8 @@ export function parseHisMatrix(
       format,
       headerColumns: headers.filter(Boolean),
       originalFileName: options?.fileName,
+      matriculationColIndex: matIdx,
+      leistungColIndex: leistungIdx,
     },
     log: {
       type: "his",

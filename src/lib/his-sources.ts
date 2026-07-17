@@ -98,6 +98,9 @@ export function buildHisSourceFromParse(input: {
   meta: HisTemplateMeta;
   fileName: string;
   sourceId?: string;
+  /** Original-.xlsx Base64 für formatgetreuen Export */
+  originalXlsxBase64?: string;
+  sheetName?: string;
 }): HisSource {
   const id = input.sourceId ?? createId("his");
   const fromFile = parseHisFileName(input.fileName);
@@ -122,13 +125,27 @@ export function buildHisSourceFromParse(input: {
     examNumber,
     label: fromFile.label || `${programCode} · ${examNumber || "HIS"}`,
     originalFileName: input.fileName,
+    originalXlsxBase64: input.originalXlsxBase64,
+    sheetName: input.sheetName ?? input.meta.sheetName,
     meta: {
       ...input.meta,
       examNumber: examNumber || input.meta.examNumber,
       originalFileName: input.fileName,
+      sheetName: input.sheetName ?? input.meta.sheetName,
     },
     rows,
   };
+}
+
+/** Quelle hat Originaldatei für HisinOne-Export */
+export function hasOriginalHisTemplate(source: HisSource): boolean {
+  return Boolean(source.originalXlsxBase64 && source.originalXlsxBase64.length > 0);
+}
+
+export function sourcesMissingOriginalTemplate(
+  project: ExamProject
+): HisSource[] {
+  return getHisSources(project).filter((s) => !hasOriginalHisTemplate(s));
 }
 
 /** Sync legacy hisRows aus hisSources (Kompatibilität) */
