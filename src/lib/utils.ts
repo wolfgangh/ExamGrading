@@ -1,0 +1,51 @@
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+/** Dateiname mit Export-Datum: YYYY-MM-DD_basis.ext */
+export function datedExportFilename(base: string, ext = "json"): string {
+  const d = new Date().toISOString().slice(0, 10);
+  const safe = base
+    .replace(/[^\w\- äöüÄÖÜß.]+/gi, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 100);
+  const cleanExt = ext.replace(/^\./, "");
+  return `${d}_${safe}.${cleanExt}`;
+}
+
+export function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function downloadJson(filename: string, data: string): void {
+  downloadBlob(
+    filename,
+    new Blob([data], { type: "application/json;charset=utf-8" })
+  );
+}
+
+export function formatGrade(grade: number | null | undefined): string {
+  if (grade == null || Number.isNaN(grade)) return "–";
+  return grade.toFixed(1).replace(".", ",");
+}
+
+export function formatPoints(points: number | null | undefined): string {
+  if (points == null || Number.isNaN(points)) return "–";
+  if (Number.isInteger(points)) return String(points);
+  return points.toFixed(1).replace(".", ",");
+}
+
+export function formatPercent(ratio: number | null | undefined): string {
+  if (ratio == null || Number.isNaN(ratio)) return "–";
+  return `${(ratio * 100).toFixed(1).replace(".", ",")}\u00a0%`;
+}
