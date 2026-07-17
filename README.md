@@ -42,4 +42,18 @@ npm run build
 npm start
 ```
 
-Deploy auf Vercel: Repository verbinden, Framework Next.js – keine Umgebungsvariablen nötig.
+Deploy auf Vercel: Repository verbinden, Framework Next.js.
+
+### App-Passwort
+
+Die App ist client-seitig passwortgeschützt (sessionStorage, gilt pro Browser-Tab).
+
+| Variable | Bedeutung |
+|----------|-----------|
+| `NEXT_PUBLIC_APP_PASSWORD` | Zugangspasswort (Build-Zeit) |
+
+- **Lokal:** `.env.local` anlegen (Vorlage: `.env.example`), dann `npm run dev` neu starten.
+- **Vercel:** Settings → Environment Variables → `NEXT_PUBLIC_APP_PASSWORD` setzen und neu deployen.
+- **Fallback** (nur wenn Env fehlt): `oth-regensburg` – in Produktion bitte überschreiben.
+
+Hinweis: Das Passwort liegt im Client-Bundle und ist **kein** serverseitiger Geheimnisschutz.

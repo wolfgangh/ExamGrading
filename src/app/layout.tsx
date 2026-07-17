@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Source_Sans_3, Source_Serif_4 } from "next/font/google";
+import { AuthGate } from "@/components/auth/auth-gate";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { APPEARANCE_STORAGE_KEY } from "@/lib/preferences";
@@ -62,7 +63,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen antialiased">
         <ThemeProvider>
-          <TooltipProvider delay={300}>{children}</TooltipProvider>
+          <TooltipProvider delay={300}>
+            <AuthGate>{children}</AuthGate>
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>
