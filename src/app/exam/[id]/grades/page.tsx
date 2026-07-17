@@ -14,7 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,7 +30,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatGrade, formatPoints, formatStat } from "@/lib/utils";
+import {
+  cn,
+  formatGrade,
+  formatPercent,
+  formatPoints,
+  formatStat,
+} from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -49,7 +57,10 @@ import {
   GradeBucketChart,
   GradeDistributionChart,
 } from "@/components/charts/grade-distribution-chart";
-import { formatPercent } from "@/lib/utils";
+import {
+  hasOpenGrading,
+  openGradingSummary,
+} from "@/lib/grades/open-grading";
 import {
   Table,
   TableBody,
@@ -58,7 +69,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ListChecks } from "lucide-react";
+
 export default function GradesPage() {
+  const { id } = useParams<{ id: string }>();
   const { project, setProject, rows, stats } = useExamContext();
   const [editKey, setEditKey] = useState<string | null>(null);
   const [gradeValue, setGradeValue] = useState<string>("");
@@ -108,6 +122,8 @@ export default function GradesPage() {
         : Number(borderlineFilter);
 
   if (!project) return null;
+
+  const gradingLocked = hasOpenGrading(project);
 
   const openEdit = (key: string) => {
     const row = rows.find((r) => r.key === key);
@@ -200,6 +216,28 @@ export default function GradesPage() {
         </p>
       </div>
 
+      {gradingLocked && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
+        >
+          <ListChecks className="mt-0.5 size-5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Notenschlüssel gesperrt</p>
+            <p className="mt-0.5 opacity-95">
+              {openGradingSummary(project)}. Szenario-Wechsel und Export erst
+              nach vollständiger Bewertung.
+            </p>
+          </div>
+          <Link
+            href={`/exam/${id}/detail-points`}
+            className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+          >
+            Zu Detailpunkten
+          </Link>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Szenario:</span>
         {scenarios.map((sc) => (
@@ -208,6 +246,12 @@ export default function GradesPage() {
             size="sm"
             variant={
               sc.id === project.activeScenarioId ? "default" : "outline"
+            }
+            disabled={gradingLocked}
+            title={
+              gradingLocked
+                ? "Zuerst alle Aufgaben bewerten"
+                : undefined
             }
             onClick={() =>
               setProject((prev) => withActiveScenario(prev, sc.id))
@@ -378,12 +422,27 @@ export default function GradesPage() {
         >
           Durchfaller-Analyse (intern)
         </Button>
-        <div className="ml-auto flex gap-3 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <span className="size-3 rounded bg-amber-200" /> Grenzfall
+        <div className="ml-auto flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="size-3 shrink-0 rounded border border-amber-400/60 bg-amber-50 dark:border-yellow-500/50 dark:bg-yellow-950"
+              aria-hidden
+            />
+            Grenzfall
           </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="size-3 rounded bg-rose-200" /> Durchfaller
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="size-3 shrink-0 rounded border border-rose-300/70 bg-rose-100 dark:border-rose-500/50 dark:bg-rose-950"
+              aria-hidden
+            />
+            Durchfaller
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="size-3 shrink-0 rounded border border-orange-300/70 bg-orange-50 dark:border-orange-500/50 dark:bg-orange-950"
+              aria-hidden
+            />
+            No-Show
           </span>
         </div>
       </div>

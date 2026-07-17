@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useExamContext } from "@/components/exam/exam-context";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -44,9 +46,13 @@ import {
   canAccessProtectedExport,
   isBackupStale,
 } from "@/lib/backup-status";
-import { formatGrade, formatPoints } from "@/lib/utils";
+import {
+  hasOpenGrading,
+  openGradingSummary,
+} from "@/lib/grades/open-grading";
+import { cn, formatGrade, formatPoints } from "@/lib/utils";
 import type { PointsRecord } from "@/lib/types";
-import { FileText, HardDrive, ShieldAlert } from "lucide-react";
+import { FileText, HardDrive, ListChecks, ShieldAlert } from "lucide-react";
 
 function upsertPoints(
   points: PointsRecord[],
@@ -75,6 +81,7 @@ function upsertPoints(
 }
 
 export default function DocumentsPage() {
+  const { id } = useParams<{ id: string }>();
   const { project, setProject, rows } = useExamContext();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,8 +111,16 @@ export default function DocumentsPage() {
 
   const backupOk = canAccessProtectedExport(project);
   const backupStale = isBackupStale(project);
+  const gradingLocked = hasOpenGrading(project);
+  const pdfAllowed = backupOk && !gradingLocked;
 
   const run = (key: string, fn: () => void, ok: string) => {
+    if (gradingLocked) {
+      setError(
+        `PDF-Export gesperrt: ${openGradingSummary(project)}. Bitte zuerst alle Aufgaben bewerten.`
+      );
+      return;
+    }
     if (!backupOk) {
       setError(
         "Bitte zuerst die JSON-Projektsicherung durchführen (Export → Projekt sichern)."
@@ -147,7 +162,29 @@ export default function DocumentsPage() {
         </p>
       </div>
 
-      {backupStale && (
+      {gradingLocked && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
+        >
+          <ListChecks className="mt-0.5 size-5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">PDF-Export gesperrt</p>
+            <p className="mt-0.5 opacity-95">
+              {openGradingSummary(project)}. Notenlisten und PDFs erst nach
+              vollständiger Bewertung aller Aufgaben.
+            </p>
+          </div>
+          <Link
+            href={`/exam/${id}/detail-points`}
+            className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+          >
+            Zu Detailpunkten
+          </Link>
+        </div>
+      )}
+
+      {backupStale && !gradingLocked && (
         <div
           role="alert"
           className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
@@ -202,7 +239,7 @@ export default function DocumentsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={busy != null || rows.length === 0 || !backupOk}
+              disabled={busy != null || rows.length === 0 || !pdfAllowed}
               onClick={() =>
                 run(
                   "grades",
@@ -294,7 +331,7 @@ export default function DocumentsPage() {
               size="sm"
               variant="outline"
               disabled={
-                busy != null || manualRows.length === 0 || !backupOk
+                busy != null || manualRows.length === 0 || !pdfAllowed
               }
               onClick={() =>
                 run(
@@ -332,7 +369,9 @@ export default function DocumentsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={busy != null || !scStatus.ready || !backupOk}
+              disabled={
+                busy != null || !scStatus.ready || !pdfAllowed
+              }
               onClick={() =>
                 run(
                   "failers",
@@ -457,7 +496,7 @@ export default function DocumentsPage() {
               size="sm"
               variant="outline"
               disabled={
-                busy != null || changeRows.length === 0 || !backupOk
+                busy != null || changeRows.length === 0 || !pdfAllowed
               }
               onClick={() =>
                 run(

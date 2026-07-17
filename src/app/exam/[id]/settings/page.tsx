@@ -35,12 +35,18 @@ import { Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { rebuildScenariosForMaxPoints } from "@/lib/grades/scenarios";
+import {
+  hasOpenGrading,
+  openGradingSummary,
+} from "@/lib/grades/open-grading";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>();
   const { project, setProject } = useExamContext();
   if (!project) return null;
+
+  const gradingLocked = hasOpenGrading(project);
 
   const updateMeta = <K extends keyof typeof project>(
     key: K,
@@ -233,6 +239,12 @@ export default function SettingsPage() {
             Szenarien 45 / 40 / frei – Vergleich und aktives Szenario unter
             Notenszenarien. Aktive Bestehensgrenze:{" "}
             {project.gradeSchema.passThreshold} Punkte.
+            {gradingLocked && (
+              <>
+                {" "}
+                Notenschlüssel derzeit gesperrt: {openGradingSummary(project)}.
+              </>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

@@ -1,4 +1,8 @@
 import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
+import {
+  countOpenGradingTasks,
+  hasOpenGrading,
+} from "@/lib/grades/open-grading";
 
 export interface ValidationItem {
   level: "error" | "warning" | "info";
@@ -16,6 +20,15 @@ export function validateForExport(
     items.push({
       level: "error",
       message: "Keine HIS-Masterliste importiert – Export unvollständig.",
+    });
+  }
+
+  if (hasOpenGrading(project)) {
+    const { people, tasks } = countOpenGradingTasks(project);
+    items.push({
+      level: "error",
+      message: `Offene Aufgaben „Bewertung notwendig“ (${people} Person(en), ${tasks} Aufgabe(n)) – Export und PDF gesperrt, bis alle bewertet sind.`,
+      count: tasks,
     });
   }
 

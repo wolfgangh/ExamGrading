@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import {
   ensureScenarios,
@@ -12,8 +14,12 @@ import {
 } from "@/lib/grades/scenarios";
 import { buildEnrichedRows } from "@/lib/matching/match";
 import { computeStatistics } from "@/lib/grades/statistics";
+import {
+  hasOpenGrading,
+  openGradingSummary,
+} from "@/lib/grades/open-grading";
 import { formatPercent } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -32,8 +38,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, formatGrade, formatStat } from "@/lib/utils";
-import { Check } from "lucide-react";
+import { Check, ListChecks } from "lucide-react";
 import { computeScenarioImpact } from "@/lib/grades/scenario-impact";
+import { ScenarioImpactPanel } from "@/components/grades/scenario-impact-panel";
 import {
   Select,
   SelectContent,
@@ -44,6 +51,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 
 export default function ScenariosPage() {
+  const { id } = useParams<{ id: string }>();
   const { project, setProject } = useExamContext();
   const [editPass, setEditPass] = useState<string | null>(null);
   const [compareA, setCompareA] = useState<string | null>(null);
@@ -63,6 +71,7 @@ export default function ScenariosPage() {
     [project]
   );
   const s3Enabled = editable?.enabled === true;
+  const gradingLocked = project ? hasOpenGrading(project) : false;
 
   const comparison = useMemo(() => {
     if (!project) return [];
@@ -103,7 +112,7 @@ export default function ScenariosPage() {
     : [];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <div className="max-w-2xl">
         <h1 className="text-2xl font-semibold tracking-tight">
           Notenszenarien
@@ -114,7 +123,29 @@ export default function ScenariosPage() {
         </p>
       </div>
 
-      {/* Aktive Schwellen + Szenario-Wahl kompakt */}
+      {gradingLocked && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
+        >
+          <ListChecks className="mt-0.5 size-5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Notenschlüssel gesperrt</p>
+            <p className="mt-0.5 opacity-95">
+              {openGradingSummary(project)}. Bitte zuerst alle Aufgaben in den
+              Detailpunkten bewerten.
+            </p>
+          </div>
+          <Link
+            href={`/exam/${id}/detail-points`}
+            className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+          >
+            Zu Detailpunkten
+          </Link>
+        </div>
+      )}
+
+      {/* Aktive Schwellen + Szenario-Wahl */}
       <Card className="surface-panel">
         <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1 space-y-2">
@@ -151,6 +182,7 @@ export default function ScenariosPage() {
                     type="button"
                     size="sm"
                     variant={isActive ? "default" : "outline"}
+                    disabled={gradingLocked}
                     onClick={() =>
                       setProject((prev) => withActiveScenario(prev, sc.id))
                     }
@@ -167,6 +199,7 @@ export default function ScenariosPage() {
               <div className="flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-1.5">
                 <Switch
                   checked={s3Enabled}
+                  disabled={gradingLocked}
                   onCheckedChange={(on) =>
                     setProject((prev) =>
                       setEditableScenarioEnabled(prev, on === true)
@@ -184,6 +217,7 @@ export default function ScenariosPage() {
                       step="0.5"
                       className="h-8 w-20"
                       title="Bestehensgrenze"
+                      disabled={gradingLocked}
                       value={editPass ?? editable.passThreshold}
                       onChange={(e) => setEditPass(e.target.value)}
                     />
@@ -192,6 +226,7 @@ export default function ScenariosPage() {
                       type="button"
                       size="sm"
                       variant="secondary"
+                      disabled={gradingLocked}
                       onClick={() => {
                         const p = Number(
                           (editPass ?? editable.passThreshold)
@@ -213,195 +248,193 @@ export default function ScenariosPage() {
         </CardContent>
       </Card>
 
-      <Card className="surface-panel">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Direktvergleich</CardTitle>
-          <CardDescription>
-            Max. {project.gradeSchema.maxPoints} Punkte
-            {scenarios.length < 2 && " · Szenario 3 aktivieren für mehr Vergleiche"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-40">Kennzahl</TableHead>
-                {comparison.map(({ scenario }) => (
-                  <TableHead
-                    key={scenario.id}
-                    className={cn(
-                      "whitespace-nowrap",
-                      scenario.id === activeId && "bg-primary/10 font-semibold"
-                    )}
-                  >
-                    {scenario.name.replace(" (Standard)", "").replace(" (frei)", "")}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell>Bestehensgrenze</TableCell>
-                {comparison.map(({ scenario }) => (
-                  <TableCell
-                    key={scenario.id}
-                    className={cn(
-                      "tabular-nums",
-                      scenario.id === activeId && "bg-primary/5"
-                    )}
-                  >
-                    {scenario.passThreshold}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>Ø Note</TableCell>
-                {comparison.map(({ scenario, stats }) => (
-                  <TableCell
-                    key={scenario.id}
-                    className={cn(
-                      "tabular-nums",
-                      scenario.id === activeId && "bg-primary/5"
-                    )}
-                  >
-                    {formatGrade(stats.averageGrade)}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>Median Note</TableCell>
-                {comparison.map(({ scenario, stats }) => (
-                  <TableCell
-                    key={scenario.id}
-                    className={cn(
-                      "tabular-nums",
-                      scenario.id === activeId && "bg-primary/5"
-                    )}
-                  >
-                    {formatGrade(stats.medianGrade)}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>Stabw. Note</TableCell>
-                {comparison.map(({ scenario, stats }) => (
-                  <TableCell
-                    key={scenario.id}
-                    className={cn(
-                      "tabular-nums",
-                      scenario.id === activeId && "bg-primary/5"
-                    )}
-                  >
-                    {formatStat(stats.stdDevGrade, 2)}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>Bestehensquote</TableCell>
-                {comparison.map(({ scenario, stats }) => (
-                  <TableCell
-                    key={scenario.id}
-                    className={cn(
-                      "tabular-nums",
-                      scenario.id === activeId && "bg-primary/5"
-                    )}
-                  >
-                    {formatPercent(stats.passRate)}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>Durchfaller</TableCell>
-                {comparison.map(({ scenario, stats }) => (
-                  <TableCell
-                    key={scenario.id}
-                    className={cn(
-                      "tabular-nums font-medium text-rose-700 dark:text-rose-300",
-                      scenario.id === activeId && "bg-primary/5"
-                    )}
-                  >
-                    {stats.failCount}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>Grenzfälle (≤1 Pkt.)</TableCell>
-                {comparison.map(({ scenario, stats }) => (
-                  <TableCell
-                    key={scenario.id}
-                    className={cn(
-                      "tabular-nums text-amber-800 dark:text-amber-200",
-                      scenario.id === activeId && "bg-primary/5"
-                    )}
-                  >
-                    {stats.borderlineCount}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {impact && scenarios.length >= 2 && (
-        <Card className="surface-panel">
+      {/* Vergleich links | Impact rechts */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
+        <Card className="surface-panel min-w-0">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              Wer profitiert / wer verliert?
-            </CardTitle>
+            <CardTitle className="text-base">Direktvergleich</CardTitle>
             <CardDescription>
-              Vergleich zweier Szenarien (Note kleiner = besser). Nur intern.
+              Max. {project.gradeSchema.maxPoints} Punkte
+              {scenarios.length < 2 &&
+                " · Szenario 3 aktivieren für mehr Vergleiche"}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="grid gap-1">
-                <Label className="text-xs">Von</Label>
-                <Select
-                  value={idA}
-                  onValueChange={(v) => v && setCompareA(v)}
-                >
-                  <SelectTrigger className="w-44">
-                    <SelectValue>
-                      {scenarios.find((s) => s.id === idA)?.name.replace(
-                        " (Standard)",
-                        ""
+          <CardContent className="overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-36">Kennzahl</TableHead>
+                  {comparison.map(({ scenario }) => (
+                    <TableHead
+                      key={scenario.id}
+                      className={cn(
+                        "whitespace-nowrap",
+                        scenario.id === activeId &&
+                          "bg-primary/10 font-semibold"
                       )}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {scenarios.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name.replace(" (Standard)", "")}
-                      </SelectItem>
+                    >
+                      {scenario.name
+                        .replace(" (Standard)", "")
+                        .replace(" (frei)", "")}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(
+                  [
+                    [
+                      "Bestehensgrenze",
+                      (sc: (typeof comparison)[0]) =>
+                        String(sc.scenario.passThreshold),
+                    ],
+                    [
+                      "Ø Note",
+                      (sc: (typeof comparison)[0]) =>
+                        formatGrade(sc.stats.averageGrade),
+                    ],
+                    [
+                      "Median",
+                      (sc: (typeof comparison)[0]) =>
+                        formatGrade(sc.stats.medianGrade),
+                    ],
+                    [
+                      "Stabw.",
+                      (sc: (typeof comparison)[0]) =>
+                        formatStat(sc.stats.stdDevGrade, 2),
+                    ],
+                    [
+                      "Bestehen %",
+                      (sc: (typeof comparison)[0]) =>
+                        formatPercent(sc.stats.passRate),
+                    ],
+                    [
+                      "Durchfaller",
+                      (sc: (typeof comparison)[0]) =>
+                        String(sc.stats.failCount),
+                    ],
+                    [
+                      "Grenzfälle",
+                      (sc: (typeof comparison)[0]) =>
+                        String(sc.stats.borderlineCount),
+                    ],
+                  ] as const
+                ).map(([label, val]) => (
+                  <TableRow key={label}>
+                    <TableCell className="text-sm">{label}</TableCell>
+                    {comparison.map((col) => (
+                      <TableCell
+                        key={col.scenario.id}
+                        className={cn(
+                          "tabular-nums text-sm",
+                          col.scenario.id === activeId && "bg-primary/5",
+                          label === "Durchfaller" &&
+                            "font-medium text-rose-700 dark:text-rose-300",
+                          label === "Grenzfälle" &&
+                            "text-amber-800 dark:text-amber-200"
+                        )}
+                      >
+                        {val(col)}
+                      </TableCell>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {impact && scenarios.length >= 2 ? (
+          <Card className="surface-panel min-w-0">
+            <CardHeader className="pb-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <CardTitle className="text-base">
+                    Auswirkung des Szenario-Wechsels
+                  </CardTitle>
+                  <CardDescription>
+                    Grafik + Kennzahlen (intern)
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Von</Label>
+                    <Select
+                      value={idA}
+                      onValueChange={(v) => v && setCompareA(v)}
+                    >
+                      <SelectTrigger className="h-8 w-36">
+                        <SelectValue>
+                          {scenarios
+                            .find((s) => s.id === idA)
+                            ?.name.replace(" (Standard)", "")
+                            .replace(" (frei)", "")}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {scenarios.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name
+                              .replace(" (Standard)", "")
+                              .replace(" (frei)", "")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Nach</Label>
+                    <Select
+                      value={idB}
+                      onValueChange={(v) => v && setCompareB(v)}
+                    >
+                      <SelectTrigger className="h-8 w-36">
+                        <SelectValue>
+                          {scenarios
+                            .find((s) => s.id === idB)
+                            ?.name.replace(" (Standard)", "")
+                            .replace(" (frei)", "")}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {scenarios.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name
+                              .replace(" (Standard)", "")
+                              .replace(" (frei)", "")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
-              <div className="grid gap-1">
-                <Label className="text-xs">Nach</Label>
-                <Select
-                  value={idB}
-                  onValueChange={(v) => v && setCompareB(v)}
-                >
-                  <SelectTrigger className="w-44">
-                    <SelectValue>
-                      {scenarios.find((s) => s.id === idB)?.name.replace(
-                        " (Standard)",
-                        ""
-                      )}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {scenarios.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name.replace(" (Standard)", "")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <label className="flex items-center gap-2 pb-2 text-sm">
+            </CardHeader>
+            <CardContent>
+              <ScenarioImpactPanel impact={impact} />
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="surface-panel min-w-0">
+            <CardContent className="pt-6 text-sm text-muted-foreground">
+              Mindestens zwei Szenarien aktivieren, um den grafischen
+              Wirkungsvergleich zu sehen.
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {impact && scenarios.length >= 2 && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
+          <Card className="surface-panel h-fit min-w-0">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Filter</CardTitle>
+              <CardDescription>
+                Personenebene (Note kleiner = besser)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   className="size-4"
@@ -410,89 +443,141 @@ export default function ScenariosPage() {
                 />
                 nur Änderungen
               </label>
-            </div>
+              <div className="space-y-1.5 rounded-lg border bg-muted/30 px-2.5 py-2 text-xs">
+                <p>
+                  Angezeigt:{" "}
+                  <strong className="tabular-nums">{impactRows.length}</strong>
+                </p>
+                <p className="text-emerald-700 dark:text-emerald-300">
+                  besser: {impact.improved}
+                </p>
+                <p className="text-rose-700 dark:text-rose-300">
+                  schlechter: {impact.worsened}
+                </p>
+                <p className="text-muted-foreground">
+                  unverändert: {impact.unchanged}
+                </p>
+                <p className="text-emerald-700 dark:text-emerald-300">
+                  neu bestanden: {impact.newlyPassed}
+                </p>
+                <p className="text-rose-700 dark:text-rose-300">
+                  neu durchgefallen: {impact.newlyFailed}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
-            <div className="flex flex-wrap gap-2 text-sm">
-              <span className="rounded-lg bg-emerald-100 px-2 py-1 dark:bg-emerald-950">
-                besser: <strong>{impact.improved}</strong>
-              </span>
-              <span className="rounded-lg bg-rose-100 px-2 py-1 dark:bg-rose-950">
-                schlechter: <strong>{impact.worsened}</strong>
-              </span>
-              <span className="rounded-lg border px-2 py-1">
-                unverändert: <strong>{impact.unchanged}</strong>
-              </span>
-              <span className="rounded-lg bg-emerald-50 px-2 py-1 dark:bg-emerald-950/40">
-                neu bestanden: <strong>{impact.newlyPassed}</strong>
-              </span>
-              <span className="rounded-lg bg-rose-50 px-2 py-1 dark:bg-rose-950/40">
-                neu durchgefallen: <strong>{impact.newlyFailed}</strong>
-              </span>
-            </div>
-
-            <div className="max-h-72 overflow-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Matr.</TableHead>
-                    <TableHead>Note A</TableHead>
-                    <TableHead>Note B</TableHead>
-                    <TableHead>Δ</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {impactRows.length === 0 ? (
+          <Card className="surface-panel min-w-0">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Detail: Wer profitiert / wer verliert?
+              </CardTitle>
+              <CardDescription>
+                {scenarios
+                  .find((s) => s.id === idA)
+                  ?.name.replace(" (Standard)", "")
+                  .replace(" (frei)", "")}{" "}
+                →{" "}
+                {scenarios
+                  .find((s) => s.id === idB)
+                  ?.name.replace(" (Standard)", "")
+                  .replace(" (frei)", "")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-96 overflow-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell
-                        colSpan={5}
-                        className="text-center text-muted-foreground"
-                      >
-                        Keine Änderungen zwischen den Szenarien.
-                      </TableCell>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Matr.</TableHead>
+                      <TableHead>Note A</TableHead>
+                      <TableHead>Note B</TableHead>
+                      <TableHead>Δ</TableHead>
+                      <TableHead className="hidden sm:table-cell">
+                        Status
+                      </TableHead>
                     </TableRow>
-                  ) : (
-                    impactRows.map((r) => (
-                      <TableRow
-                        key={r.key}
-                        className={cn(
-                          r.delta != null &&
-                            r.delta < 0 &&
-                            "bg-emerald-50/80 dark:bg-emerald-950/20",
-                          r.delta != null &&
-                            r.delta > 0 &&
-                            "bg-rose-50/80 dark:bg-rose-950/20"
-                        )}
-                      >
-                        <TableCell>
-                          {r.lastName}, {r.firstName}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {r.key}
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {formatGrade(r.gradeA)}
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {formatGrade(r.gradeB)}
-                        </TableCell>
-                        <TableCell className="tabular-nums font-medium">
-                          {r.delta == null
-                            ? "–"
-                            : r.delta > 0
-                              ? `+${r.delta.toFixed(1)}`
-                              : r.delta.toFixed(1)}
-                          {r.newlyPassed && " ✓"}
-                          {r.newlyFailed && " ✗"}
+                  </TableHeader>
+                  <TableBody>
+                    {impactRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={6}
+                          className="text-center text-muted-foreground"
+                        >
+                          Keine Änderungen zwischen den Szenarien.
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                    ) : (
+                      impactRows.map((r) => (
+                        <TableRow
+                          key={r.key}
+                          className={cn(
+                            r.delta != null &&
+                              r.delta < 0 &&
+                              "bg-emerald-50/80 dark:bg-emerald-950/20",
+                            r.delta != null &&
+                              r.delta > 0 &&
+                              "bg-rose-50/80 dark:bg-rose-950/20"
+                          )}
+                        >
+                          <TableCell>
+                            {r.lastName}, {r.firstName}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {r.key}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {formatGrade(r.gradeA)}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {formatGrade(r.gradeB)}
+                          </TableCell>
+                          <TableCell className="tabular-nums font-medium">
+                            {r.delta == null
+                              ? "–"
+                              : r.delta > 0
+                                ? `+${r.delta.toFixed(1)}`
+                                : r.delta.toFixed(1)}
+                          </TableCell>
+                          <TableCell className="hidden text-xs sm:table-cell">
+                            {r.newlyPassed && (
+                              <span className="text-emerald-700 dark:text-emerald-300">
+                                neu bestanden
+                              </span>
+                            )}
+                            {r.newlyFailed && (
+                              <span className="text-rose-700 dark:text-rose-300">
+                                neu durchgefallen
+                              </span>
+                            )}
+                            {!r.newlyPassed &&
+                              !r.newlyFailed &&
+                              r.delta != null &&
+                              Math.abs(r.delta) >= 0.05 && (
+                                <span className="text-muted-foreground">
+                                  Note geändert
+                                </span>
+                              )}
+                            {!r.newlyPassed &&
+                              !r.newlyFailed &&
+                              (r.delta == null ||
+                                Math.abs(r.delta) < 0.05) && (
+                                <span className="text-muted-foreground">
+                                  –
+                                </span>
+                              )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

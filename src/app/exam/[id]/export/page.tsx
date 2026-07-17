@@ -194,6 +194,11 @@ export default function ExportPage() {
               Bitte zuerst die Projektsicherung durchführen.
             </p>
           )}
+          {hasError && backupOk && (
+            <p className="text-xs text-destructive">
+              Export blockiert – siehe Validierung (z. B. offene Bewertungen).
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -201,7 +206,7 @@ export default function ExportPage() {
         <CardContent className="flex flex-wrap items-center gap-3 pt-4">
           <FileText className="size-4 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            PDF-Listen (ebenfalls erst nach Sicherung):
+            PDF-Listen (nach Sicherung und vollständiger Bewertung):
           </p>
           <Link
             href={`/exam/${id}/documents`}

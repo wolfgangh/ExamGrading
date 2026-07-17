@@ -161,6 +161,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       pointsRec != null ? computeEffectiveTotal(pointsRec) : null;
     const hasPoints = totalPoints != null;
     const needsGradingCount = pointsRec?.needsGrading?.length ?? 0;
+    const hasOpenGrading = needsGradingCount > 0;
     // Punkte retten Antritt (z. B. Moodle-Antritt fehlt, THE aber geschrieben)
     if (hasPoints && attended !== true) {
       attended = true;
@@ -181,6 +182,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       hasPoints,
       finalGrade,
       hasGradeOverride: gradeOverride != null,
+      hasOpenGrading,
     });
 
     const warnings: string[] = [];
@@ -195,6 +197,11 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     }
     if (gradeOverride != null) {
       warnings.push("Note manuell überschrieben");
+    }
+    if (hasOpenGrading) {
+      warnings.push(
+        `${needsGradingCount} Aufgabe(n) „Bewertung notwendig“ – nicht exportbereit`
+      );
     }
     const multiProgram = (matInSources.get(key) ?? 0) > 1;
     if (multiProgram) {

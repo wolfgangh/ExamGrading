@@ -6,8 +6,17 @@ export function deriveStudentStatus(input: {
   hasPoints: boolean;
   finalGrade: number | null;
   hasGradeOverride: boolean;
+  /** Offene Detailaufgaben („Bewertung notwendig“) */
+  hasOpenGrading?: boolean;
 }): StudentStatus {
-  const { inHis, attended, hasPoints, finalGrade, hasGradeOverride } = input;
+  const {
+    inHis,
+    attended,
+    hasPoints,
+    finalGrade,
+    hasGradeOverride,
+    hasOpenGrading,
+  } = input;
 
   if (!inHis) {
     if (hasPoints || attended) return "mismatch";
@@ -29,13 +38,17 @@ export function deriveStudentStatus(input: {
   }
 
   if (hasPoints) {
+    // Exportbereit erst, wenn keine offenen Aufgaben mehr
+    if (hasOpenGrading) {
+      return "points";
+    }
     if (finalGrade != null) {
       return inHis ? "export_ready" : "graded";
     }
     return "points";
   }
 
-  if (hasGradeOverride && finalGrade != null) {
+  if (hasGradeOverride && finalGrade != null && !hasOpenGrading) {
     return "export_ready";
   }
 
