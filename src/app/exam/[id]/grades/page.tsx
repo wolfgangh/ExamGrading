@@ -44,8 +44,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { computeFailerAnalysis } from "@/lib/grades/statistics";
+import { computeFailerAnalysis, computeStatistics } from "@/lib/grades/statistics";
 import {
+  ensureScenarios,
   visibleScenarios,
   withActiveScenario,
 } from "@/lib/grades/scenarios";
@@ -53,9 +54,11 @@ import {
   computeGradeBuckets,
   computeScenarioImpact,
 } from "@/lib/grades/scenario-impact";
+import { buildEnrichedRows } from "@/lib/matching/match";
 import {
-  GradeBucketChart,
-  GradeDistributionChart,
+  ScenarioGradeBucketChart,
+  ScenarioGradeDistributionChart,
+  shortScenarioLabel,
 } from "@/components/charts/grade-distribution-chart";
 import {
   hasOpenGrading,
@@ -100,7 +103,27 @@ export default function GradesPage() {
     [project]
   );
 
-  const buckets = useMemo(() => computeGradeBuckets(rows), [rows]);
+  /** Stats + Buckets je sichtbares Szenario für Vergleichsgrafiken */
+  const scenarioChartSeries = useMemo(() => {
+    if (!project || scenarios.length === 0) return [];
+    const all = ensureScenarios(project);
+    return scenarios.map((sc) => {
+      const scRows = buildEnrichedRows({
+        ...project,
+        gradeSchema: sc.schema,
+        gradeScenarios: all,
+        activeScenarioId: sc.id,
+      });
+      const scStats = computeStatistics(scRows, sc.schema, 1, project);
+      return {
+        key: sc.id,
+        label: shortScenarioLabel(sc.name, sc.passThreshold),
+        stats: scStats,
+        buckets: computeGradeBuckets(scRows),
+        passThreshold: sc.passThreshold,
+      };
+    });
+  }, [project, scenarios]);
 
   const impactVs40 = useMemo(() => {
     if (!project || scenarios.length < 2) return null;
@@ -262,30 +285,45 @@ export default function GradesPage() {
         ))}
       </div>
 
-      {stats && (
+      {scenarioChartSeries.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="surface-panel">
+          <Card className="surface-panel min-w-0">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
-                Notenverteilung (Anteil &amp; Anzahl)
+                Notenverteilung im Szenario-Vergleich
               </CardTitle>
               <CardDescription>
-                Je Note: absolute Anzahl und Anteil der bewerteten Teilnehmer
+                {scenarioChartSeries.length > 1
+                  ? `Gruppierte Balken je Note · ${scenarioChartSeries
+                      .map((s) => s.label)
+                      .join(" · ")}`
+                  : "Anteil je Note (aktives Szenario)"}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <GradeDistributionChart stats={stats} mode="share" />
+              <ScenarioGradeDistributionChart
+                series={scenarioChartSeries}
+                mode="share"
+              />
             </CardContent>
           </Card>
-          <Card className="surface-panel">
+          <Card className="surface-panel min-w-0">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Notenstufen</CardTitle>
+              <CardTitle className="text-base">
+                Notenstufen im Szenario-Vergleich
+              </CardTitle>
               <CardDescription>
                 sehr gut … nicht ausreichend
+                {scenarioChartSeries.length > 1
+                  ? " · Szenarien nebeneinander"
+                  : ""}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <GradeBucketChart buckets={buckets} />
+              <ScenarioGradeBucketChart
+                series={scenarioChartSeries}
+                mode="count"
+              />
             </CardContent>
           </Card>
         </div>
