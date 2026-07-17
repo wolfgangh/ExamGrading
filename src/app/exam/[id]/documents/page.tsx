@@ -36,6 +36,8 @@ import {
   exportGradeChangesPdf,
   filterGradeChangeRows,
 } from "@/lib/pdf/export-grade-changes-pdf";
+import { exportNotenspiegelPdf } from "@/lib/pdf/export-notenspiegel-pdf";
+import { exportNotenspiegelExcel } from "@/lib/excel/export-notenspiegel";
 import {
   findPointsRecord,
   resolveProgramCode,
@@ -52,7 +54,13 @@ import {
 } from "@/lib/grades/open-grading";
 import { cn, formatGrade, formatPoints } from "@/lib/utils";
 import type { PointsRecord } from "@/lib/types";
-import { FileText, HardDrive, ListChecks, ShieldAlert } from "lucide-react";
+import {
+  FileSpreadsheet,
+  FileText,
+  HardDrive,
+  ListChecks,
+  ShieldAlert,
+} from "lucide-react";
 
 function upsertPoints(
   points: PointsRecord[],
@@ -82,7 +90,7 @@ function upsertPoints(
 
 export default function DocumentsPage() {
   const { id } = useParams<{ id: string }>();
-  const { project, setProject, rows } = useExamContext();
+  const { project, setProject, rows, stats } = useExamContext();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -113,8 +121,10 @@ export default function DocumentsPage() {
   const backupStale = isBackupStale(project);
   const gradingLocked = hasOpenGrading(project);
   const pdfAllowed = backupOk && !gradingLocked;
+  const notenspiegelReady =
+    pdfAllowed && stats != null && stats.graded > 0;
 
-  const run = (key: string, fn: () => void, ok: string) => {
+  const run = (key: string, fn: () => void | Promise<void>, ok: string) => {
     if (gradingLocked) {
       setError(
         `PDF-Export gesperrt: ${openGradingSummary(project)}. Bitte zuerst alle Aufgaben bewerten.`
@@ -130,14 +140,16 @@ export default function DocumentsPage() {
     setBusy(key);
     setMessage(null);
     setError(null);
-    try {
-      fn();
-      setMessage(ok);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Export fehlgeschlagen");
-    } finally {
-      setBusy(null);
-    }
+    void (async () => {
+      try {
+        await fn();
+        setMessage(ok);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Export fehlgeschlagen");
+      } finally {
+        setBusy(null);
+      }
+    })();
   };
 
   const patchStudent = (matKey: string, patch: Partial<PointsRecord>) => {
@@ -226,6 +238,56 @@ export default function DocumentsPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Notenspiegel */}
+        <Card className="surface-panel md:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Notenspiegel</CardTitle>
+            <CardDescription>
+              Aggregierte Notenverteilung und Kennzahlen zum aktiven
+              Szenario – ohne personenbezogene Daten. PDF oder Excel.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy != null || !notenspiegelReady}
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "spiegel-pdf",
+                  () => exportNotenspiegelPdf(project, rows, stats),
+                  "Notenspiegel (PDF) heruntergeladen."
+                );
+              }}
+            >
+              <FileText className="size-4" />
+              {busy === "spiegel-pdf" ? "…" : "PDF"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy != null || !notenspiegelReady}
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "spiegel-xlsx",
+                  () => exportNotenspiegelExcel(project, rows, stats),
+                  "Notenspiegel (Excel) heruntergeladen."
+                );
+              }}
+            >
+              <FileSpreadsheet className="size-4" />
+              {busy === "spiegel-xlsx" ? "…" : "Excel"}
+            </Button>
+            {stats && stats.graded <= 0 && (
+              <p className="text-xs text-muted-foreground">
+                Noch keine bewerteten Teilnehmer.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Notenliste */}
         <Card className="surface-panel">
           <CardHeader className="pb-2">

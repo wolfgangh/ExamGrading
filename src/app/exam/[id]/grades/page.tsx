@@ -64,6 +64,11 @@ import {
   hasOpenGrading,
   openGradingSummary,
 } from "@/lib/grades/open-grading";
+import { exportNotenspiegelPdf } from "@/lib/pdf/export-notenspiegel-pdf";
+import { exportNotenspiegelExcel } from "@/lib/excel/export-notenspiegel";
+import {
+  canAccessProtectedExport,
+} from "@/lib/backup-status";
 import {
   Table,
   TableBody,
@@ -72,7 +77,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ListChecks } from "lucide-react";
+import { FileSpreadsheet, FileText, ListChecks } from "lucide-react";
 
 export default function GradesPage() {
   const { id } = useParams<{ id: string }>();
@@ -87,6 +92,8 @@ export default function GradesPage() {
   const [noShowOnly, setNoShowOnly] = useState(false);
   const [orphanOnly, setOrphanOnly] = useState(false);
   const [showFailerPanel, setShowFailerPanel] = useState(false);
+  const [spiegelBusy, setSpiegelBusy] = useState<string | null>(null);
+  const [spiegelMsg, setSpiegelMsg] = useState<string | null>(null);
 
   const editRow = useMemo(
     () => rows.find((r) => r.key === editKey) ?? null,
@@ -147,6 +154,31 @@ export default function GradesPage() {
   if (!project) return null;
 
   const gradingLocked = hasOpenGrading(project);
+  const backupOk = canAccessProtectedExport(project);
+  const notenspiegelReady =
+    !gradingLocked && backupOk && stats != null && stats.graded > 0;
+
+  const runNotenspiegel = (key: "pdf" | "xlsx", fn: () => void | Promise<void>) => {
+    if (!notenspiegelReady || !stats) return;
+    setSpiegelBusy(key);
+    setSpiegelMsg(null);
+    void (async () => {
+      try {
+        await fn();
+        setSpiegelMsg(
+          key === "pdf"
+            ? "Notenspiegel (PDF) heruntergeladen."
+            : "Notenspiegel (Excel) heruntergeladen."
+        );
+      } catch (e) {
+        setSpiegelMsg(
+          e instanceof Error ? e.message : "Export fehlgeschlagen"
+        );
+      } finally {
+        setSpiegelBusy(null);
+      }
+    })();
+  };
 
   const openEdit = (key: string) => {
     const row = rows.find((r) => r.key === key);
@@ -330,23 +362,81 @@ export default function GradesPage() {
       )}
 
       {stats && (
-        <div className="flex flex-wrap gap-2">
-          {[
-            { l: "Bewertet", v: String(stats.graded) },
-            { l: "Ø Note", v: formatGrade(stats.averageGrade) },
-            { l: "Median", v: formatGrade(stats.medianGrade) },
-            { l: "Stabw.", v: formatStat(stats.stdDevGrade, 2) },
-            { l: "Bestehen", v: formatPercent(stats.passRate) },
-            { l: "Durchfaller", v: `${stats.failCount}` },
-          ].map((c) => (
-            <div
-              key={c.l}
-              className="min-w-[7rem] flex-1 rounded-xl border bg-card px-3 py-2 text-sm sm:max-w-[10rem]"
-            >
-              <p className="text-muted-foreground">{c.l}</p>
-              <p className="text-lg font-semibold tabular-nums">{c.v}</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+            {[
+              { l: "Bewertet", v: String(stats.graded) },
+              { l: "Ø Note", v: formatGrade(stats.averageGrade) },
+              { l: "Median", v: formatGrade(stats.medianGrade) },
+              { l: "Stabw.", v: formatStat(stats.stdDevGrade, 2) },
+              { l: "Bestehen", v: formatPercent(stats.passRate) },
+              { l: "Durchfaller", v: `${stats.failCount}` },
+            ].map((c) => (
+              <div
+                key={c.l}
+                className="min-w-[7rem] flex-1 rounded-xl border bg-card px-3 py-2 text-sm sm:max-w-[10rem]"
+              >
+                <p className="text-muted-foreground">{c.l}</p>
+                <p className="text-lg font-semibold tabular-nums">{c.v}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <span className="text-xs text-muted-foreground">Notenspiegel</span>
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!notenspiegelReady || spiegelBusy != null}
+                title={
+                  !backupOk
+                    ? "Zuerst Projektsicherung"
+                    : gradingLocked
+                      ? "Zuerst alle Aufgaben bewerten"
+                      : stats.graded <= 0
+                        ? "Noch keine Noten"
+                        : "Notenspiegel als PDF"
+                }
+                onClick={() =>
+                  runNotenspiegel("pdf", () =>
+                    exportNotenspiegelPdf(project, rows, stats)
+                  )
+                }
+              >
+                <FileText className="size-3.5" />
+                {spiegelBusy === "pdf" ? "…" : "PDF"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!notenspiegelReady || spiegelBusy != null}
+                title={
+                  !backupOk
+                    ? "Zuerst Projektsicherung"
+                    : gradingLocked
+                      ? "Zuerst alle Aufgaben bewerten"
+                      : stats.graded <= 0
+                        ? "Noch keine Noten"
+                        : "Notenspiegel als Excel"
+                }
+                onClick={() =>
+                  runNotenspiegel("xlsx", () =>
+                    exportNotenspiegelExcel(project, rows, stats)
+                  )
+                }
+              >
+                <FileSpreadsheet className="size-3.5" />
+                {spiegelBusy === "xlsx" ? "…" : "Excel"}
+              </Button>
             </div>
-          ))}
+            {spiegelMsg && (
+              <p className="max-w-[16rem] text-right text-xs text-muted-foreground">
+                {spiegelMsg}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
