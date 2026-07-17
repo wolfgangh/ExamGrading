@@ -62,9 +62,9 @@ const SYNONYMS: Record<LogicalField, string[]> = {
     "gesamtpunkte",
     "bewertung/",
     "bewertung",
-    "punkte",
     "score",
     "points",
+    // "punkte" absichtlich nicht allein – sonst greift „Punkte FRM“ als Gesamtpunkte
   ],
   grade: ["note", "grade", "bewertung (note)"],
   attempt: ["versuch", "versuche", "attempt"],
@@ -86,6 +86,11 @@ export function detectField(header: string): LogicalField | null {
   // Moodle: exakte Spalte "Name" = Nachname (nicht "Vorname", nicht "Vollständiger Name")
   if (n === "name") return "lastName";
 
+  // Gesamtpunkte exakt / mit Präfix – vor generischen „Punkte …“-Teilgebieten
+  if (n === "gesamtpunkte" || n.startsWith("gesamtpunkte")) {
+    return "totalPoints";
+  }
+
   for (const [field, synonyms] of Object.entries(SYNONYMS) as [
     LogicalField,
     string[],
@@ -102,6 +107,14 @@ export function detectField(header: string): LogicalField | null {
         if (
           field === "totalPoints" &&
           (n.includes("notwendig") || n.includes("nicht bewertet"))
+        ) {
+          continue;
+        }
+        // „Punkte FRM“ ist Teilgebiet, keine Gesamtpunkte
+        if (
+          field === "totalPoints" &&
+          /^punkte\s+\S+/i.test(n) &&
+          !n.includes("gesamt")
         ) {
           continue;
         }

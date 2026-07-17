@@ -168,7 +168,8 @@ export function parsePointsMatrix(
   let columnMap = options?.columnMap;
 
   if (headerRowIndex == null) {
-    // THE: Header mit Nachname/Anmeldename + Bewertung oder F-Spalten
+    // THE: Anmeldename + Bewertung/F-Spalten
+    // Klausur-Vorlage: Matrikelnummer + Gesamtpunkte
     let bestIdx: number | null = null;
     let bestScore = 0;
     for (let i = 0; i < Math.min(15, matrix.length); i++) {
@@ -178,13 +179,21 @@ export function parsePointsMatrix(
       if (joined.includes("nachname")) score += 2;
       if (joined.includes("anmeldename")) score += 3;
       if (joined.includes("bewertung")) score += 2;
+      if (joined.includes("gesamtpunkte")) score += 3;
+      if (/matrikel|matr\.-?nr/.test(joined)) score += 3;
       const fCols = hs.filter((h) =>
         /(?:^|[^a-z])f\s*\d+/i.test(
           String(h).replace(/[\u00a0\u202f]/g, " ")
         )
       ).length;
       score += fCols;
-      if (score > bestScore && (fCols >= 2 || joined.includes("bewertung"))) {
+      const looksLikePoints =
+        fCols >= 2 ||
+        joined.includes("bewertung") ||
+        joined.includes("gesamtpunkte") ||
+        (/matrikel|matr\.-?nr/.test(joined) &&
+          (joined.includes("punkte") || joined.includes("nachname")));
+      if (score > bestScore && looksLikePoints) {
         bestScore = score;
         bestIdx = i;
       }
@@ -217,7 +226,7 @@ export function parsePointsMatrix(
 
   if (headerRowIndex == null || !hasIdentity) {
     errors.push(
-      "THE-Header nicht erkannt. Erwartet: Nachname, Vorname, Anmeldename, E-Mail-Adresse, Bewertung/…"
+      "Punkte-Header nicht erkannt. Erwartet: Matrikelnummer/Nachname/Vorname und Gesamtpunkte (Klausur-Vorlage) oder Anmeldename + Bewertung/… (THE)."
     );
     return emptyResult(errors, warnings, map, headers, 0);
   }
@@ -270,8 +279,14 @@ export function parsePointsMatrix(
     const login = loginIdx != null ? cellToString(row[loginIdx]) : "";
     const email = emailIdx != null ? cellToString(row[emailIdx]) : "";
 
-    // Footer
+    // Footer / Platzhalter-Zeilen der Klausur-Vorlage
     if (FOOTER_RE.test(lastName) || FOOTER_RE.test(firstName) || FOOTER_RE.test(login)) {
+      continue;
+    }
+    if (
+      /weitere\s*person|ohne\s*his|hier\s*eintragen/i.test(lastName) ||
+      /weitere\s*person|ohne\s*his|hier\s*eintragen/i.test(firstName)
+    ) {
       continue;
     }
 

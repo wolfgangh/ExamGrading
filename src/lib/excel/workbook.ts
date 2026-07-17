@@ -73,8 +73,10 @@ export function pickPointsWorksheet(workbook: Workbook): Worksheet {
 
     if (/detail/.test(name)) score += 80;
     if (/bewertung|grades|moodle|the/.test(name)) score += 25;
-    if (/punkte/.test(name)) score += 15;
-    if (/antritt|noteneintrag|szenario|definition|durchfall|his|qis/.test(name)) {
+    if (/^punkte$|punktevorlage|klausur/.test(name)) score += 40;
+    else if (/punkte/.test(name)) score += 15;
+    if (/hinweis|anleitung|definition/.test(name)) score -= 50;
+    if (/antritt|noteneintrag|szenario|durchfall|his|qis/.test(name)) {
       score -= 60;
     }
 

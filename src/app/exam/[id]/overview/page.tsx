@@ -38,6 +38,8 @@ export default function OverviewPage() {
   const backupOk = hasSubstantialData(project) && !isBackupStale(project);
   const backupStale = isBackupStale(project);
 
+  const isKlausur = project.examType === "written";
+
   const steps = [
     {
       done: project.hisRows.length > 0,
@@ -45,21 +47,29 @@ export default function OverviewPage() {
       href: `/exam/${id}/import`,
       detail: `${project.hisRows.length} Anmeldungen`,
     },
-    {
-      done: project.attendance.length > 0,
-      label: "Antrittsliste",
-      href: `/exam/${id}/import`,
-      detail: `${project.attendance.length} Moodle · ${stats.attended} gematcht${
-        stats.attendedOrphan > 0
-          ? ` · ${stats.attendedOrphan} ohne HIS`
-          : ""
-      }`,
-    },
+    ...(isKlausur
+      ? []
+      : [
+          {
+            done: project.attendance.length > 0,
+            label: "Antrittsliste",
+            href: `/exam/${id}/import`,
+            detail: `${project.attendance.length} Moodle · ${stats.attended} gematcht${
+              stats.attendedOrphan > 0
+                ? ` · ${stats.attendedOrphan} ohne HIS`
+                : ""
+            }`,
+          },
+        ]),
     {
       done: project.points.length > 0,
-      label: "Punkte",
-      href: `/exam/${id}/points`,
-      detail: `${project.points.length} mit Punkten`,
+      label: isKlausur ? "Punkte (Vorlage)" : "Punkte",
+      href: `/exam/${id}/import?focus=points`,
+      detail: isKlausur
+        ? project.points.length > 0
+          ? `${project.points.length} mit Punkten`
+          : "Vorlage exportieren & importieren"
+        : `${project.points.length} mit Punkten`,
     },
     {
       done: rows.some((r) => r.finalGrade != null),

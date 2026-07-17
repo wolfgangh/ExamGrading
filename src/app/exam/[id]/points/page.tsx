@@ -18,8 +18,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn, formatPoints } from "@/lib/utils";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import type { PointsRecord } from "@/lib/types";
-import { ListChecks, RefreshCw } from "lucide-react";
+import { Download, ListChecks, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { exportPointsTemplate } from "@/lib/excel/export-points-template";
 
 export default function PointsPage() {
   const { id } = useParams<{ id: string }>();
@@ -76,6 +77,17 @@ export default function PointsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {project.examType === "written" && project.hisRows.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void exportPointsTemplate(project)}
+            >
+              <Download className="size-4" />
+              Punkte-Vorlage
+            </Button>
+          )}
           <Link
             href={`/exam/${id}/detail-points`}
             className={cn(buttonVariants(), "gap-1.5")}

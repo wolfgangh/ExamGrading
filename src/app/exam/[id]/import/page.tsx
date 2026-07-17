@@ -35,7 +35,8 @@ import type {
   Student,
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { exportPointsTemplate } from "@/lib/excel/export-points-template";
+import { Download, Trash2 } from "lucide-react";
 
 type PreviewState = {
   type: ImportType;
@@ -276,9 +277,21 @@ export default function ImportPage() {
     if (wb.worksheets.length > 1) {
       warnings.unshift(`Arbeitsblatt „${sheet.name}“ verwendet.`);
     }
-    if (!result.questionDefs?.length && result.records.length > 0) {
+    if (
+      project.examType !== "written" &&
+      !result.questionDefs?.length &&
+      result.records.length > 0
+    ) {
       warnings.unshift(
-        "Keine Aufgaben-Spalten (F 1, F 2, …) gefunden – bitte ein Blatt mit Detailpunkten wählen bzw. THE-Bewertungsexport mit F-Spalten laden."
+        "Keine Aufgaben-Spalten (F 1, F 2, …) – Gesamtpunkte werden genutzt (bei THE optional Detailblatt wählen)."
+      );
+    }
+    if (
+      project.examType === "written" &&
+      result.records.length > 0
+    ) {
+      warnings.unshift(
+        "Klausur-Punkteimport: Match über Matrikelnummer. Personen ohne HIS erscheinen als Sonderfälle."
       );
     }
     if (isReimport) {
@@ -390,18 +403,32 @@ export default function ImportPage() {
     project.importLogs.find((l) => l.type === type);
 
   const hisSources = getHisSources(project);
+  const isKlausur = project.examType === "written";
+  const canExportTemplate = project.hisRows.length > 0;
+
+  const downloadTemplate = async () => {
+    if (!canExportTemplate) return;
+    await exportPointsTemplate(project);
+  };
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Importe</h1>
         <p className="text-muted-foreground">
-          HIS-Masterliste (ggf. mehrere Studiengänge), Antrittsliste und
-          Punkte. Matching über Matrikelnummer.
+          {isKlausur
+            ? "Klausur: HIS-Masterliste, dann Punkte-Vorlage ausfüllen und importieren."
+            : "HIS-Masterliste (ggf. mehrere Studiengänge), Antrittsliste und Punkte. Matching über Matrikelnummer / Anmeldename."}
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div
+        className={
+          isKlausur
+            ? "grid gap-4 md:grid-cols-2"
+            : "grid gap-4 md:grid-cols-3"
+        }
+      >
         <div className="space-y-2">
           <ImportDropzone
             label="1. HIS / QIS Noteneintrag"
@@ -442,40 +469,90 @@ export default function ImportPage() {
             </div>
           )}
         </div>
-        <div className="space-y-2">
-          <ImportDropzone
-            label={
-              project.attendance.length > 0
-                ? "2. Antritt neu laden (ersetzt Liste)"
-                : "2. Antritt zur Prüfung"
-            }
-            description="Moodle: E-Mail, Datum, Name, Vorname, Matrikelnummer. Erneuter Import ersetzt die Antrittsliste."
-            onFile={handleAttendance}
-          />
-          <StatusLine
-            count={project.attendance.length}
-            log={lastByType("attendance")}
-          />
-        </div>
-        <div ref={pointsRef} className="space-y-2" id="points-import">
-          <ImportDropzone
-            label={
-              project.points.length > 0
-                ? "3. Punkte aktualisieren (Moodle / THE)"
-                : "3. Punkte (Moodle / THE)"
-            }
-            description={
-              project.points.length > 0
-                ? "THE/Moodle erneut importieren (Match: Anmeldename). Overrides optional behalten."
-                : "Moodle THE: Nachname, Vorname, Anmeldename, Bewertung/90 – Match über Anmeldename (zuerst Antritt laden)."
-            }
-            onFile={handlePoints}
-          />
-          <StatusLine
-            count={project.points.length}
-            log={lastByType("points")}
-          />
-        </div>
+
+        {isKlausur ? (
+          <div className="space-y-3">
+            <Card className="surface-panel border-dashed">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">2. Punkte-Vorlage</CardTitle>
+                <CardDescription>
+                  Excel mit allen HIS-Personen zum Ausfüllen der Punkte.
+                  Extra-Zeilen für Teilnehmer ohne HIS-Anmeldung.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canExportTemplate}
+                  onClick={() => void downloadTemplate()}
+                >
+                  <Download className="size-4" />
+                  Vorlage herunterladen
+                </Button>
+                {!canExportTemplate && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Zuerst HIS importieren.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <div ref={pointsRef} className="space-y-2" id="points-import">
+              <ImportDropzone
+                label={
+                  project.points.length > 0
+                    ? "3. Punkte aktualisieren (Vorlage)"
+                    : "3. Punkte importieren (Vorlage)"
+                }
+                description="Ausgefüllte Klausur-Vorlage (Matrikelnummer + Gesamtpunkte). Personen ohne HIS möglich."
+                onFile={handlePoints}
+              />
+              <StatusLine
+                count={project.points.length}
+                log={lastByType("points")}
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <ImportDropzone
+                label={
+                  project.attendance.length > 0
+                    ? "2. Antritt neu laden (ersetzt Liste)"
+                    : "2. Antritt zur Prüfung"
+                }
+                description="Moodle: E-Mail, Datum, Name, Vorname, Matrikelnummer. Erneuter Import ersetzt die Antrittsliste."
+                onFile={handleAttendance}
+              />
+              <StatusLine
+                count={project.attendance.length}
+                log={lastByType("attendance")}
+              />
+            </div>
+            <div ref={pointsRef} className="space-y-2" id="points-import">
+              <ImportDropzone
+                label={
+                  project.points.length > 0
+                    ? "3. Punkte aktualisieren (Moodle / THE)"
+                    : "3. Punkte (Moodle / THE)"
+                }
+                description={
+                  project.points.length > 0
+                    ? "THE/Moodle erneut importieren (Match: Anmeldename). Overrides optional behalten."
+                    : "Moodle THE: Nachname, Vorname, Anmeldename, Bewertung/90 – Match über Anmeldename (zuerst Antritt laden)."
+                }
+                onFile={handlePoints}
+              />
+              <StatusLine
+                count={project.points.length}
+                log={lastByType("points")}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <Card className="surface-panel">
