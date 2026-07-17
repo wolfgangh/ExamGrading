@@ -14,7 +14,8 @@ function ExamShell({
   examId: string;
   children: React.ReactNode;
 }) {
-  const { project, loading, error, saveStatus, stats } = useExamContext();
+  const { project, loading, error, saveStatus, lastSavedAt, stats } =
+    useExamContext();
 
   if (loading) {
     return (
@@ -36,21 +37,29 @@ function ExamShell({
     saveStatus === "saving"
       ? "Speichert…"
       : saveStatus === "saved"
-        ? "Gespeichert"
+        ? lastSavedAt
+          ? `Gespeichert ${lastSavedAt.toLocaleTimeString("de-DE", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}`
+          : "Gespeichert"
         : saveStatus === "error"
           ? "Speicherfehler"
-          : null;
+          : "Auto-Save aktiv";
 
   return (
     <div className="page-shell flex min-h-screen flex-col">
       <AppHeader
         subtitle={project.name}
         actions={
-          saveLabel ? (
-            <Badge variant="outline" className="font-normal">
-              {saveLabel}
-            </Badge>
-          ) : null
+          <Badge
+            variant="outline"
+            className="font-normal"
+            title="Automatisches Speichern im Browser (IndexedDB)"
+          >
+            {saveLabel}
+          </Badge>
         }
       />
       <div className="flex min-h-0 flex-1">

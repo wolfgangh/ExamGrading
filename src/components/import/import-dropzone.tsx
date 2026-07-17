@@ -10,28 +10,41 @@ export function ImportDropzone({
   description,
   accept = ".xlsx,.xls,.csv",
   onFile,
+  onFiles,
+  multiple = false,
   disabled,
 }: {
   label: string;
   description: string;
   accept?: string;
-  onFile: (file: File) => void | Promise<void>;
+  onFile?: (file: File) => void | Promise<void>;
+  /** Mehrere Dateien (z. B. MEB + MBW HIS) */
+  onFiles?: (files: File[]) => void | Promise<void>;
+  multiple?: boolean;
   disabled?: boolean;
 }) {
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const handle = useCallback(
-    async (file: File | undefined) => {
-      if (!file || disabled) return;
+  const handleMany = useCallback(
+    async (fileList: FileList | File[] | null | undefined) => {
+      if (!fileList || disabled) return;
+      const files = Array.from(fileList);
+      if (files.length === 0) return;
       setBusy(true);
       try {
-        await onFile(file);
+        if (onFiles) {
+          await onFiles(files);
+        } else if (onFile) {
+          for (const f of files) {
+            await onFile(f);
+          }
+        }
       } finally {
         setBusy(false);
       }
     },
-    [onFile, disabled]
+    [onFile, onFiles, disabled]
   );
 
   return (
@@ -51,7 +64,7 @@ export function ImportDropzone({
       onDrop={(e) => {
         e.preventDefault();
         setDragging(false);
-        void handle(e.dataTransfer.files?.[0]);
+        void handleMany(e.dataTransfer.files);
       }}
     >
       <FileSpreadsheet className="mb-2 size-8 text-primary" />
@@ -63,10 +76,11 @@ export function ImportDropzone({
         <input
           type="file"
           accept={accept}
+          multiple={multiple}
           className="hidden"
           disabled={disabled || busy}
           onChange={(e) => {
-            void handle(e.target.files?.[0]);
+            void handleMany(e.target.files);
             e.target.value = "";
           }}
         />
@@ -81,7 +95,11 @@ export function ImportDropzone({
           }}
         >
           <Upload className="size-4" />
-          {busy ? "Wird gelesen…" : "Datei wählen"}
+          {busy
+            ? "Wird gelesen…"
+            : multiple
+              ? "Datei(en) wählen"
+              : "Datei wählen"}
         </Button>
       </label>
     </div>

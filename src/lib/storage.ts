@@ -1,4 +1,5 @@
 import localforage from "localforage";
+import { migrateExamProject } from "@/lib/grades/scenarios";
 import type { ExamProject } from "@/lib/types";
 
 const projectsStore = localforage.createInstance({
@@ -16,7 +17,7 @@ const draftStore = localforage.createInstance({
 export async function listExams(): Promise<ExamProject[]> {
   const items: ExamProject[] = [];
   await projectsStore.iterate<ExamProject, void>((value) => {
-    items.push(value);
+    items.push(migrateExamProject(value));
   });
   return items.sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -24,12 +25,14 @@ export async function listExams(): Promise<ExamProject[]> {
 }
 
 export async function getExam(id: string): Promise<ExamProject | null> {
-  return (await projectsStore.getItem<ExamProject>(id)) ?? null;
+  const raw = await projectsStore.getItem<ExamProject>(id);
+  return raw ? migrateExamProject(raw) : null;
 }
 
 export async function saveExam(project: ExamProject): Promise<void> {
+  const migrated = migrateExamProject(project);
   const toSave: ExamProject = {
-    ...project,
+    ...migrated,
     updatedAt: new Date().toISOString(),
   };
   await projectsStore.setItem(toSave.id, toSave);
@@ -49,7 +52,8 @@ export async function saveDraft(project: ExamProject): Promise<void> {
 }
 
 export async function getDraft(id: string): Promise<ExamProject | null> {
-  return (await draftStore.getItem<ExamProject>(id)) ?? null;
+  const raw = await draftStore.getItem<ExamProject>(id);
+  return raw ? migrateExamProject(raw) : null;
 }
 
 export async function clearDraft(id: string): Promise<void> {
@@ -75,5 +79,5 @@ export function parseExamJson(json: string): ExamProject {
   data.importLogs = data.importLogs ?? [];
   data.subAreas = data.subAreas ?? [];
   data.lecturers = data.lecturers ?? [];
-  return data;
+  return migrateExamProject(data);
 }

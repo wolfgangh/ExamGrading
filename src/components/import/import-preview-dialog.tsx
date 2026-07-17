@@ -29,6 +29,8 @@ export function ImportPreviewDialog({
   rowCount,
   onConfirm,
   confirming,
+  extra,
+  confirmLabel,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -40,6 +42,9 @@ export function ImportPreviewDialog({
   rowCount: number;
   onConfirm: () => void;
   confirming?: boolean;
+  /** z. B. Merge-Optionen beim Punkte-Reimport */
+  extra?: React.ReactNode;
+  confirmLabel?: string;
 }) {
   const cols =
     preview.length > 0 ? Object.keys(preview[0]) : ["Keine Vorschau"];
@@ -112,6 +117,8 @@ export function ImportPreviewDialog({
           </div>
         )}
 
+        {extra}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Abbrechen
@@ -120,7 +127,9 @@ export function ImportPreviewDialog({
             onClick={onConfirm}
             disabled={confirming || rowCount === 0 || errors.length > 0}
           >
-            {confirming ? "Importiere…" : `${rowCount} Zeilen importieren`}
+            {confirming
+              ? "Importiere…"
+              : confirmLabel ?? `${rowCount} Zeilen importieren`}
           </Button>
         </DialogFooter>
       </DialogContent>

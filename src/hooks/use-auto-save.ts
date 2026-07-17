@@ -16,7 +16,8 @@ export function useAutoSave(
 ) {
   const debounceMs = options?.debounceMs ?? 800;
   const persist = options?.persist ?? true;
-  const intervalMs = options?.intervalMs ?? 30_000;
+  /** Periodisches Speichern alle 15 s, solange ungesicherte Änderungen */
+  const intervalMs = options?.intervalMs ?? 15_000;
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

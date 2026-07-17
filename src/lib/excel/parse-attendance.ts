@@ -18,8 +18,15 @@ export interface AttendanceParseResult {
 }
 
 /**
- * Moodle-Export „Antritt zur Prüfung“:
- * Präsenz der Matrikelnummer = angetreten.
+ * Moodle-Export „Antritt zur Prüfung“.
+ *
+ * Typische Spalten:
+ * Vollständiger Name | Gruppen | E-Mail-Adresse | Datum | Name | Vorname | Matrikelnummer
+ *
+ * Beispielzeile:
+ * Mustermann, Erika | … | erika.mustermann@st.oth-regensburg.de | Freitag, 17. Juli 2026, 10:31 | Mustermann | Erika | 3513589
+ *
+ * Präsenz der Matrikelnummer in der Datei = angetreten.
  */
 export function parseAttendanceMatrix(
   matrix: unknown[][],
@@ -36,7 +43,8 @@ export function parseAttendanceMatrix(
   let columnMap = options?.columnMap;
 
   if (headerRowIndex == null) {
-    const found = findHeaderRow(matrix);
+    // Moodle: oft Header in Zeile 1–5, nach Zählerzeilen
+    const found = findHeaderRow(matrix, 20);
     if (found) {
       headerRowIndex = found.headerRowIndex;
       headers = found.headers;
@@ -47,8 +55,29 @@ export function parseAttendanceMatrix(
     columnMap = columnMap ?? autoMapColumns(headers);
   }
 
+  // Fallback: explizit Moodle-Header suchen
   if (headerRowIndex == null || columnMap?.matriculation == null) {
-    errors.push("Matrikelnummer-Spalte nicht gefunden.");
+    for (let i = 0; i < Math.min(20, matrix.length); i++) {
+      const row = matrix[i] ?? [];
+      const hs = row.map((c) => cellToString(c));
+      const lower = hs.map((h) => h.toLowerCase());
+      const hasMat = lower.some((h) => h.includes("matrikel"));
+      const hasName =
+        lower.some((h) => h === "name" || h === "nachname") ||
+        lower.some((h) => h.includes("vollständiger name"));
+      if (hasMat && hasName) {
+        headerRowIndex = i;
+        headers = hs;
+        columnMap = autoMapColumns(headers);
+        break;
+      }
+    }
+  }
+
+  if (headerRowIndex == null || columnMap?.matriculation == null) {
+    errors.push(
+      "Matrikelnummer-Spalte nicht gefunden. Erwartet u. a.: Name, Vorname, Matrikelnummer, E-Mail-Adresse."
+    );
     return {
       records: [],
       students: [],
@@ -98,21 +127,24 @@ export function parseAttendanceMatrix(
     let lastName = lastIdx != null ? cellToString(row[lastIdx]) : "";
     let firstName = firstIdx != null ? cellToString(row[firstIdx]) : "";
 
+    // Moodle: "Vollständiger Name" oft "Nachname, Vorname"
     if ((!lastName || !firstName) && fullIdx != null) {
       const full = cellToString(row[fullIdx]);
-      // "Nachname, Vorname" oder "Vorname Nachname"
       if (full.includes(",")) {
         const [a, b] = full.split(",").map((s) => s.trim());
         lastName = lastName || a;
         firstName = firstName || b;
       } else {
-        const parts = full.split(/\s+/);
+        const parts = full.split(/\s+/).filter(Boolean);
         if (parts.length >= 2) {
+          // "Vorname Nachname" (selten in Moodle DE)
           firstName = firstName || parts.slice(0, -1).join(" ");
           lastName = lastName || parts[parts.length - 1];
         }
       }
     }
+
+    const email = emailIdx != null ? cellToString(row[emailIdx]) : undefined;
 
     records.push({
       matriculationNumber: mat,
@@ -124,7 +156,7 @@ export function parseAttendanceMatrix(
       matriculationNumber: mat,
       lastName,
       firstName,
-      email: emailIdx != null ? cellToString(row[emailIdx]) : undefined,
+      email: email || undefined,
     });
   }
 
@@ -143,6 +175,7 @@ export function parseAttendanceMatrix(
       Matrikelnummer: s.matriculationNumber,
       Nachname: s.lastName,
       Vorname: s.firstName,
+      ...(s.email ? { "E-Mail": s.email } : {}),
     })),
     columnMap,
     headers,

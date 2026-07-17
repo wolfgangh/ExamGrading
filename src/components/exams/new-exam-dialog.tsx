@@ -1,11 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,97 +22,152 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createEmptyExamProject, createDefaultSubAreas } from "@/lib/project-factory";
+import { ComboboxField } from "@/components/ui/combobox-field";
+import { ClearableInput } from "@/components/ui/clearable-input";
+import { Badge } from "@/components/ui/badge";
+import {
+  DEFAULT_LECTURER,
+  EXAM_NAME_OPTIONS,
+  LECTURER_OPTIONS,
+  findCatalogEntry,
+  resolveExamDisplayName,
+  resolveSubAreasForExamName,
+  type CatalogSubArea,
+} from "@/lib/exam-catalog";
+import { createEmptyExamProject } from "@/lib/project-factory";
 import { saveExam } from "@/lib/storage";
-import type { ExamType } from "@/lib/types";
+import { EXAM_TYPE_LABELS, type ExamType } from "@/lib/types";
 
-type FormValues = {
-  name: string;
-  examNumber?: string;
-  semester?: string;
-  lecturers?: string;
-  examType: "the" | "written" | "other";
-  maxPoints: number;
-  passThreshold: number;
-  useFrmPreset?: boolean;
-};
+type ExamTypeValue = ExamType;
 
-const schema = z.object({
-  name: z.string().min(2, "Bitte Prüfungsname angeben"),
-  examNumber: z.string().optional(),
-  semester: z.string().optional(),
-  lecturers: z.string().optional(),
-  examType: z.enum(["the", "written", "other"]),
-  maxPoints: z.number().min(1).max(1000),
-  passThreshold: z.number().min(0).max(1000),
-  useFrmPreset: z.boolean().optional(),
-});
+function emptySubAreaRow(): CatalogSubArea {
+  return { name: "Gesamt", code: "G", maxPoints: 90 };
+}
 
 export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      name: "",
-      examNumber: "",
-      semester: "",
-      lecturers: "",
-      examType: "the",
-      maxPoints: 90,
-      passThreshold: 45,
-      useFrmPreset: true,
-    },
-  });
+  const [nameInput, setNameInput] = useState("");
+  const [examNumber, setExamNumber] = useState("");
+  const [semester, setSemester] = useState("");
+  const [examType, setExamType] = useState<ExamTypeValue>("the");
+  const [lecturers, setLecturers] = useState<string[]>([DEFAULT_LECTURER]);
+  const [lecturerDraft, setLecturerDraft] = useState("");
+  const [subAreas, setSubAreas] = useState<CatalogSubArea[]>([
+    emptySubAreaRow(),
+  ]);
+  const [nameError, setNameError] = useState<string | null>(null);
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  const totalMax = useMemo(
+    () => subAreas.reduce((s, sa) => s + (Number(sa.maxPoints) || 0), 0),
+    [subAreas]
+  );
+
+  const resetForm = () => {
+    setNameInput("");
+    setExamNumber("");
+    setSemester("");
+    setExamType("the");
+    setLecturers([DEFAULT_LECTURER]);
+    setLecturerDraft("");
+    setSubAreas([emptySubAreaRow()]);
+    setNameError(null);
+  };
+
+  const applyNameAndSubAreas = (raw: string) => {
+    setNameInput(raw);
+    setNameError(null);
+    if (!raw.trim()) {
+      setSubAreas([emptySubAreaRow()]);
+      return;
+    }
+    setSubAreas(resolveSubAreasForExamName(raw));
+  };
+
+  const addLecturer = (value?: string) => {
+    const name = (value ?? lecturerDraft).trim();
+    if (!name) return;
+    setLecturers((prev) =>
+      prev.some((l) => l.toLowerCase() === name.toLowerCase())
+        ? prev
+        : [...prev, name]
+    );
+    setLecturerDraft("");
+  };
+
+  const removeLecturer = (name: string) => {
+    setLecturers((prev) => prev.filter((l) => l !== name));
+  };
+
+  const updateSubArea = (index: number, patch: Partial<CatalogSubArea>) => {
+    setSubAreas((prev) =>
+      prev.map((sa, i) => (i === index ? { ...sa, ...patch } : sa))
+    );
+  };
+
+  const addSubArea = () => {
+    setSubAreas((prev) => [
+      ...prev,
+      { name: "Teilgebiet", code: "T", maxPoints: 0 },
+    ]);
+  };
+
+  const removeSubArea = (index: number) => {
+    setSubAreas((prev) =>
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)
+    );
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = nameInput.trim();
+    if (trimmed.length < 2) {
+      setNameError("Bitte Prüfungsname angeben");
+      return;
+    }
+    if (subAreas.length === 0 || totalMax <= 0) {
+      setNameError("Bitte mindestens ein Teilgebiet mit Punkten angeben");
+      return;
+    }
+    setNameError(null);
     setSaving(true);
     try {
-      const lecturers = (values.lecturers ?? "")
-        .split(/[,;]/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      const maxPoints = Number(values.maxPoints) || 90;
-      const passThreshold = Number(values.passThreshold) || 45;
-
+      // Katalog nur für Anzeige-Name; Freitext bleibt
+      const catalog = findCatalogEntry(trimmed);
       const project = createEmptyExamProject({
-        name: values.name,
-        examNumber: values.examNumber,
-        semester: values.semester,
-        lecturers,
-        examType: values.examType as ExamType,
-        maxPoints,
-        passThreshold,
-        subAreas: values.useFrmPreset
-          ? createDefaultSubAreas().map((sa) => ({
-              name: sa.name,
-              code: sa.code,
-              maxPoints: sa.maxPoints,
-            }))
-          : [
-              {
-                name: "Gesamt",
-                code: "G",
-                maxPoints,
-              },
-            ],
+        name: catalog ? resolveExamDisplayName(trimmed) : trimmed,
+        examNumber,
+        semester,
+        lecturers:
+          lecturers.length > 0 ? lecturers : [DEFAULT_LECTURER],
+        examType,
+        subAreas: subAreas.map((sa) => ({
+          name: sa.name.trim() || "Teilgebiet",
+          code: sa.code.trim() || "T",
+          maxPoints: Number(sa.maxPoints) || 0,
+        })),
       });
 
       await saveExam(project);
       setOpen(false);
-      form.reset();
+      resetForm();
       onCreated?.();
       router.push(`/exam/${project.id}/overview`);
     } finally {
       setSaving(false);
     }
-  });
+  };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) resetForm();
+      }}
+    >
       <DialogTrigger
         render={
           <Button>
@@ -124,96 +176,215 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
           </Button>
         }
       />
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Neue Prüfung anlegen</DialogTitle>
           <DialogDescription>
-            Metadaten und Notenschema. Importe und Punkte folgen im nächsten
-            Schritt.
+            Katalogauswahl oder Freitext. Die Prüfungsnummer kann auch später
+            aus der HISinOne-Datei übernommen werden. Bestehensgrenze und
+            Notenszenarien legen Sie unter Einstellungen fest.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="name">Prüfungsname *</Label>
-            <Input id="name" {...form.register("name")} placeholder="Finanzierung und Investition" />
-            {form.formState.errors.name && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.name.message}
-              </p>
-            )}
-          </div>
+          <ComboboxField
+            label="Prüfungsname"
+            required
+            clearable
+            value={nameInput}
+            onChange={applyNameAndSubAreas}
+            options={EXAM_NAME_OPTIONS}
+            placeholder="z. B. Finanzierung und Investition (FI)"
+          />
+          {nameError && (
+            <p className="text-sm text-destructive">{nameError}</p>
+          )}
+
           <div className="grid gap-1.5">
             <Label htmlFor="examNumber">Prüfungsnummer</Label>
-            <Input
+            <ClearableInput
               id="examNumber"
-              {...form.register("examNumber")}
-              placeholder="BW 20152 7820010 FI"
+              value={examNumber}
+              onChange={setExamNumber}
+              placeholder="optional – oder aus HIS-Import"
+              clearLabel="Prüfungsnummer löschen"
             />
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="semester">Semester</Label>
-              <Input
+              <ClearableInput
                 id="semester"
-                {...form.register("semester")}
-                placeholder="Sommer 2025"
+                value={semester}
+                onChange={setSemester}
+                placeholder="Sommer 2026"
+                clearLabel="Semester löschen"
               />
             </div>
             <div className="grid gap-1.5">
               <Label>Prüfungstyp</Label>
               <Select
-                value={form.watch("examType")}
-                onValueChange={(v) =>
-                  form.setValue("examType", v as FormValues["examType"])
-                }
+                value={examType}
+                onValueChange={(v) => v && setExamType(v as ExamTypeValue)}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Typ wählen">
+                    {EXAM_TYPE_LABELS[examType]}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="the">Take-Home-Exam</SelectItem>
-                  <SelectItem value="written">Klausur</SelectItem>
-                  <SelectItem value="other">Sonstige</SelectItem>
+                  <SelectItem value="the">
+                    {EXAM_TYPE_LABELS.the}
+                  </SelectItem>
+                  <SelectItem value="written">
+                    {EXAM_TYPE_LABELS.written}
+                  </SelectItem>
+                  <SelectItem value="other">
+                    {EXAM_TYPE_LABELS.other}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {/* Dozenten */}
           <div className="grid gap-1.5">
-            <Label htmlFor="lecturers">Dozenten (Komma-getrennt)</Label>
-            <Input
-              id="lecturers"
-              {...form.register("lecturers")}
-              placeholder="Prof. Dr. Mustermann, Prof. Dr. Beispiel"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="maxPoints">Max. Punkte</Label>
-              <Input
-                id="maxPoints"
-                type="number"
-                step="0.5"
-                {...form.register("maxPoints", { valueAsNumber: true })}
-              />
+            <Label>Dozenten</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {lecturers.map((l) => (
+                <Badge
+                  key={l}
+                  variant="secondary"
+                  className="gap-1 pr-1 font-normal"
+                >
+                  {l}
+                  <button
+                    type="button"
+                    className="rounded-sm p-0.5 hover:bg-muted"
+                    onClick={() => removeLecturer(l)}
+                    aria-label={`${l} entfernen`}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </Badge>
+              ))}
+              {lecturers.length === 0 && (
+                <span className="text-sm text-muted-foreground">
+                  Kein Dozent ausgewählt
+                </span>
+              )}
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="passThreshold">Bestehensgrenze</Label>
-              <Input
-                id="passThreshold"
-                type="number"
-                step="0.5"
-                {...form.register("passThreshold", { valueAsNumber: true })}
-              />
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <ClearableInput
+                  list="lecturer-options"
+                  value={lecturerDraft}
+                  onChange={setLecturerDraft}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addLecturer();
+                    }
+                  }}
+                  placeholder="Dozent wählen oder eingeben…"
+                  autoComplete="off"
+                  clearLabel="Dozenteneingabe löschen"
+                />
+                <datalist id="lecturer-options">
+                  {LECTURER_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt} />
+                  ))}
+                </datalist>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => addLecturer()}
+              >
+                Hinzufügen
+              </Button>
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 rounded border"
-              {...form.register("useFrmPreset")}
-            />
-            Teilgebiete FRM + Investition (45/45) vorbefüllen
-          </label>
+
+          {/* Teilgebiete */}
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <Label>Teilgebiete</Label>
+                <p className="text-xs text-muted-foreground">
+                  FI und MAP werden vorbefüllt; sonst Gesamt oder eigene
+                  Gebiete. Summe:{" "}
+                  <span className="font-medium text-foreground">
+                    {totalMax} Punkte
+                  </span>
+                </p>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={addSubArea}>
+                <Plus className="size-3.5" />
+                Gebiet
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {subAreas.map((sa, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-[1fr_4.5rem_5rem_auto] items-end gap-1.5"
+                >
+                  <div className="grid gap-1">
+                    {index === 0 && (
+                      <span className="text-xs text-muted-foreground">Name</span>
+                    )}
+                    <Input
+                      value={sa.name}
+                      onChange={(e) =>
+                        updateSubArea(index, { name: e.target.value })
+                      }
+                      placeholder="Name"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    {index === 0 && (
+                      <span className="text-xs text-muted-foreground">Kürzel</span>
+                    )}
+                    <Input
+                      value={sa.code}
+                      onChange={(e) =>
+                        updateSubArea(index, { code: e.target.value })
+                      }
+                      placeholder="Code"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    {index === 0 && (
+                      <span className="text-xs text-muted-foreground">Max.</span>
+                    )}
+                    <Input
+                      type="number"
+                      step="0.5"
+                      min={0}
+                      value={sa.maxPoints}
+                      onChange={(e) =>
+                        updateSubArea(index, {
+                          maxPoints: Number(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={subAreas.length <= 1}
+                    onClick={() => removeSubArea(index)}
+                    aria-label="Teilgebiet entfernen"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <DialogFooter>
             <Button
               type="button"

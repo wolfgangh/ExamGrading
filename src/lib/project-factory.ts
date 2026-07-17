@@ -1,5 +1,11 @@
 import { createId } from "@/lib/id";
-import { defaultGradeSchema, generateLinearGradeSchema } from "@/lib/grades/schema";
+import { defaultGradeSchema } from "@/lib/grades/schema";
+import { createDefaultScenarios } from "@/lib/grades/scenarios";
+import {
+  resolveExamDisplayName,
+  resolveSubAreasForExamName,
+  type CatalogSubArea,
+} from "@/lib/exam-catalog";
 import type { ExamProject, ExamType, SubArea } from "@/lib/types";
 
 export interface CreateExamInput {
@@ -10,48 +16,47 @@ export interface CreateExamInput {
   examType?: ExamType;
   maxPoints?: number;
   passThreshold?: number;
-  subAreas?: { name: string; code: string; maxPoints: number }[];
+  subAreas?: CatalogSubArea[];
+}
+
+function toSubAreas(defs: CatalogSubArea[]): SubArea[] {
+  return defs.map((sa) => ({
+    id: createId("sa"),
+    name: sa.name,
+    code: sa.code,
+    maxPoints: sa.maxPoints,
+  }));
 }
 
 export function createEmptyExamProject(input: CreateExamInput): ExamProject {
   const now = new Date().toISOString();
-  const maxPoints = input.maxPoints ?? 90;
-  const passThreshold = input.passThreshold ?? Math.round(maxPoints / 2);
+  const displayName = resolveExamDisplayName(input.name);
 
   let subAreas: SubArea[];
   if (input.subAreas && input.subAreas.length > 0) {
-    subAreas = input.subAreas.map((sa) => ({
-      id: createId("sa"),
-      name: sa.name,
-      code: sa.code,
-      maxPoints: sa.maxPoints,
-    }));
+    subAreas = toSubAreas(input.subAreas);
   } else {
-    const half = maxPoints / 2;
-    subAreas = [
-      { id: createId("sa"), name: "Teilgebiet 1", code: "A", maxPoints: half },
-      { id: createId("sa"), name: "Teilgebiet 2", code: "B", maxPoints: half },
-    ];
+    subAreas = toSubAreas(resolveSubAreasForExamName(input.name));
   }
 
   const sumMax = subAreas.reduce((s, sa) => s + sa.maxPoints, 0);
+  const maxPoints = sumMax || input.maxPoints || 90;
+  const scenarios = createDefaultScenarios(maxPoints);
 
   return {
     id: createId("exam"),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 1,
-    name: input.name.trim(),
+    schemaVersion: 2,
+    name: displayName,
     examNumber: input.examNumber?.trim() ?? "",
     semester: input.semester?.trim() ?? "",
     lecturers: (input.lecturers ?? []).map((l) => l.trim()).filter(Boolean),
     examType: input.examType ?? "the",
     subAreas,
-    gradeSchema: generateLinearGradeSchema(
-      sumMax || maxPoints,
-      passThreshold,
-      true
-    ),
+    gradeScenarios: scenarios,
+    activeScenarioId: scenarios[0].id,
+    gradeSchema: scenarios[0].schema,
     hisRows: [],
     attendance: [],
     points: [],
@@ -79,15 +84,10 @@ export function duplicateExamProject(
     points: clear ? [] : structuredClone(source.points),
     students: clear ? {} : structuredClone(source.students),
     importLogs: clear ? [] : structuredClone(source.importLogs),
-    hisTemplateMeta: clear ? undefined : structuredClone(source.hisTemplateMeta),
+    hisTemplateMeta: clear
+      ? undefined
+      : structuredClone(source.hisTemplateMeta),
   };
-}
-
-export function createDefaultSubAreas(): SubArea[] {
-  return [
-    { id: createId("sa"), name: "FRM", code: "F", maxPoints: 45 },
-    { id: createId("sa"), name: "Investition", code: "I", maxPoints: 45 },
-  ];
 }
 
 export { defaultGradeSchema };

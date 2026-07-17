@@ -1,12 +1,12 @@
 "use client";
 
 import { useExamContext } from "@/components/exam/exam-context";
-import { generateLinearGradeSchema } from "@/lib/grades/schema";
 import { createId } from "@/lib/id";
 import type { ExamType, SubArea } from "@/lib/types";
 import { EXAM_TYPE_LABELS } from "@/lib/types";
 import { formatGrade } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -32,8 +32,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { rebuildScenariosForMaxPoints } from "@/lib/grades/scenarios";
+import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
+  const { id } = useParams<{ id: string }>();
   const { project, setProject } = useExamContext();
   if (!project) return null;
 
@@ -50,28 +55,10 @@ export default function SettingsPage() {
         sa.id === id ? { ...sa, ...patch } : sa
       );
       const maxPoints = subAreas.reduce((s, sa) => s + sa.maxPoints, 0);
-      return {
-        ...prev,
-        subAreas,
-        gradeSchema: {
-          ...prev.gradeSchema,
-          maxPoints,
-        },
-      };
-    });
-  };
-
-  const regenerateSchema = () => {
-    setProject((prev) => {
-      const maxPoints = prev.subAreas.reduce((s, sa) => s + sa.maxPoints, 0);
-      return {
-        ...prev,
-        gradeSchema: generateLinearGradeSchema(
-          maxPoints || prev.gradeSchema.maxPoints,
-          prev.gradeSchema.passThreshold,
-          prev.gradeSchema.roundPointsUp
-        ),
-      };
+      return rebuildScenariosForMaxPoints(
+        { ...prev, subAreas },
+        maxPoints || prev.gradeSchema.maxPoints
+      );
     });
   };
 
@@ -241,73 +228,25 @@ export default function SettingsPage() {
 
       <Card className="surface-panel">
         <CardHeader>
-          <CardTitle className="text-base">Notenschema</CardTitle>
+          <CardTitle className="text-base">Notenszenarien</CardTitle>
           <CardDescription>
-            Lineare Skala wie im Excel-Notenszenario (Schrittweite aus max. −
-            Bestehensgrenze)
+            Szenarien 45 / 40 / frei – Vergleich und aktives Szenario unter
+            Notenszenarien. Aktive Bestehensgrenze:{" "}
+            {project.gradeSchema.passThreshold} Punkte.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label>Bestehensgrenze (Punkte)</Label>
-              <Input
-                type="number"
-                value={project.gradeSchema.passThreshold}
-                onChange={(e) =>
-                  setProject((prev) => ({
-                    ...prev,
-                    gradeSchema: {
-                      ...prev.gradeSchema,
-                      passThreshold: Number(e.target.value) || 0,
-                    },
-                  }))
-                }
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Max. Punkte (Schema)</Label>
-              <Input
-                type="number"
-                value={project.gradeSchema.maxPoints}
-                onChange={(e) =>
-                  setProject((prev) => ({
-                    ...prev,
-                    gradeSchema: {
-                      ...prev.gradeSchema,
-                      maxPoints: Number(e.target.value) || 0,
-                    },
-                  }))
-                }
-              />
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="size-4"
-              checked={project.gradeSchema.roundPointsUp}
-              onChange={(e) =>
-                setProject((prev) => ({
-                  ...prev,
-                  gradeSchema: {
-                    ...prev.gradeSchema,
-                    roundPointsUp: e.target.checked,
-                  },
-                }))
-              }
-            />
-            Punkte vor Notenbildung aufrunden (Excel ROUNDUP)
-          </label>
-          <Button type="button" onClick={regenerateSchema}>
-            Schwellen neu berechnen
-          </Button>
-
+        <CardContent className="space-y-3">
+          <Link
+            href={`/exam/${id}/scenarios`}
+            className={cn(buttonVariants())}
+          >
+            Notenszenarien öffnen
+          </Link>
           <div className="overflow-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Note</TableHead>
+                  <TableHead>Note (aktiv)</TableHead>
                   <TableHead>ab Punkte</TableHead>
                 </TableRow>
               </TableHeader>

@@ -131,8 +131,8 @@ export default function ExportPage() {
         <CardContent className="text-sm text-muted-foreground space-y-1">
           <p>
             <strong className="text-foreground">Noteneintrag:</strong>{" "}
-            Nachname, Vorname, Matrikelnummer, bewertung, Antritt, Test –
-            in HIS-Reihenfolge.
+            Pro Studiengang/HIS-Quelle eine Datei (z. B. MEB und MBW getrennt).
+            Enthält u. a. Matrikelnummer und Note (Leistung/bewertung).
           </p>
           <p>
             <strong className="text-foreground">Durchfaller:</strong> Note

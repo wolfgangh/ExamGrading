@@ -33,7 +33,15 @@ import {
   type EnrichedStudentRow,
   type StudentStatus,
 } from "@/lib/types";
-import { formatGrade, formatPercent, formatPoints } from "@/lib/utils";
+import { cn, formatGrade, formatPercent, formatPoints } from "@/lib/utils";
+
+export type BorderlineFilter =
+  | "off"
+  | "0.5"
+  | "1"
+  | "1.5"
+  | "2"
+  | "custom";
 
 export function StudentsTable({
   rows,
@@ -41,12 +49,27 @@ export function StudentsTable({
   onEditGrade,
   onEditPoints,
   subAreaNames = {},
+  showNextGrade = false,
+  borderlineFilter = "off",
+  borderlineCustom = 1,
+  failersOnly = false,
+  noShowOnly = false,
+  orphanOnly = false,
+  highlightBorderlineMax = 1,
 }: {
   rows: EnrichedStudentRow[];
   editable?: boolean;
   onEditGrade?: (key: string) => void;
   onEditPoints?: (key: string, subAreaId: string, value: number | null) => void;
   subAreaNames?: Record<string, string>;
+  showNextGrade?: boolean;
+  borderlineFilter?: BorderlineFilter;
+  borderlineCustom?: number;
+  failersOnly?: boolean;
+  noShowOnly?: boolean;
+  orphanOnly?: boolean;
+  /** Ab welcher pointsToNext-Schwelle Zeilen amber markiert werden */
+  highlightBorderlineMax?: number;
 }) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "orderIndex", desc: false },
@@ -54,10 +77,44 @@ export function StudentsTable({
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  const borderlineLimit = useMemo(() => {
+    if (borderlineFilter === "off") return null;
+    if (borderlineFilter === "custom") return borderlineCustom;
+    return Number(borderlineFilter);
+  }, [borderlineFilter, borderlineCustom]);
+
   const filtered = useMemo(() => {
-    if (statusFilter === "all") return rows;
-    return rows.filter((r) => r.status === statusFilter);
-  }, [rows, statusFilter]);
+    let list = rows;
+    if (statusFilter !== "all") {
+      list = list.filter((r) => r.status === statusFilter);
+    }
+    if (failersOnly) {
+      list = list.filter((r) => r.isFailed);
+    }
+    if (noShowOnly) {
+      list = list.filter((r) => r.status === "no_show" || r.attended === false);
+    }
+    if (orphanOnly) {
+      list = list.filter((r) => r.attendanceWithoutHis);
+    }
+    if (borderlineLimit != null) {
+      list = list.filter(
+        (r) =>
+          r.pointsToNext != null &&
+          r.pointsToNext > 0 &&
+          r.pointsToNext <= borderlineLimit &&
+          !r.isFailed
+      );
+    }
+    return list;
+  }, [
+    rows,
+    statusFilter,
+    failersOnly,
+    noShowOnly,
+    orphanOnly,
+    borderlineLimit,
+  ]);
 
   const columns = useMemo<ColumnDef<EnrichedStudentRow>[]>(() => {
     const cols: ColumnDef<EnrichedStudentRow>[] = [
@@ -69,7 +126,6 @@ export function StudentsTable({
             {row.original.orderIndex + 1}
           </span>
         ),
-        size: 48,
       },
       {
         id: "matnr",
@@ -95,6 +151,22 @@ export function StudentsTable({
             {row.original.student.firstName}
           </span>
         ),
+      },
+      {
+        id: "program",
+        accessorFn: (r) => r.programCode ?? "",
+        header: "Studiengang",
+        cell: ({ row }) =>
+          row.original.programCode ? (
+            <span className="text-sm">
+              {row.original.programCode}
+              {row.original.multiProgram && (
+                <span className="ml-1 text-xs text-amber-700">+</span>
+              )}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">–</span>
+          ),
       },
       {
         accessorKey: "status",
@@ -139,7 +211,7 @@ export function StudentsTable({
           <button
             type="button"
             className="tabular-nums font-semibold hover:underline disabled:no-underline"
-            disabled={!editable || !onEditGrade}
+            disabled={!onEditGrade}
             onClick={() => onEditGrade?.(row.original.key)}
           >
             {formatGrade(row.original.finalGrade)}
@@ -151,7 +223,32 @@ export function StudentsTable({
       },
     ];
 
-    // optional sub-area columns
+    if (showNextGrade) {
+      cols.push({
+        id: "toNext",
+        accessorFn: (r) => r.pointsToNext ?? 999,
+        header: "bis nächste Note",
+        cell: ({ row }) => {
+          const r = row.original;
+          if (r.pointsToNext == null || r.nextGrade == null) {
+            return <span className="text-muted-foreground">–</span>;
+          }
+          if (r.pointsToNext === 0) {
+            return (
+              <span className="text-muted-foreground tabular-nums">
+                (an Schwelle)
+              </span>
+            );
+          }
+          return (
+            <span className="tabular-nums">
+              {formatPoints(r.pointsToNext)} → {formatGrade(r.nextGrade)}
+            </span>
+          );
+        },
+      });
+    }
+
     const saIds = Object.keys(subAreaNames);
     for (const saId of saIds) {
       cols.splice(6, 0, {
@@ -186,7 +283,13 @@ export function StudentsTable({
     }
 
     return cols;
-  }, [editable, onEditGrade, onEditPoints, subAreaNames]);
+  }, [
+    editable,
+    onEditGrade,
+    onEditPoints,
+    subAreaNames,
+    showNextGrade,
+  ]);
 
   const table = useReactTable({
     data: filtered,
@@ -282,34 +385,54 @@ export function StudentsTable({
                   colSpan={columns.length}
                   className="h-24 text-center text-muted-foreground"
                 >
-                  Keine Daten – bitte Importe prüfen.
+                  Keine Daten – Filter prüfen oder Importe.
                 </TableCell>
               </TableRow>
             ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={
-                    row.original.status === "mismatch" ? "selected" : undefined
-                  }
-                  className={
-                    row.original.status === "mismatch"
-                      ? "bg-red-50/50 dark:bg-red-950/20"
-                      : row.original.status === "no_show"
-                        ? "bg-orange-50/40 dark:bg-orange-950/10"
-                        : undefined
-                  }
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-1.5">
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const r = row.original;
+                const isBorderline =
+                  r.pointsToNext != null &&
+                  r.pointsToNext > 0 &&
+                  r.pointsToNext <= highlightBorderlineMax &&
+                  !r.isFailed;
+
+                return (
+                  <TableRow
+                    key={row.id}
+                    className={cn(
+                      r.attendanceWithoutHis &&
+                        "bg-amber-100 ring-1 ring-inset ring-amber-400/60 dark:bg-amber-950/50",
+                      !r.attendanceWithoutHis &&
+                        r.status === "mismatch" &&
+                        "bg-red-50/60 dark:bg-red-950/25",
+                      r.isFailed &&
+                        !r.attendanceWithoutHis &&
+                        r.status !== "mismatch" &&
+                        "bg-rose-100/70 dark:bg-rose-950/30",
+                      isBorderline &&
+                        !r.isFailed &&
+                        !r.attendanceWithoutHis &&
+                        r.status !== "mismatch" &&
+                        "bg-amber-50 dark:bg-amber-950/25",
+                      r.status === "no_show" &&
+                        !r.isFailed &&
+                        !isBorderline &&
+                        !r.attendanceWithoutHis &&
+                        "bg-orange-50/50 dark:bg-orange-950/20"
+                    )}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="py-1.5">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

@@ -1,6 +1,8 @@
 import type {
   EnrichedStudentRow,
+  ExamProject,
   ExamStatistics,
+  FailerAnalysis,
   GradeSchema,
 } from "@/lib/types";
 
@@ -16,11 +18,19 @@ function median(values: number[]): number | null {
 
 export function computeStatistics(
   rows: EnrichedStudentRow[],
-  schema: GradeSchema
+  schema: GradeSchema,
+  borderlineMax = 1,
+  project?: ExamProject | null
 ): ExamStatistics {
+  const hasAttendanceList = (project?.attendance.length ?? 0) > 0;
+  const attendanceImported = project?.attendance.length ?? 0;
+
   const inHis = rows.filter((r) => r.inHis);
   const registered = inHis.length;
   const attended = inHis.filter((r) => r.attended === true).length;
+  const attendedOrphan = rows.filter(
+    (r) => r.attendanceWithoutHis || (!r.inHis && r.attended === true)
+  ).length;
   const noShow = inHis.filter(
     (r) => r.status === "no_show" || r.attended === false
   ).length;
@@ -40,15 +50,21 @@ export function computeStatistics(
     .map((r) => r.totalPoints as number);
 
   const passed = grades.filter((g) => g <= 4.0).length;
+  const failCount = rows.filter((r) => r.isFailed).length;
+  const borderlineCount = rows.filter(
+    (r) =>
+      r.pointsToNext != null &&
+      r.pointsToNext <= borderlineMax &&
+      r.pointsToNext > 0 &&
+      !r.isFailed
+  ).length;
 
-  // Notenverteilung (feste deutsche Noten)
   const gradeKeys = [1, 1.3, 1.7, 2, 2.3, 2.7, 3, 3.3, 3.7, 4, 5];
   const gradeDistribution = gradeKeys.map((grade) => ({
     grade,
     count: grades.filter((g) => Math.abs(g - grade) < 0.05).length,
   }));
 
-  // Punkte-Histogramm in 10 Bins
   const maxP = schema.maxPoints || 100;
   const binCount = 10;
   const binWidth = maxP / binCount;
@@ -58,19 +74,18 @@ export function computeStatistics(
     const count = points.filter((p) =>
       i === binCount - 1 ? p >= from && p <= to : p >= from && p < to
     ).length;
-    return {
-      bin: `${from}–${to}`,
-      from,
-      to,
-      count,
-    };
+    return { bin: `${from}–${to}`, from, to, count };
   });
 
   return {
     registered,
     attended,
-    noShow,
-    noShowRate: registered > 0 ? noShow / registered : null,
+    attendanceImported,
+    attendedOrphan,
+    noShow: hasAttendanceList ? noShow : 0,
+    noShowRate:
+      hasAttendanceList && registered > 0 ? noShow / registered : null,
+    hasAttendanceList,
     withPoints,
     graded,
     exportReady,
@@ -85,7 +100,38 @@ export function computeStatistics(
       points.length > 0
         ? points.reduce((a, b) => a + b, 0) / points.length
         : null,
+    failCount,
+    borderlineCount,
     gradeDistribution,
     pointsHistogram,
+  };
+}
+
+/** Interne Prüfer-Analyse der Durchfaller (keine Studierenden-Kommunikation) */
+export function computeFailerAnalysis(
+  rows: EnrichedStudentRow[]
+): FailerAnalysis {
+  const failers = rows.filter((r) => r.isFailed);
+  const pts = failers
+    .map((r) => r.totalPoints)
+    .filter((p): p is number => p != null);
+
+  const nearPass = [0.5, 1, 1.5, 2, 3, 5].map((within) => ({
+    within,
+    count: failers.filter(
+      (r) =>
+        r.pointsBelowPass != null &&
+        r.pointsBelowPass > 0 &&
+        r.pointsBelowPass <= within
+    ).length,
+  }));
+
+  return {
+    count: failers.length,
+    averagePoints:
+      pts.length > 0 ? pts.reduce((a, b) => a + b, 0) / pts.length : null,
+    medianPoints: median(pts),
+    nearPass,
+    rows: failers,
   };
 }

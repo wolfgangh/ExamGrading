@@ -7,6 +7,8 @@ import {
   ClipboardList,
   Download,
   FileSpreadsheet,
+  Grid3x3,
+  Layers,
   PenLine,
   Settings,
   Table2,
@@ -17,7 +19,9 @@ const NAV = [
   { href: "overview", label: "Übersicht", icon: BarChart3 },
   { href: "import", label: "Importe", icon: FileSpreadsheet },
   { href: "points", label: "Punkteerfassung", icon: PenLine },
+  { href: "detail-points", label: "Detailpunkte", icon: Grid3x3 },
   { href: "grades", label: "Notenübersicht", icon: Table2 },
+  { href: "scenarios", label: "Notenszenarien", icon: Layers },
   { href: "export", label: "Export", icon: Download },
   { href: "settings", label: "Einstellungen", icon: Settings },
 ] as const;

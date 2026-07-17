@@ -42,6 +42,16 @@ export interface GradeSchema {
   roundPointsUp: boolean;
 }
 
+/** Ein Notenszenario (Bestehensgrenze → Schwellen) */
+export interface GradeScenario {
+  id: string;
+  name: string;
+  passThreshold: number;
+  /** true = Nutzer darf Bestehensgrenze ändern (Szenario 3) */
+  editable: boolean;
+  schema: GradeSchema;
+}
+
 export interface Student {
   matriculationNumber: string;
   lastName: string;
@@ -56,14 +66,29 @@ export interface AttendanceRecord {
   sourceRow?: number;
 }
 
+/** Aufgabe aus THE-Import (F 1 /10,00 …) */
+export interface QuestionDef {
+  id: string;
+  label: string;
+  maxPoints: number;
+  orderIndex: number;
+  subAreaId?: string;
+}
+
 export interface PointsRecord {
   matriculationNumber: string;
   bySubArea: Record<string, number | null>;
+  /** Berechnet aus byQuestion oder Import – nicht manuell setzen */
   totalPoints: number | null;
+  /** @deprecated nicht mehr über UI */
   totalOverride?: number | null;
   gradeOverride?: number | null;
   comment?: string;
   source: PointsSource;
+  /** Punkte pro Aufgabe (questionId) */
+  byQuestion?: Record<string, number | null>;
+  /** Offene manuelle Bewertungen */
+  needsGrading?: string[];
 }
 
 export interface HISTemplateRow {
@@ -71,15 +96,48 @@ export interface HISTemplateRow {
   lastName: string;
   firstName: string;
   orderIndex: number;
+  /** Verweis auf HisSource.id (Multi-Studiengang) */
+  sourceId?: string;
+  examPlanId?: string;
+  examNumber?: string;
+  title?: string;
+  status?: string;
+  leistung?: string | number | null;
+  vermerk?: string;
+  semester?: string;
+  year?: string | number;
   extra?: Record<string, unknown>;
 }
 
+export type HisFileFormat = "legacy" | "hisinone_v2";
+
 export interface HisTemplateMeta {
   titleCell?: string;
+  /** aus HISinOne-Titelzeile / Spalte PrüfungsNr. */
+  examNumber?: string;
+  examCheckToken?: string;
   lecturers?: string[];
+  semesterLabel?: string;
+  examPeriod?: string;
   originalFileName?: string;
   headerRowIndex?: number;
   dataStartRowIndex?: number;
+  format?: HisFileFormat;
+  /** Original-Header für Re-Export */
+  headerColumns?: string[];
+}
+
+/** Eine HISinOne-Quelle = ein Studiengang / eine Prüfungsnummer */
+export interface HisSource {
+  id: string;
+  /** z. B. MEB, MBW */
+  programCode: string;
+  /** z. B. "MEB 20242 8010260 RMT" */
+  examNumber: string;
+  label: string;
+  originalFileName?: string;
+  meta: HisTemplateMeta;
+  rows: HISTemplateRow[];
 }
 
 export interface ImportLogEntry {
@@ -97,21 +155,32 @@ export interface ExamProject {
   id: string;
   createdAt: string;
   updatedAt: string;
-  schemaVersion: 1;
+  /** 1 = gradeSchema; 2 = scenarios; 3 = multi HIS sources */
+  schemaVersion: 1 | 2 | 3;
 
   name: string;
+  /** Anzeige: eine oder mehrere Prüfungsnummern (kommagetrennt) */
   examNumber: string;
   semester: string;
   lecturers: string[];
   examType: ExamType;
   subAreas: SubArea[];
+  /** Spiegel des aktiven Szenarios (Export / Matching) */
   gradeSchema: GradeSchema;
+  /** Drei Szenarien: 45, 40, editierbar */
+  gradeScenarios?: GradeScenario[];
+  activeScenarioId?: string;
 
+  /** Mehrere HIS-Quellen (Studiengänge) */
+  hisSources?: HisSource[];
+  /** Ab v3 aus hisSources abgeleitet (Kompatibilität) */
   hisRows: HISTemplateRow[];
   hisTemplateMeta?: HisTemplateMeta;
   attendance: AttendanceRecord[];
   points: PointsRecord[];
   students: Record<MatriculationKey, Student>;
+  /** Aufgaben aus THE-Import */
+  questionDefs?: QuestionDef[];
 
   importLogs: ImportLogEntry[];
 }
@@ -134,13 +203,39 @@ export interface EnrichedStudentRow {
   comment?: string;
   attempt?: number | null;
   orderIndex: number;
+  /** Punkte bis zur nächstbesseren Note (aktives Szenario) */
+  pointsToNext: number | null;
+  nextGrade: number | null;
+  /** Note > 4,0 und mit Bewertung */
+  isFailed: boolean;
+  /** Abstand zur Bestehensgrenze (positiv = darunter) */
+  pointsBelowPass: number | null;
+  /** Noten in allen Szenarien (Vergleich) */
+  scenarioGrades: { scenarioId: string; name: string; grade: number | null }[];
+  /** Studiengang / HIS-Quelle */
+  hisSourceId?: string;
+  programCode?: string;
+  examNumber?: string;
+  /** Matnr. kommt in mehreren HIS-Quellen vor */
+  multiProgram?: boolean;
+  /** In Antrittsliste, aber nicht in HIS */
+  attendanceWithoutHis?: boolean;
+  /** Offene Aufgabenbewertungen */
+  needsGradingCount?: number;
 }
 
 export interface ExamStatistics {
   registered: number;
+  /** Gematchte Antritte (HIS ∩ Moodle) */
   attended: number;
+  /** Rohanzahl importierter Antrittszeilen */
+  attendanceImported: number;
+  /** Antritt ohne HIS-Match */
+  attendedOrphan: number;
   noShow: number;
+  /** null = keine Antrittsliste importiert */
   noShowRate: number | null;
+  hasAttendanceList: boolean;
   withPoints: number;
   graded: number;
   exportReady: number;
@@ -149,8 +244,18 @@ export interface ExamStatistics {
   medianGrade: number | null;
   passRate: number | null;
   averagePoints: number | null;
+  failCount: number;
+  borderlineCount: number;
   gradeDistribution: { grade: number; count: number }[];
   pointsHistogram: { bin: string; from: number; to: number; count: number }[];
+}
+
+export interface FailerAnalysis {
+  count: number;
+  averagePoints: number | null;
+  medianPoints: number | null;
+  nearPass: { within: number; count: number }[];
+  rows: EnrichedStudentRow[];
 }
 
 export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {

@@ -4,11 +4,17 @@ export type LogicalField =
   | "firstName"
   | "fullName"
   | "email"
+  | "login"
+  | "date"
   | "totalPoints"
   | "grade"
   | "attempt"
   | "attendance";
 
+/**
+ * Moodle „Antritt“: … | E-Mail-Adresse | … | Name | Vorname | Matrikelnummer
+ * Moodle THE-Bewertung: Nachname | Vorname | Anmeldename | E-Mail | … | Bewertung/90,00 | F 1 /…
+ */
 const SYNONYMS: Record<LogicalField, string[]> = {
   matriculation: [
     "matrikelnummer",
@@ -22,7 +28,6 @@ const SYNONYMS: Record<LogicalField, string[]> = {
     "id nummer",
     "matriculation",
     "student id",
-    "matr",
   ],
   lastName: [
     "nachname",
@@ -30,7 +35,6 @@ const SYNONYMS: Record<LogicalField, string[]> = {
     "lastname",
     "last name",
     "surname",
-    "name",
   ],
   firstName: ["vorname", "firstname", "first name", "given name"],
   fullName: [
@@ -39,15 +43,28 @@ const SYNONYMS: Record<LogicalField, string[]> = {
     "full name",
     "display name",
   ],
-  email: ["e-mail", "email", "e-mail-adresse", "mail"],
+  email: [
+    "e-mail-adresse",
+    "e-mail adresse",
+    "email-adresse",
+    "e-mail",
+    "email",
+  ],
+  login: [
+    "anmeldename",
+    "benutzername",
+    "username",
+    "user name",
+    "login",
+  ],
+  date: ["datum", "date", "begonnen", "zeitstempel", "timestamp"],
   totalPoints: [
     "gesamtpunkte",
+    "bewertung/",
     "bewertung",
     "punkte",
     "score",
-    "gesamt",
     "points",
-    "bewertung/",
   ],
   grade: ["note", "grade", "bewertung (note)"],
   attempt: ["versuch", "versuche", "attempt"],
@@ -66,19 +83,30 @@ export function detectField(header: string): LogicalField | null {
   const n = normalizeHeader(header);
   if (!n) return null;
 
+  // Moodle: exakte Spalte "Name" = Nachname (nicht "Vorname", nicht "Vollständiger Name")
+  if (n === "name") return "lastName";
+
   for (const [field, synonyms] of Object.entries(SYNONYMS) as [
     LogicalField,
     string[],
   ][]) {
     for (const syn of synonyms) {
-      if (n === syn || n.startsWith(syn) || n.includes(syn)) {
-        // "name" alone should not steal "vorname"
-        if (field === "lastName" && (n.includes("vorname") || n === "vollständiger name")) {
+      if (n === syn || n.startsWith(syn + " ") || n.startsWith(syn + "/")) {
+        return field;
+      }
+      // includes nur bei längeren Synonymen (≥5), um "name"∈"vorname" zu vermeiden
+      if (syn.length >= 5 && n.includes(syn)) {
+        if (field === "lastName" && n.includes("vorname")) continue;
+        if (field === "lastName" && n.includes("vollständig")) continue;
+        if (field === "totalPoints" && n.includes("note")) continue;
+        if (
+          field === "totalPoints" &&
+          (n.includes("notwendig") || n.includes("nicht bewertet"))
+        ) {
           continue;
         }
-        if (field === "totalPoints" && n.includes("note")) {
-          continue;
-        }
+        if (field === "date" && n.includes("update")) continue;
+        if (field === "email" && n === "anmeldename") continue;
         return field;
       }
     }
