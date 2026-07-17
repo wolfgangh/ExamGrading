@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { useParams } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
 import { ExamSidebar } from "@/components/layout/exam-sidebar";
 import { SummaryPanel } from "@/components/layout/summary-panel";
@@ -90,14 +90,26 @@ function ExamShell({
   );
 }
 
+/**
+ * Dynamische Exam-Route: params über useParams (Client),
+ * nicht use(params)/Promise – vermeidet 500 auf Vercel Production.
+ */
 export default function ExamLayout({
   children,
-  params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ id: string }>;
 }) {
-  const { id } = use(params);
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
+
+  if (!id || typeof id !== "string") {
+    return (
+      <div className="page-shell flex items-center justify-center p-12 text-muted-foreground">
+        Prüfung wird geladen…
+      </div>
+    );
+  }
+
   return (
     <ExamProvider examId={id}>
       <ExamShell examId={id}>{children}</ExamShell>

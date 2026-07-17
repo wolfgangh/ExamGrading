@@ -1,18 +1,17 @@
 "use client";
 
-import { use, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 
-export default function ExamIndexPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
+export default function ExamIndexPage() {
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(`/exam/${id}/overview`);
+    if (id) {
+      router.replace(`/exam/${id}/overview`);
+    }
   }, [id, router]);
 
   return (
