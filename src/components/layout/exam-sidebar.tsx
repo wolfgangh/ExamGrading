@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ArrowLeft,
   BarChart3,
   ClipboardList,
   Download,
@@ -13,6 +14,7 @@ import {
   Settings,
   Table2,
 } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -32,7 +34,20 @@ export function ExamSidebar({ examId }: { examId: string }) {
 
   return (
     <aside className="surface-panel flex w-56 shrink-0 flex-col border-r">
-      <div className="border-b px-3 py-3">
+      <div className="border-b p-2">
+        <Link
+          href="/"
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "w-full justify-start gap-2"
+          )}
+          title="Zur Übersicht aller Prüfungen"
+        >
+          <ArrowLeft className="size-4 shrink-0" />
+          Zurück
+        </Link>
+      </div>
+      <div className="border-b px-3 py-2">
         <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <ClipboardList className="size-3.5" />
           Prüfung
@@ -59,14 +74,6 @@ export function ExamSidebar({ examId }: { examId: string }) {
           );
         })}
       </nav>
-      <div className="mt-auto border-t p-3">
-        <Link
-          href="/"
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
-          ← Alle Prüfungen
-        </Link>
-      </div>
     </aside>
   );
 }
