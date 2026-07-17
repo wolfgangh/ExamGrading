@@ -1,26 +1,50 @@
-import localforage from "localforage";
+import type { ExamProject } from "@/lib/types";
 import { migrateExamProject } from "@/lib/grades/scenarios";
 import {
   buildProjectArchive,
   parseProjectArchive,
 } from "@/lib/project-archive";
-import type { ExamProject } from "@/lib/types";
 
-const projectsStore = localforage.createInstance({
-  name: "exam-grade",
-  storeName: "projects",
-  description: "Prüfungsprojekte ExamGrade",
-});
+type LocalForage = typeof import("localforage");
+type Store = Awaited<ReturnType<LocalForage["createInstance"]>>;
 
-const draftStore = localforage.createInstance({
-  name: "exam-grade",
-  storeName: "drafts",
-  description: "Auto-Save Drafts",
-});
+let projectsStore: Store | null = null;
+let draftStore: Store | null = null;
+let initPromise: Promise<void> | null = null;
+
+async function ensureStores(): Promise<{
+  projects: Store;
+  drafts: Store;
+}> {
+  if (typeof window === "undefined") {
+    throw new Error("IndexedDB ist nur im Browser verfügbar.");
+  }
+  if (projectsStore && draftStore) {
+    return { projects: projectsStore, drafts: draftStore };
+  }
+  if (!initPromise) {
+    initPromise = (async () => {
+      const localforage = (await import("localforage")).default;
+      projectsStore = localforage.createInstance({
+        name: "exam-grade",
+        storeName: "projects",
+        description: "Prüfungsprojekte ExamGrade",
+      });
+      draftStore = localforage.createInstance({
+        name: "exam-grade",
+        storeName: "drafts",
+        description: "Auto-Save Drafts",
+      });
+    })();
+  }
+  await initPromise;
+  return { projects: projectsStore!, drafts: draftStore! };
+}
 
 export async function listExams(): Promise<ExamProject[]> {
+  const { projects } = await ensureStores();
   const items: ExamProject[] = [];
-  await projectsStore.iterate<ExamProject, void>((value) => {
+  await projects.iterate<ExamProject, void>((value) => {
     items.push(migrateExamProject(value));
   });
   return items.sort(
@@ -29,7 +53,8 @@ export async function listExams(): Promise<ExamProject[]> {
 }
 
 export async function getExam(id: string): Promise<ExamProject | null> {
-  const raw = await projectsStore.getItem<ExamProject>(id);
+  const { projects } = await ensureStores();
+  const raw = await projects.getItem<ExamProject>(id);
   return raw ? migrateExamProject(raw) : null;
 }
 
@@ -39,34 +64,40 @@ export async function getExam(id: string): Promise<ExamProject | null> {
  * sonst wäre jede Sicherung sofort wieder „veraltet“.
  */
 export async function saveExam(project: ExamProject): Promise<void> {
+  const { projects, drafts } = await ensureStores();
   const migrated = migrateExamProject(project);
   const toSave: ExamProject = {
     ...migrated,
     updatedAt: migrated.updatedAt || new Date().toISOString(),
   };
-  await projectsStore.setItem(toSave.id, toSave);
-  await clearDraft(toSave.id);
+  await projects.setItem(toSave.id, toSave);
+  await drafts.removeItem(toSave.id);
 }
 
 export async function deleteExam(id: string): Promise<void> {
-  await projectsStore.removeItem(id);
-  await clearDraft(id);
+  const { projects, drafts } = await ensureStores();
+  await projects.removeItem(id);
+  await drafts.removeItem(id);
 }
 
 export async function saveDraft(project: ExamProject): Promise<void> {
-  await draftStore.setItem(project.id, {
+  const { drafts } = await ensureStores();
+  await drafts.setItem(project.id, {
     ...project,
     updatedAt: project.updatedAt || new Date().toISOString(),
   });
 }
 
 export async function getDraft(id: string): Promise<ExamProject | null> {
-  const raw = await draftStore.getItem<ExamProject>(id);
+  const { drafts } = await ensureStores();
+  const raw = await drafts.getItem<ExamProject>(id);
   return raw ? migrateExamProject(raw) : null;
 }
 
 export async function clearDraft(id: string): Promise<void> {
-  await draftStore.removeItem(id);
+  if (typeof window === "undefined") return;
+  const { drafts } = await ensureStores();
+  await drafts.removeItem(id);
 }
 
 /** Vollständige Projektsicherung (Archive-Format) */
