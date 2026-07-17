@@ -31,6 +31,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import {
+  ChartTooltip,
+  chartTooltipCursor,
+} from "@/components/charts/chart-tooltip";
 
 function pctColor(p: number | null) {
   const d = difficultyColor(p);
@@ -93,7 +97,12 @@ export function QuestionStatsPanel({
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} unit=" %" tick={{ fontSize: 11 }} />
                   <Tooltip
-                    formatter={(v) => [`${v} %`, "Ø-Erreichungsgrad"]}
+                    cursor={chartTooltipCursor}
+                    content={
+                      <ChartTooltip
+                        formatter={(v) => [`${v} %`, "Ø-Erreichungsgrad"]}
+                      />
+                    }
                   />
                   <Bar dataKey="pct" radius={[4, 4, 0, 0]} fill="var(--color-chart-1)">
                     <LabelList

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
@@ -11,6 +11,10 @@ import {
   computeQuestionStats,
   computeSubAreaStats,
 } from "@/lib/grades/question-stats";
+import {
+  ensureQuestionDefs,
+  projectWithEnsuredQuestionDefs,
+} from "@/lib/grades/ensure-question-defs";
 import { recomputePointsRecord } from "@/lib/grades/points-total";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { Button } from "@/components/ui/button";
@@ -24,6 +28,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { Lock, LockOpen, RefreshCw } from "lucide-react";
 import type { PointsRecord } from "@/lib/types";
@@ -35,13 +45,31 @@ export default function DetailPointsPage() {
   const [search, setSearch] = useState("");
   const [onlyOpen, setOnlyOpen] = useState(false);
 
+  // questionDefs aus byQuestion rekonstruieren und einmal persistieren
+  useEffect(() => {
+    if (!project) return;
+    if (project.questionDefs && project.questionDefs.length > 0) return;
+    const next = projectWithEnsuredQuestionDefs(project);
+    if (next.questionDefs && next.questionDefs.length > 0) {
+      setProject(() => next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, project?.points?.length]);
+
+  const effectiveProject = useMemo(() => {
+    if (!project) return null;
+    const defs = ensureQuestionDefs(project);
+    if (defs === project.questionDefs) return project;
+    return { ...project, questionDefs: defs };
+  }, [project]);
+
   const questionStats = useMemo(
-    () => (project ? computeQuestionStats(project) : []),
-    [project]
+    () => (effectiveProject ? computeQuestionStats(effectiveProject) : []),
+    [effectiveProject]
   );
   const subAreaStats = useMemo(
-    () => (project ? computeSubAreaStats(project) : []),
-    [project]
+    () => (effectiveProject ? computeSubAreaStats(effectiveProject) : []),
+    [effectiveProject]
   );
   const pctMap = useMemo(() => {
     const m: Record<string, number | null> = {};
@@ -49,11 +77,17 @@ export default function DetailPointsPage() {
     return m;
   }, [questionStats]);
 
-  if (!project) return null;
+  if (!project || !effectiveProject) return null;
+
+  const taskCount = ensureQuestionDefs(effectiveProject).length;
+  const hasPointsButNoTasks =
+    project.points.length > 0 && taskCount === 0;
+  const showSubareaMapping = effectiveProject.subAreas.length > 1;
 
   const updateQuestionSubArea = (questionId: string, subAreaId: string) => {
     setProject((prev) => {
-      const questionDefs = (prev.questionDefs ?? []).map((q) =>
+      const baseDefs = ensureQuestionDefs(prev);
+      const questionDefs = baseDefs.map((q) =>
         q.id === questionId ? { ...q, subAreaId } : q
       );
       const points = prev.points.map((rec) =>
@@ -69,6 +103,7 @@ export default function DetailPointsPage() {
     value: number | null
   ) => {
     setProject((prev) => {
+      const defs = ensureQuestionDefs(prev);
       const idx = prev.points.findIndex(
         (p) => normalizeMatriculation(p.matriculationNumber) === matKey
       );
@@ -92,8 +127,6 @@ export default function DetailPointsPage() {
       let needsGrading = [...(base.needsGrading ?? [])];
       if (value != null) {
         needsGrading = needsGrading.filter((id) => id !== questionId);
-      } else if (!needsGrading.includes(questionId)) {
-        // optional: leave needs flag if was open
       }
 
       const next = recomputePointsRecord(
@@ -103,21 +136,25 @@ export default function DetailPointsPage() {
           needsGrading,
           source: base.source === "moodle" ? "mixed" : base.source,
         },
-        prev.questionDefs ?? [],
+        defs,
         prev.subAreas
       );
 
       const points = [...prev.points];
       if (idx >= 0) points[idx] = next;
       else points.push(next);
-      return { ...prev, points };
+      return {
+        ...prev,
+        questionDefs: prev.questionDefs?.length ? prev.questionDefs : defs,
+        points,
+      };
     });
   };
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 max-w-2xl">
           <h1 className="text-2xl font-semibold tracking-tight">
             Detailpunkte (Matrix)
           </h1>
@@ -138,6 +175,7 @@ export default function DetailPointsPage() {
             type="button"
             variant={unlocked ? "default" : "outline"}
             onClick={() => setUnlocked((u) => !u)}
+            disabled={taskCount === 0}
           >
             {unlocked ? (
               <>
@@ -152,12 +190,37 @@ export default function DetailPointsPage() {
         </div>
       </div>
 
+      {hasPointsButNoTasks && (
+        <div className="rounded-xl border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50">
+          <p className="font-medium">Keine Aufgaben-Spalten gefunden</p>
+          <p className="mt-1">
+            Die importierten Punkte enthalten keine Einzelaufgaben (F&nbsp;1,
+            F&nbsp;2, …). Bitte die Moodle-THE-Datei erneut unter{" "}
+            <Link
+              href={`/exam/${id}/import?focus=points`}
+              className="font-semibold underline"
+            >
+              Importe
+            </Link>{" "}
+            laden (Spalten wie „F 1 /10,00“). Nur Gesamtpunkte reichen für die
+            Matrix nicht.
+          </p>
+        </div>
+      )}
+
+      {taskCount > 0 && (
+        <QuestionStatsPanel
+          questionStats={questionStats}
+          subAreaStats={subAreaStats}
+        />
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Suche Name / Matr.…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
+          className="w-full max-w-xs"
         />
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -168,9 +231,7 @@ export default function DetailPointsPage() {
           />
           nur offene Bewertungen
         </label>
-        <Badge variant="secondary">
-          {project.questionDefs?.length ?? 0} Aufgaben
-        </Badge>
+        <Badge variant="secondary">{taskCount} Aufgaben</Badge>
         {unlocked && (
           <Badge className="bg-amber-100 text-amber-950 dark:bg-amber-950 dark:text-amber-100">
             Edit-Modus – Zellen nach Eingabe mit Tab verlassen
@@ -178,23 +239,29 @@ export default function DetailPointsPage() {
         )}
       </div>
 
-      {(project.subAreas.length > 1 ||
-        (project.questionDefs?.length ?? 0) > 0) && (
-        <Card className="surface-panel">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Zuordnung Teilgebiete</CardTitle>
-            <CardDescription>
-              Für Auswertungen und Σ-Spalten in der Matrix
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <QuestionSubareaMapper
-              questionDefs={project.questionDefs ?? []}
-              subAreas={project.subAreas}
-              onChange={updateQuestionSubArea}
-            />
-          </CardContent>
-        </Card>
+      {showSubareaMapping && (
+        <Accordion className="surface-panel rounded-xl border px-3">
+          <AccordionItem value="subareas" className="border-0">
+            <AccordionTrigger className="py-2.5 hover:no-underline">
+              <span className="flex flex-wrap items-center gap-2">
+                Zuordnung Teilgebiete
+                <Badge variant="outline" className="font-normal">
+                  {taskCount} Aufg. · {effectiveProject.subAreas.length} Gebiete
+                </Badge>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Für Auswertungen und Σ-Spalten in der Matrix
+              </p>
+              <QuestionSubareaMapper
+                questionDefs={ensureQuestionDefs(effectiveProject)}
+                subAreas={effectiveProject.subAreas}
+                onChange={updateQuestionSubArea}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       )}
 
       <Card className="surface-panel">
@@ -206,7 +273,7 @@ export default function DetailPointsPage() {
         </CardHeader>
         <CardContent>
           <PointsMatrix
-            project={project}
+            project={effectiveProject}
             unlocked={unlocked}
             search={search}
             onlyOpen={onlyOpen}
@@ -216,11 +283,6 @@ export default function DetailPointsPage() {
           />
         </CardContent>
       </Card>
-
-      <QuestionStatsPanel
-        questionStats={questionStats}
-        subAreaStats={subAreaStats}
-      />
     </div>
   );
 }

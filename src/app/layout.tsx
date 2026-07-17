@@ -31,7 +31,7 @@ const themeInitScript = `
 (function(){
   try {
     var raw = localStorage.getItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)});
-    var prefs = raw ? JSON.parse(raw) : { colorMode: "light", fontFamily: "sans" };
+    var prefs = raw ? JSON.parse(raw) : { colorMode: "light", fontFamily: "sans", highContrast: false };
     var root = document.documentElement;
     if (prefs.colorMode === "dark") root.classList.add("dark");
     else root.classList.remove("dark");
@@ -39,6 +39,9 @@ const themeInitScript = `
     root.classList.add(prefs.fontFamily === "serif" ? "font-serif" : "font-sans");
     root.dataset.font = prefs.fontFamily === "serif" ? "serif" : "sans";
     root.dataset.theme = prefs.colorMode === "dark" ? "dark" : "light";
+    root.dataset.contrast = prefs.highContrast ? "high" : "normal";
+    if (prefs.highContrast) root.classList.add("high-contrast");
+    else root.classList.remove("high-contrast");
   } catch (e) {}
 })();
 `;

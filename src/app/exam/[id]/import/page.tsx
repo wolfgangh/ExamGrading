@@ -13,7 +13,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { loadWorkbookFromFile, worksheetToMatrix } from "@/lib/excel/workbook";
+import {
+  loadWorkbookFromFile,
+  pickPointsWorksheet,
+  worksheetToMatrix,
+} from "@/lib/excel/workbook";
 import { parseHisMatrix } from "@/lib/excel/parse-his";
 import { parseAttendanceMatrix } from "@/lib/excel/parse-attendance";
 import { parsePointsMatrix } from "@/lib/excel/parse-moodle-points";
@@ -260,10 +264,8 @@ export default function ImportPage() {
 
   const handlePoints = async (file: File) => {
     const wb = await loadWorkbookFromFile(file);
-    const sheet =
-      wb.worksheets.find((s) =>
-        /punkte|detail|bewertung|grades/i.test(s.name)
-      ) ?? wb.worksheets[0];
+    // Detailpunkte mit F-Spalten bevorzugen (nicht nur Gesamtpunkte-Blatt)
+    const sheet = pickPointsWorksheet(wb);
     const matrix = worksheetToMatrix(sheet);
     const result = parsePointsMatrix(matrix, project.subAreas, {
       knownStudents: project.students,
@@ -271,6 +273,14 @@ export default function ImportPage() {
     const isReimport = project.points.length > 0;
 
     const warnings = [...result.log.warnings];
+    if (wb.worksheets.length > 1) {
+      warnings.unshift(`Arbeitsblatt „${sheet.name}“ verwendet.`);
+    }
+    if (!result.questionDefs?.length && result.records.length > 0) {
+      warnings.unshift(
+        "Keine Aufgaben-Spalten (F 1, F 2, …) gefunden – bitte ein Blatt mit Detailpunkten wählen bzw. THE-Bewertungsexport mit F-Spalten laden."
+      );
+    }
     if (isReimport) {
       warnings.unshift(
         `Re-Import: bisher ${project.points.length} Punktedatensätze – Optionen im Dialog prüfen.`

@@ -37,9 +37,56 @@ export function createDefaultScenarios(maxPoints: number): GradeScenario[] {
     name: "Szenario 3 (frei)",
     passThreshold: pass45,
     editable: true,
+    enabled: false,
     schema: generateLinearGradeSchema(max, pass45, true),
   };
   return [s45, s40, s3];
+}
+
+/** Sichtbare Szenarien: Presets immer, editierbares nur wenn enabled */
+export function isScenarioVisible(sc: GradeScenario): boolean {
+  if (!sc.editable) return true;
+  return sc.enabled === true;
+}
+
+export function visibleScenarios(project: ExamProject): GradeScenario[] {
+  return ensureScenarios(project).filter(isScenarioVisible);
+}
+
+export function getEditableScenario(
+  project: ExamProject
+): GradeScenario | undefined {
+  return ensureScenarios(project).find((s) => s.editable);
+}
+
+/** Szenario 3 ein-/ausschalten; bei Aus und aktiv → erstes Preset */
+export function setEditableScenarioEnabled(
+  project: ExamProject,
+  enabled: boolean
+): ExamProject {
+  const scenarios = [
+    ...(project.gradeScenarios ??
+      createDefaultScenarios(project.gradeSchema.maxPoints)),
+  ];
+  const idx = scenarios.findIndex((s) => s.editable);
+  if (idx < 0) return project;
+
+  scenarios[idx] = { ...scenarios[idx], enabled };
+
+  let next: ExamProject = {
+    ...project,
+    gradeScenarios: scenarios,
+  };
+
+  if (!enabled) {
+    const activeId = project.activeScenarioId ?? scenarios[0]?.id;
+    if (activeId === scenarios[idx].id) {
+      const fallback = scenarios.find((s) => !s.editable) ?? scenarios[0];
+      next = withActiveScenario(next, fallback.id);
+    }
+  }
+
+  return next;
 }
 
 export function getActiveScenario(project: ExamProject): GradeScenario {
@@ -184,13 +231,26 @@ export function migrateExamProject(raw: ExamProject): ExamProject {
       gradeSchema: scenarios[0].schema,
     };
   } else {
+    // enabled-Flag für editierbares Szenario normalisieren
+    const scenarios = project.gradeScenarios!.map((s) => {
+      if (!s.editable) return s;
+      if (s.enabled === true || s.enabled === false) return s;
+      // fehlend: aktiv halten wenn gerade gewählt, sonst deaktiviert
+      const isActive = s.id === project.activeScenarioId;
+      return { ...s, enabled: isActive };
+    });
     const active =
-      project.gradeScenarios!.find((s) => s.id === project.activeScenarioId) ??
-      project.gradeScenarios![0];
+      scenarios.find((s) => s.id === project.activeScenarioId) ?? scenarios[0];
+    // falls aktives Szenario editierbar und disabled → Fallback
+    const activeOk =
+      active && (!active.editable || active.enabled === true)
+        ? active
+        : scenarios.find((s) => !s.editable) ?? scenarios[0];
     project = {
       ...project,
-      gradeSchema: active.schema,
-      activeScenarioId: active.id,
+      gradeScenarios: scenarios,
+      gradeSchema: activeOk.schema,
+      activeScenarioId: activeOk.id,
     };
   }
 

@@ -4,7 +4,10 @@ import { useMemo, useState } from "react";
 import { useExamContext } from "@/components/exam/exam-context";
 import {
   ensureScenarios,
+  getEditableScenario,
+  setEditableScenarioEnabled,
   updateEditableScenario,
+  visibleScenarios,
   withActiveScenario,
 } from "@/lib/grades/scenarios";
 import { buildEnrichedRows } from "@/lib/matching/match";
@@ -38,6 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 export default function ScenariosPage() {
   const { project, setProject } = useExamContext();
@@ -46,10 +50,19 @@ export default function ScenariosPage() {
   const [compareB, setCompareB] = useState<string | null>(null);
   const [onlyChanged, setOnlyChanged] = useState(true);
 
-  const scenarios = useMemo(
+  const allScenarios = useMemo(
     () => (project ? ensureScenarios(project) : []),
     [project]
   );
+  const scenarios = useMemo(
+    () => (project ? visibleScenarios(project) : []),
+    [project]
+  );
+  const editable = useMemo(
+    () => (project ? getEditableScenario(project) : undefined),
+    [project]
+  );
+  const s3Enabled = editable?.enabled === true;
 
   const comparison = useMemo(() => {
     if (!project) return [];
@@ -57,81 +70,171 @@ export default function ScenariosPage() {
       const rows = buildEnrichedRows({
         ...project,
         gradeSchema: sc.schema,
-        gradeScenarios: scenarios,
+        gradeScenarios: allScenarios,
         activeScenarioId: sc.id,
       });
       const stats = computeStatistics(rows, sc.schema);
       return { scenario: sc, stats, rows };
     });
-  }, [project, scenarios]);
+  }, [project, scenarios, allScenarios]);
 
   if (!project) return null;
 
   const activeId = project.activeScenarioId ?? scenarios[0]?.id;
+  const active =
+    scenarios.find((s) => s.id === activeId) ?? scenarios[0] ?? null;
   const idA = compareA ?? scenarios[0]?.id;
-  const idB = compareB ?? scenarios[1]?.id;
+  const idB =
+    compareB ??
+    scenarios.find((s) => s.id !== idA)?.id ??
+    scenarios[1]?.id;
   const impact =
-    idA && idB ? computeScenarioImpact(project, idA, idB) : null;
+    idA && idB && scenarios.length >= 2
+      ? computeScenarioImpact(project, idA, idB)
+      : null;
   const impactRows = impact
     ? onlyChanged
       ? impact.rows.filter((r) => r.delta != null && Math.abs(r.delta) >= 0.05)
       : impact.rows
     : [];
 
+  const thresholds = active
+    ? [...active.schema.thresholds].sort((a, b) => a.grade - b.grade)
+    : [];
+
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
+    <div className="mx-auto max-w-5xl space-y-4">
+      <div className="max-w-2xl">
         <h1 className="text-2xl font-semibold tracking-tight">
           Notenszenarien
         </h1>
         <p className="text-muted-foreground">
           Vergleich der Bestehensgrenzen. Das aktive Szenario steuert Noten,
-          Export und Grenzfälle. Auswertung nur für Prüferinnen und Prüfer –
-          keine Studierenden-Kommunikation.
+          Export und Grenzfälle. Nur intern – keine Studierenden-Kommunikation.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {scenarios.map((sc) => {
-          const active = sc.id === activeId;
-          return (
-            <Button
-              key={sc.id}
-              type="button"
-              variant={active ? "default" : "outline"}
-              onClick={() =>
-                setProject((prev) => withActiveScenario(prev, sc.id))
-              }
-            >
-              {active && <Check className="size-4" />}
-              {sc.name}
-              <span className="opacity-80">({sc.passThreshold} Pkt.)</span>
-            </Button>
-          );
-        })}
-      </div>
+      {/* Aktive Schwellen + Szenario-Wahl kompakt */}
+      <Card className="surface-panel">
+        <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">Aktive Notenschwelle</span>
+              {active && (
+                <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  {active.name.replace(" (Standard)", "")} · Bestehen ab{" "}
+                  {active.passThreshold} Pkt.
+                </span>
+              )}
+            </div>
+            <div className="flex max-w-full flex-wrap gap-1.5">
+              {thresholds.map((t) => (
+                <span
+                  key={t.grade}
+                  className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-0.5 text-xs tabular-nums"
+                  title={`Note ${formatGrade(t.grade)} ab ${t.minPoints} Punkten`}
+                >
+                  <span className="font-semibold">{formatGrade(t.grade)}</span>
+                  <span className="text-muted-foreground">≥{t.minPoints}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+            <div className="flex flex-wrap gap-1.5">
+              {scenarios.map((sc) => {
+                const isActive = sc.id === activeId;
+                return (
+                  <Button
+                    key={sc.id}
+                    type="button"
+                    size="sm"
+                    variant={isActive ? "default" : "outline"}
+                    onClick={() =>
+                      setProject((prev) => withActiveScenario(prev, sc.id))
+                    }
+                  >
+                    {isActive && <Check className="size-3.5" />}
+                    {sc.name.replace(" (Standard)", "").replace(" (frei)", "")}
+                    <span className="opacity-80">{sc.passThreshold} Pkt.</span>
+                  </Button>
+                );
+              })}
+            </div>
+
+            {editable && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-1.5">
+                <Switch
+                  checked={s3Enabled}
+                  onCheckedChange={(on) =>
+                    setProject((prev) =>
+                      setEditableScenarioEnabled(prev, on === true)
+                    )
+                  }
+                  id="s3-toggle"
+                />
+                <Label htmlFor="s3-toggle" className="cursor-pointer text-sm">
+                  Szenario 3 (frei)
+                </Label>
+                {s3Enabled && (
+                  <>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      className="h-8 w-20"
+                      title="Bestehensgrenze"
+                      value={editPass ?? editable.passThreshold}
+                      onChange={(e) => setEditPass(e.target.value)}
+                    />
+                    <span className="text-xs text-muted-foreground">Pkt.</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        const p = Number(
+                          (editPass ?? editable.passThreshold)
+                            .toString()
+                            .replace(",", ".")
+                        );
+                        if (!Number.isFinite(p)) return;
+                        setProject((prev) => updateEditableScenario(prev, p));
+                        setEditPass(null);
+                      }}
+                    >
+                      Übernehmen
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="surface-panel">
-        <CardHeader>
+        <CardHeader className="pb-2">
           <CardTitle className="text-base">Direktvergleich</CardTitle>
           <CardDescription>
-            Max. {project.gradeSchema.maxPoints} Punkte · aktives Szenario
-            hervorgehoben
+            Max. {project.gradeSchema.maxPoints} Punkte
+            {scenarios.length < 2 && " · Szenario 3 aktivieren für mehr Vergleiche"}
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Kennzahl</TableHead>
+                <TableHead className="w-40">Kennzahl</TableHead>
                 {comparison.map(({ scenario }) => (
                   <TableHead
                     key={scenario.id}
                     className={cn(
+                      "whitespace-nowrap",
                       scenario.id === activeId && "bg-primary/10 font-semibold"
                     )}
                   >
-                    {scenario.name.replace(" (Standard)", "")}
+                    {scenario.name.replace(" (Standard)", "").replace(" (frei)", "")}
                   </TableHead>
                 ))}
               </TableRow>
@@ -212,107 +315,65 @@ export default function ScenariosPage() {
         </CardContent>
       </Card>
 
-      {scenarios
-        .filter((s) => s.editable)
-        .map((sc) => (
-          <Card key={sc.id} className="surface-panel">
-            <CardHeader>
-              <CardTitle className="text-base">{sc.name}</CardTitle>
-              <CardDescription>
-                Editierbare Bestehensgrenze · Schwellen linear wie im Excel
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-end gap-3">
-              <div className="grid gap-1.5">
-                <Label>Bestehensgrenze (Punkte)</Label>
-                <Input
-                  type="number"
-                  step="0.5"
-                  className="w-32"
-                  value={editPass ?? sc.passThreshold}
-                  onChange={(e) => setEditPass(e.target.value)}
-                />
-              </div>
-              <Button
-                type="button"
-                onClick={() => {
-                  const p = Number(
-                    (editPass ?? sc.passThreshold).toString().replace(",", ".")
-                  );
-                  if (!Number.isFinite(p)) return;
-                  setProject((prev) => updateEditableScenario(prev, p));
-                  setEditPass(null);
-                }}
-              >
-                Übernehmen &amp; Schwellen neu berechnen
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  setProject((prev) => withActiveScenario(prev, sc.id))
-                }
-              >
-                Als aktiv setzen
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-
-      {impact && (
+      {impact && scenarios.length >= 2 && (
         <Card className="surface-panel">
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-base">
               Wer profitiert / wer verliert?
             </CardTitle>
             <CardDescription>
-              Vergleich zweier Szenarien (Note kleiner = besser). Nur für
-              Prüfer – keine Weitergabe an Studierende.
+              Vergleich zweier Szenarien (Note kleiner = besser). Nur intern.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-3">
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
               <div className="grid gap-1">
-                <Label className="text-xs">Von Szenario</Label>
+                <Label className="text-xs">Von</Label>
                 <Select
                   value={idA}
                   onValueChange={(v) => v && setCompareA(v)}
                 >
-                  <SelectTrigger className="w-52">
+                  <SelectTrigger className="w-44">
                     <SelectValue>
-                      {scenarios.find((s) => s.id === idA)?.name}
+                      {scenarios.find((s) => s.id === idA)?.name.replace(
+                        " (Standard)",
+                        ""
+                      )}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {scenarios.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.name}
+                        {s.name.replace(" (Standard)", "")}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-1">
-                <Label className="text-xs">Nach Szenario</Label>
+                <Label className="text-xs">Nach</Label>
                 <Select
                   value={idB}
                   onValueChange={(v) => v && setCompareB(v)}
                 >
-                  <SelectTrigger className="w-52">
+                  <SelectTrigger className="w-44">
                     <SelectValue>
-                      {scenarios.find((s) => s.id === idB)?.name}
+                      {scenarios.find((s) => s.id === idB)?.name.replace(
+                        " (Standard)",
+                        ""
+                      )}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {scenarios.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
-                        {s.name}
+                        {s.name.replace(" (Standard)", "")}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <label className="flex items-end gap-2 pb-2 text-sm">
+              <label className="flex items-center gap-2 pb-2 text-sm">
                 <input
                   type="checkbox"
                   className="size-4"
@@ -405,32 +466,6 @@ export default function ScenariosPage() {
           </CardContent>
         </Card>
       )}
-
-      <Card className="surface-panel">
-        <CardHeader>
-          <CardTitle className="text-base">Notenschwellen (aktiv)</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Note</TableHead>
-                <TableHead>ab Punkte</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[...project.gradeSchema.thresholds]
-                .sort((a, b) => a.grade - b.grade)
-                .map((t) => (
-                  <TableRow key={t.grade}>
-                    <TableCell>{formatGrade(t.grade)}</TableCell>
-                    <TableCell className="tabular-nums">{t.minPoints}</TableCell>
-                  </TableRow>
-                ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   );
 }

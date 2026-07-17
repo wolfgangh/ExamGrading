@@ -10,6 +10,10 @@ import {
   YAxis,
 } from "recharts";
 import type { ExamStatistics } from "@/lib/types";
+import {
+  ChartTooltip,
+  chartTooltipCursor,
+} from "@/components/charts/chart-tooltip";
 
 export function PointsHistogramChart({ stats }: { stats: ExamStatistics }) {
   const data = stats.pointsHistogram.map((b) => ({
@@ -32,8 +36,13 @@ export function PointsHistogramChart({ stats }: { stats: ExamStatistics }) {
           />
           <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
           <Tooltip
-            formatter={(value) => [value ?? 0, "Anzahl"]}
-            labelFormatter={(l) => `Punkte ${l}`}
+            cursor={chartTooltipCursor}
+            content={
+              <ChartTooltip
+                labelFormatter={(l) => `Punkte ${l}`}
+                formatter={(value) => [value ?? 0, "Anzahl"]}
+              />
+            }
           />
           <Bar
             dataKey="count"

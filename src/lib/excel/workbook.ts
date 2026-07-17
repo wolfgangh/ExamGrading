@@ -49,3 +49,66 @@ export function worksheetToMatrix(
 export function listSheetNames(workbook: Workbook): string[] {
   return workbook.worksheets.map((ws) => ws.name);
 }
+
+const F_HEADER_RE =
+  /(?:^|[^a-z0-9])(F|Frage|Aufgabe)\s*\d+/i;
+
+/**
+ * Wählt das beste Arbeitsblatt für THE-/Punkte-Import.
+ * Bevorzugt Detailpunkte mit F-Spalten vor reinen Gesamtpunkte-Blättern.
+ */
+export function pickPointsWorksheet(workbook: Workbook): Worksheet {
+  const sheets = workbook.worksheets;
+  if (sheets.length === 0) {
+    throw new Error("Excel-Datei enthält keine Arbeitsblätter.");
+  }
+  if (sheets.length === 1) return sheets[0];
+
+  let best = sheets[0];
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const sheet of sheets) {
+    const name = sheet.name.toLowerCase();
+    let score = 0;
+
+    if (/detail/.test(name)) score += 80;
+    if (/bewertung|grades|moodle|the/.test(name)) score += 25;
+    if (/punkte/.test(name)) score += 15;
+    if (/antritt|noteneintrag|szenario|definition|durchfall|his|qis/.test(name)) {
+      score -= 60;
+    }
+
+    // Nur Header-Bereich scannen
+    const matrix = worksheetToMatrix(sheet, 20);
+    for (const row of matrix.slice(0, 15)) {
+      const headers = (row ?? []).map((c) =>
+        String(c ?? "")
+          .replace(/[\u00a0\u202f\u2007]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+      );
+      const joined = headers.join(" ").toLowerCase();
+      const fCount = headers.filter((h) => F_HEADER_RE.test(h)).length;
+      if (fCount >= 2) score += 40 + fCount * 8;
+      else if (fCount === 1) score += 10;
+      if (joined.includes("bewertung/")) score += 12;
+      if (joined.includes("anmeldename")) score += 8;
+      if (/matr/.test(joined)) score += 6;
+      if (joined.includes("nachname") && joined.includes("vorname")) score += 4;
+      // reines Gesamtblatt ohne Aufgaben abwerten
+      if (
+        fCount === 0 &&
+        (joined.includes("gesamtpunkte") || joined.includes("punkte f"))
+      ) {
+        score -= 5;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = sheet;
+    }
+  }
+
+  return best;
+}

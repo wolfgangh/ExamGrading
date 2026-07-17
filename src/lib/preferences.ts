@@ -4,6 +4,7 @@ export type FontFamily = "sans" | "serif";
 export interface AppearancePreferences {
   colorMode: ColorMode;
   fontFamily: FontFamily;
+  highContrast: boolean;
 }
 
 export const APPEARANCE_STORAGE_KEY = "exam-grade-appearance";
@@ -11,6 +12,7 @@ export const APPEARANCE_STORAGE_KEY = "exam-grade-appearance";
 export const DEFAULT_APPEARANCE: AppearancePreferences = {
   colorMode: "light",
   fontFamily: "sans",
+  highContrast: false,
 };
 
 export function readAppearance(): AppearancePreferences {
@@ -22,6 +24,7 @@ export function readAppearance(): AppearancePreferences {
     return {
       colorMode: parsed.colorMode === "dark" ? "dark" : "light",
       fontFamily: parsed.fontFamily === "serif" ? "serif" : "sans",
+      highContrast: parsed.highContrast === true,
     };
   } catch {
     return DEFAULT_APPEARANCE;
@@ -39,4 +42,6 @@ export function applyAppearanceToDocument(prefs: AppearancePreferences): void {
   root.classList.toggle("font-sans", prefs.fontFamily !== "serif");
   root.dataset.font = prefs.fontFamily;
   root.dataset.theme = prefs.colorMode;
+  root.dataset.contrast = prefs.highContrast ? "high" : "normal";
+  root.classList.toggle("high-contrast", prefs.highContrast);
 }

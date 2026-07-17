@@ -397,29 +397,34 @@ export function StudentsTable({
                   r.pointsToNext <= highlightBorderlineMax &&
                   !r.isFailed;
 
+                const rowKind = r.attendanceWithoutHis
+                  ? "orphan"
+                  : r.status === "mismatch"
+                    ? "mismatch"
+                    : r.isFailed
+                      ? "fail"
+                      : isBorderline
+                        ? "borderline"
+                        : r.status === "no_show"
+                          ? "no-show"
+                          : "default";
+
                 return (
                   <TableRow
                     key={row.id}
+                    data-status={rowKind}
                     className={cn(
-                      r.attendanceWithoutHis &&
-                        "bg-amber-100 ring-1 ring-inset ring-amber-400/60 dark:bg-amber-950/50",
-                      !r.attendanceWithoutHis &&
-                        r.status === "mismatch" &&
-                        "bg-red-50/60 dark:bg-red-950/25",
-                      r.isFailed &&
-                        !r.attendanceWithoutHis &&
-                        r.status !== "mismatch" &&
-                        "bg-rose-100/70 dark:bg-rose-950/30",
-                      isBorderline &&
-                        !r.isFailed &&
-                        !r.attendanceWithoutHis &&
-                        r.status !== "mismatch" &&
-                        "bg-amber-50 dark:bg-amber-950/25",
-                      r.status === "no_show" &&
-                        !r.isFailed &&
-                        !isBorderline &&
-                        !r.attendanceWithoutHis &&
-                        "bg-orange-50/50 dark:bg-orange-950/20"
+                      "student-status-row",
+                      rowKind === "orphan" &&
+                        "bg-amber-100 ring-1 ring-inset ring-amber-500/70 dark:bg-amber-900/55 dark:ring-amber-400/50",
+                      rowKind === "mismatch" &&
+                        "bg-red-100/80 dark:bg-red-950/55 dark:text-red-50",
+                      rowKind === "fail" &&
+                        "bg-rose-100/80 dark:bg-rose-950/60 dark:text-rose-50",
+                      rowKind === "borderline" &&
+                        "bg-amber-50 dark:bg-yellow-950/45 dark:text-yellow-50",
+                      rowKind === "no-show" &&
+                        "bg-orange-50/70 dark:bg-orange-950/40 dark:text-orange-50"
                     )}
                   >
                     {row.getVisibleCells().map((cell) => (

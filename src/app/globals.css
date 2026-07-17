@@ -198,3 +198,149 @@ html.font-sans {
 @utility surface-muted {
   background-color: var(--surface-muted);
 }
+
+/* Status-Zeilen: im Dark Mode klarer unterscheidbar (Grenzfall ≠ Durchfaller) */
+.dark .student-status-row[data-status="fail"] {
+  background-color: oklch(0.32 0.12 18 / 0.85) !important;
+  box-shadow: inset 3px 0 0 oklch(0.72 0.2 18);
+}
+.dark .student-status-row[data-status="borderline"] {
+  background-color: oklch(0.34 0.1 95 / 0.75) !important;
+  box-shadow: inset 3px 0 0 oklch(0.85 0.16 95);
+}
+.dark .student-status-row[data-status="no-show"] {
+  background-color: oklch(0.32 0.08 55 / 0.7) !important;
+  box-shadow: inset 3px 0 0 oklch(0.75 0.14 55);
+}
+.dark .student-status-row[data-status="mismatch"] {
+  background-color: oklch(0.3 0.12 25 / 0.8) !important;
+  box-shadow: inset 3px 0 0 oklch(0.7 0.2 25);
+}
+.dark .student-status-row[data-status="orphan"] {
+  background-color: oklch(0.35 0.1 85 / 0.7) !important;
+  box-shadow: inset 3px 0 0 oklch(0.82 0.15 85);
+}
+
+/* High Contrast – Light */
+html.high-contrast:not(.dark) {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0 0 0);
+  --primary: oklch(0.25 0.12 255);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.94 0 0);
+  --secondary-foreground: oklch(0 0 0);
+  --muted: oklch(0.94 0 0);
+  --muted-foreground: oklch(0.25 0 0);
+  --accent: oklch(0.92 0.04 255);
+  --accent-foreground: oklch(0 0 0);
+  --destructive: oklch(0.45 0.22 25);
+  --border: oklch(0.35 0 0);
+  --input: oklch(0.45 0 0);
+  --ring: oklch(0.35 0.14 255);
+  --sidebar: oklch(0.98 0 0);
+  --sidebar-foreground: oklch(0 0 0);
+  --sidebar-border: oklch(0.35 0 0);
+  --surface-muted: oklch(0.95 0 0);
+  --surface-elevated: oklch(1 0 0);
+  --page-gradient-from: oklch(1 0 0);
+  --page-gradient-via: oklch(1 0 0);
+  --page-gradient-to: oklch(0.97 0 0);
+}
+
+html.high-contrast:not(.dark) .student-status-row[data-status="fail"] {
+  background-color: oklch(0.9 0.08 18) !important;
+  box-shadow: inset 4px 0 0 oklch(0.4 0.22 18);
+  color: oklch(0.15 0.05 18);
+}
+html.high-contrast:not(.dark) .student-status-row[data-status="borderline"] {
+  background-color: oklch(0.93 0.1 95) !important;
+  box-shadow: inset 4px 0 0 oklch(0.45 0.16 95);
+  color: oklch(0.2 0.06 95);
+}
+html.high-contrast:not(.dark) .student-status-row[data-status="no-show"] {
+  background-color: oklch(0.93 0.08 55) !important;
+  box-shadow: inset 4px 0 0 oklch(0.45 0.16 55);
+}
+html.high-contrast:not(.dark) .student-status-row[data-status="mismatch"] {
+  background-color: oklch(0.9 0.1 25) !important;
+  box-shadow: inset 4px 0 0 oklch(0.4 0.22 25);
+}
+html.high-contrast:not(.dark) .student-status-row[data-status="orphan"] {
+  background-color: oklch(0.92 0.1 85) !important;
+  box-shadow: inset 4px 0 0 oklch(0.4 0.16 85);
+}
+
+/* High Contrast – Dark */
+html.high-contrast.dark {
+  --background: oklch(0.12 0.02 255);
+  --foreground: oklch(0.98 0 0);
+  --card: oklch(0.16 0.025 255);
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.14 0.02 255);
+  --popover-foreground: oklch(0.99 0 0);
+  --primary: oklch(0.82 0.14 250);
+  --primary-foreground: oklch(0.1 0.02 255);
+  --secondary: oklch(0.24 0.03 255);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.22 0.025 255);
+  --muted-foreground: oklch(0.88 0.02 250);
+  --accent: oklch(0.28 0.05 255);
+  --accent-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.75 0.2 22);
+  --border: oklch(0.55 0.04 255);
+  --input: oklch(0.4 0.03 255);
+  --ring: oklch(0.8 0.12 250);
+  --sidebar: oklch(0.14 0.03 255);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(0.5 0.04 255);
+  --surface-muted: oklch(0.18 0.025 255);
+  --surface-elevated: oklch(0.16 0.03 255);
+  --page-gradient-from: oklch(0.12 0.025 255);
+  --page-gradient-via: oklch(0.13 0.02 255);
+  --page-gradient-to: oklch(0.11 0.03 260);
+}
+
+html.high-contrast.dark .student-status-row[data-status="fail"] {
+  background-color: oklch(0.38 0.16 18) !important;
+  box-shadow: inset 4px 0 0 oklch(0.78 0.2 18);
+  color: oklch(0.98 0.02 18);
+}
+html.high-contrast.dark .student-status-row[data-status="borderline"] {
+  background-color: oklch(0.4 0.14 100) !important;
+  box-shadow: inset 4px 0 0 oklch(0.9 0.18 100);
+  color: oklch(0.99 0.03 100);
+}
+html.high-contrast.dark .student-status-row[data-status="no-show"] {
+  background-color: oklch(0.38 0.12 55) !important;
+  box-shadow: inset 4px 0 0 oklch(0.82 0.16 55);
+  color: oklch(0.98 0.02 55);
+}
+html.high-contrast.dark .student-status-row[data-status="mismatch"] {
+  background-color: oklch(0.36 0.16 25) !important;
+  box-shadow: inset 4px 0 0 oklch(0.78 0.2 25);
+  color: oklch(0.98 0.02 25);
+}
+html.high-contrast.dark .student-status-row[data-status="orphan"] {
+  background-color: oklch(0.4 0.12 85) !important;
+  box-shadow: inset 4px 0 0 oklch(0.88 0.16 85);
+  color: oklch(0.99 0.02 85);
+}
+
+/* Recharts-Tooltip: erzwinge lesbare Farben über CSS-Variablen */
+.recharts-default-tooltip {
+  background-color: var(--popover) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  color: var(--popover-foreground) !important;
+}
+.recharts-default-tooltip .recharts-tooltip-label,
+.recharts-default-tooltip .recharts-tooltip-item,
+.recharts-default-tooltip .recharts-tooltip-item-name,
+.recharts-default-tooltip .recharts-tooltip-item-value,
+.recharts-default-tooltip .recharts-tooltip-item-separator {
+  color: var(--popover-foreground) !important;
+}

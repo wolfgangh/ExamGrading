@@ -12,13 +12,16 @@ import {
 } from "recharts";
 import type { ExamStatistics } from "@/lib/types";
 import { formatGrade } from "@/lib/utils";
+import {
+  ChartTooltip,
+  chartTooltipCursor,
+} from "@/components/charts/chart-tooltip";
 
 export function GradeDistributionChart({
   stats,
   mode = "count",
 }: {
   stats: ExamStatistics;
-  /** count = absolute Anzahl; share = Anteil in % */
   mode?: "count" | "share";
 }) {
   const total = stats.gradeDistribution.reduce((s, g) => s + g.count, 0) || 1;
@@ -48,11 +51,16 @@ export function GradeDistributionChart({
             unit={mode === "share" ? " %" : undefined}
           />
           <Tooltip
-            formatter={(value, name) => {
-              if (name === "sharePct") return [`${value} %`, "Anteil"];
-              return [value ?? 0, "Anzahl"];
-            }}
-            labelFormatter={(l) => `Note ${l}`}
+            cursor={chartTooltipCursor}
+            content={
+              <ChartTooltip
+                labelFormatter={(l) => `Note ${l}`}
+                formatter={(value, name) => {
+                  if (name === "sharePct") return [`${value} %`, "Anteil"];
+                  return [value ?? 0, "Anzahl"];
+                }}
+              />
+            }
           />
           <Bar
             dataKey={mode === "share" ? "sharePct" : "count"}
@@ -91,8 +99,13 @@ export function GradeBucketChart({
           <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} />
           <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
           <Tooltip
-            formatter={(value) => [value ?? 0, "Anzahl"]}
-            labelFormatter={(l) => String(l)}
+            cursor={chartTooltipCursor}
+            content={
+              <ChartTooltip
+                labelFormatter={(l) => String(l)}
+                formatter={(value) => [value ?? 0, "Anzahl"]}
+              />
+            }
           />
           <Bar dataKey="count" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]}>
             <LabelList

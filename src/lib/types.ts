@@ -49,6 +49,11 @@ export interface GradeScenario {
   passThreshold: number;
   /** true = Nutzer darf Bestehensgrenze ändern (Szenario 3) */
   editable: boolean;
+  /**
+   * Sichtbar/wählbar. Presets sind immer aktiv;
+   * editierbares Szenario standardmäßig `false`.
+   */
+  enabled?: boolean;
   schema: GradeSchema;
 }
 

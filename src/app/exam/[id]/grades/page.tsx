@@ -37,7 +37,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { computeFailerAnalysis } from "@/lib/grades/statistics";
-import { ensureScenarios, withActiveScenario } from "@/lib/grades/scenarios";
+import {
+  visibleScenarios,
+  withActiveScenario,
+} from "@/lib/grades/scenarios";
 import {
   computeGradeBuckets,
   computeScenarioImpact,
@@ -79,7 +82,7 @@ export default function GradesPage() {
   );
 
   const scenarios = useMemo(
-    () => (project ? ensureScenarios(project) : []),
+    () => (project ? visibleScenarios(project) : []),
     [project]
   );
 
@@ -90,7 +93,10 @@ export default function GradesPage() {
     const a =
       scenarios.find((s) => s.id === project.activeScenarioId) ?? scenarios[0];
     const b =
-      scenarios.find((s) => s.id !== a.id && !s.editable) ?? scenarios[1];
+      scenarios.find((s) => s.id !== a.id && !s.editable) ??
+      scenarios.find((s) => s.id !== a.id) ??
+      scenarios[1];
+    if (!b) return null;
     return computeScenarioImpact(project, a.id, b.id);
   }, [project, scenarios]);
 

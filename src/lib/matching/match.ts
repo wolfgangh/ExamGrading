@@ -31,7 +31,9 @@ function scenarioGradesForPoints(
   totalPoints: number | null,
   gradeOverride: number | null
 ): EnrichedStudentRow["scenarioGrades"] {
-  const scenarios = ensureScenarios(project);
+  const scenarios = ensureScenarios(project).filter(
+    (sc) => !sc.editable || sc.enabled === true
+  );
   return scenarios.map((sc) => {
     const grade =
       gradeOverride != null

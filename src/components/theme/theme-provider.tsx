@@ -23,7 +23,9 @@ interface ThemeContextValue extends AppearancePreferences {
   ready: boolean;
   setColorMode: (mode: ColorMode) => void;
   setFontFamily: (font: FontFamily) => void;
+  setHighContrast: (on: boolean) => void;
   toggleColorMode: () => void;
+  toggleHighContrast: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -52,11 +54,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       ready,
       setColorMode: (colorMode) => update({ ...prefs, colorMode }),
       setFontFamily: (fontFamily) => update({ ...prefs, fontFamily }),
+      setHighContrast: (highContrast) => update({ ...prefs, highContrast }),
       toggleColorMode: () =>
         update({
           ...prefs,
           colorMode: prefs.colorMode === "dark" ? "light" : "dark",
         }),
+      toggleHighContrast: () =>
+        update({ ...prefs, highContrast: !prefs.highContrast }),
     }),
     [prefs, ready, update]
   );

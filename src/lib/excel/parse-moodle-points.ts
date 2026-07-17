@@ -66,7 +66,10 @@ function detectSubAreaColumns(
   return result;
 }
 
-/** Spalten „F 1 /10,00“, „F 2 /…“ → QuestionDef + Spaltenindex */
+/**
+ * Spalten „F 1 /10,00“, „F1/10,00“, „F  2 / 12,00“ (NBSP etc.) → QuestionDef.
+ * Moodle-THE nutzt oft genau dieses Muster.
+ */
 function parseQuestionHeaders(
   headers: string[],
   subAreas: SubArea[]
@@ -78,12 +81,26 @@ function parseQuestionHeaders(
       ?.id ?? subAreas[0]?.id;
 
   headers.forEach((h, idx) => {
-    const t = h.trim();
-    const m = t.match(/^(F|Frage|Aufgabe)\s*(\d+)\s*(?:\/\s*([\d.,]+))?/i);
+    // NBSP / schmale Leerzeichen normalisieren
+    const t = String(h ?? "")
+      .replace(/[\u00a0\u202f\u2007]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!t) return;
+
+    // F 1, F1, Frage 2, Aufgabe 3 – mit optionalem /max am Ende
+    const m = t.match(
+      /(?:^|[^a-z0-9])(F|Frage|Aufgabe)\s*(\d+)\s*(?:[\/⁄]\s*([\d.,]+))?/i
+    );
     if (!m) return;
+
     const num = m[2];
-    const maxRaw = m[3] ? cellToNumber(m[3].replace(",", ".")) : 0;
+    const maxRaw = m[3]
+      ? cellToNumber(String(m[3]).replace(",", "."))
+      : 0;
     const id = `f${num}`;
+    if (defs.some((d) => d.id === id)) return;
+
     defs.push({
       id,
       label: `F ${num}`,
@@ -93,7 +110,18 @@ function parseQuestionHeaders(
     });
     colIndex.push(idx);
   });
-  return { defs, colIndex };
+
+  // stabile Sortierung nach Aufgabennummer
+  const paired = defs.map((d, i) => ({ d, col: colIndex[i] }));
+  paired.sort(
+    (a, b) =>
+      parseInt(a.d.id.replace(/\D/g, ""), 10) -
+      parseInt(b.d.id.replace(/\D/g, ""), 10)
+  );
+  return {
+    defs: paired.map((p, i) => ({ ...p.d, orderIndex: i })),
+    colIndex: paired.map((p) => p.col),
+  };
 }
 
 function parsePointsCell(value: unknown): {
@@ -140,19 +168,31 @@ export function parsePointsMatrix(
   let columnMap = options?.columnMap;
 
   if (headerRowIndex == null) {
-    // THE: oft erste Zeile Header mit Bewertung/
-    for (let i = 0; i < Math.min(10, matrix.length); i++) {
+    // THE: Header mit Nachname/Anmeldename + Bewertung oder F-Spalten
+    let bestIdx: number | null = null;
+    let bestScore = 0;
+    for (let i = 0; i < Math.min(15, matrix.length); i++) {
       const hs = (matrix[i] ?? []).map((c) => cellToString(c));
       const joined = hs.join(" ").toLowerCase();
-      if (
-        (joined.includes("nachname") || joined.includes("anmeldename")) &&
-        (joined.includes("bewertung") || /f\s*1\s*\//i.test(joined))
-      ) {
-        headerRowIndex = i;
-        headers = hs;
-        columnMap = autoMapColumns(headers);
-        break;
+      let score = 0;
+      if (joined.includes("nachname")) score += 2;
+      if (joined.includes("anmeldename")) score += 3;
+      if (joined.includes("bewertung")) score += 2;
+      const fCols = hs.filter((h) =>
+        /(?:^|[^a-z])f\s*\d+/i.test(
+          String(h).replace(/[\u00a0\u202f]/g, " ")
+        )
+      ).length;
+      score += fCols;
+      if (score > bestScore && (fCols >= 2 || joined.includes("bewertung"))) {
+        bestScore = score;
+        bestIdx = i;
       }
+    }
+    if (bestIdx != null) {
+      headerRowIndex = bestIdx;
+      headers = (matrix[bestIdx] ?? []).map((c) => cellToString(c));
+      columnMap = autoMapColumns(headers);
     }
     if (headerRowIndex == null) {
       const found = findHeaderRow(matrix);
@@ -234,13 +274,16 @@ export function parsePointsMatrix(
     if (FOOTER_RE.test(lastName) || FOOTER_RE.test(firstName) || FOOTER_RE.test(login)) {
       continue;
     }
-    if (!lastName && !firstName && !login && !email) {
-      const any = row.some((c) => cellToString(c));
-      if (!any) continue;
+
+    const matRaw = matIdx != null ? row[matIdx] : null;
+    const hasIdentity =
+      !!cellToString(matRaw) || !!login || !!email || !!lastName || !!firstName;
+    if (!hasIdentity) {
+      continue;
     }
 
     const { mat, method } = resolveMatriculation({
-      matriculationRaw: matIdx != null ? row[matIdx] : null,
+      matriculationRaw: matRaw,
       login,
       email,
       lastName,
@@ -251,7 +294,7 @@ export function parsePointsMatrix(
     if (!mat) {
       unmatched++;
       warnings.push(
-        `Zeile ${r + 1}: kein Match über Anmeldename (${login || "–"}) – ${lastName}, ${firstName}`
+        `Zeile ${r + 1}: kein Match (Anmeldename/Matr.) – ${login || "–"} · ${lastName}, ${firstName}`
       );
       continue;
     }
