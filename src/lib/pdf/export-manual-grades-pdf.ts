@@ -126,7 +126,7 @@ export function exportManualGradesPdf(
   doc.setFontSize(9);
   doc.text(
     pdfText(
-      `Anzahl Sonderfälle: ${specials.length} · Bitte ausgedruckt und unterschrieben im Fachbereich abgeben.`
+      `Anzahl Sonderfälle: ${specials.length} · Bitte unterschrieben an Abteilung Studium senden.`
     ),
     PDF_MARGIN,
     finalY
