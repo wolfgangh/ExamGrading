@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Copy,
   FileJson,
+  HardDrive,
   MoreHorizontal,
   Trash2,
 } from "lucide-react";
@@ -27,31 +28,47 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EXAM_TYPE_LABELS } from "@/lib/types";
-import {
-  datedExportFilename,
-  downloadJson,
-} from "@/lib/utils";
+import { downloadJson } from "@/lib/utils";
 import {
   exportExamJson,
   parseExamJson,
   saveExam,
 } from "@/lib/storage";
+import {
+  projectArchiveFilename,
+  projectArchiveSummary,
+} from "@/lib/project-archive";
 import { createId } from "@/lib/id";
 
 export function ExamList() {
   const { exams, loading, error, refresh, remove, duplicate } = useExams();
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importErr, setImportErr] = useState<string | null>(null);
 
   const importJson = async (file: File) => {
-    const text = await file.text();
-    const project = parseExamJson(text);
-    project.id = createId("exam");
-    project.createdAt = new Date().toISOString();
-    project.updatedAt = project.createdAt;
-    await saveExam(project);
-    await refresh();
-    router.push(`/exam/${project.id}/overview`);
+    setImportMsg(null);
+    setImportErr(null);
+    try {
+      const text = await file.text();
+      const project = parseExamJson(text);
+      project.id = createId("exam");
+      project.createdAt = new Date().toISOString();
+      project.updatedAt = project.createdAt;
+      await saveExam(project);
+      await refresh();
+      setImportMsg(
+        `Sicherung importiert: ${projectArchiveSummary(project)}`
+      );
+      router.push(`/exam/${project.id}/overview`);
+    } catch (e) {
+      setImportErr(
+        e instanceof Error
+          ? e.message
+          : "Sicherung konnte nicht importiert werden."
+      );
+    }
   };
 
   return (
@@ -73,9 +90,10 @@ export function ExamList() {
             <Button
               variant="outline"
               onClick={() => fileRef.current?.click()}
+              title="Vollständige Projektsicherung (.json) wiederherstellen"
             >
-              <FileJson className="size-4" />
-              JSON importieren
+              <HardDrive className="size-4" />
+              Sicherung importieren
             </Button>
             <NewExamDialog onCreated={() => void refresh()} />
           </>
@@ -87,7 +105,17 @@ export function ExamList() {
           <h1 className="text-2xl font-semibold tracking-tight">Prüfungen</h1>
           <p className="mt-1 text-muted-foreground">
             Notenvergabe und HIS/QIS-Export – ersetzt den Excel-Workflow.
+            Sicherungen (.json) können neben den Klausur-Excel-Dateien abgelegt
+            und hier wieder importiert werden.
           </p>
+          {importMsg && (
+            <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
+              {importMsg}
+            </p>
+          )}
+          {importErr && (
+            <p className="mt-2 text-sm text-destructive">{importErr}</p>
+          )}
         </div>
 
         {loading && (
@@ -100,19 +128,29 @@ export function ExamList() {
             <CardHeader>
               <CardTitle>Noch keine Prüfung</CardTitle>
               <CardDescription>
-                Legen Sie eine neue Prüfung an oder importieren Sie ein
-                JSON-Backup.
+                Legen Sie eine neue Prüfung an oder importieren Sie eine
+                Projektsicherung (.json).
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-wrap gap-2">
               <NewExamDialog onCreated={() => void refresh()} />
+              <Button
+                variant="outline"
+                onClick={() => fileRef.current?.click()}
+              >
+                <HardDrive className="size-4" />
+                Sicherung importieren
+              </Button>
             </CardContent>
           </Card>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           {exams.map((exam) => (
-            <Card key={exam.id} className="surface-panel transition-shadow hover:shadow-md">
+            <Card
+              key={exam.id}
+              className="surface-panel transition-shadow hover:shadow-md"
+            >
               <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
                 <div className="min-w-0">
                   <CardTitle className="truncate text-lg">
@@ -147,13 +185,13 @@ export function ExamList() {
                     <DropdownMenuItem
                       onClick={() => {
                         downloadJson(
-                          datedExportFilename(exam.name, "json"),
+                          projectArchiveFilename(exam),
                           exportExamJson(exam)
                         );
                       }}
                     >
                       <FileJson className="size-4" />
-                      JSON exportieren
+                      Sicherung exportieren
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => void duplicate(exam, false)}

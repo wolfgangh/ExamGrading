@@ -247,8 +247,12 @@ export interface ExamStatistics {
   mismatches: number;
   averageGrade: number | null;
   medianGrade: number | null;
+  /** Stichproben-Standardabweichung der Noten (n-1), null wenn n < 2 */
+  stdDevGrade: number | null;
   passRate: number | null;
   averagePoints: number | null;
+  medianPoints: number | null;
+  stdDevPoints: number | null;
   failCount: number;
   borderlineCount: number;
   gradeDistribution: { grade: number; count: number }[];

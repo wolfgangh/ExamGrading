@@ -210,6 +210,15 @@ async function exportOneSource(
   wsStat.getCell(4, 2).value = project.gradeSchema.passThreshold;
   wsStat.getCell(5, 1).value = "Gesamt-Anmeldungen (alle Studiengänge)";
   wsStat.getCell(5, 2).value = stats.registered;
+  wsStat.getCell(6, 1).value = "Ø Note";
+  wsStat.getCell(6, 2).value = stats.averageGrade;
+  wsStat.getCell(7, 1).value = "Median Note";
+  wsStat.getCell(7, 2).value = stats.medianGrade;
+  wsStat.getCell(8, 1).value = "Stabw. Note";
+  wsStat.getCell(8, 2).value = stats.stdDevGrade;
+  wsStat.getCell(9, 1).value = "Bestehensquote";
+  wsStat.getCell(9, 2).value =
+    stats.passRate != null ? stats.passRate : null;
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {

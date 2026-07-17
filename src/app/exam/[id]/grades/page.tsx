@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatGrade, formatPoints } from "@/lib/utils";
+import { formatGrade, formatPoints, formatStat } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -241,28 +241,18 @@ export default function GradesPage() {
       )}
 
       {stats && (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex flex-wrap gap-2">
           {[
-            {
-              l: "Bewertet",
-              v: String(stats.graded),
-            },
-            {
-              l: "Ø Note",
-              v: formatGrade(stats.averageGrade),
-            },
-            {
-              l: "Bestehen",
-              v: formatPercent(stats.passRate),
-            },
-            {
-              l: "Durchfaller",
-              v: `${stats.failCount}`,
-            },
+            { l: "Bewertet", v: String(stats.graded) },
+            { l: "Ø Note", v: formatGrade(stats.averageGrade) },
+            { l: "Median", v: formatGrade(stats.medianGrade) },
+            { l: "Stabw.", v: formatStat(stats.stdDevGrade, 2) },
+            { l: "Bestehen", v: formatPercent(stats.passRate) },
+            { l: "Durchfaller", v: `${stats.failCount}` },
           ].map((c) => (
             <div
               key={c.l}
-              className="rounded-xl border bg-card px-3 py-2 text-sm"
+              className="min-w-[7rem] flex-1 rounded-xl border bg-card px-3 py-2 text-sm sm:max-w-[10rem]"
             >
               <p className="text-muted-foreground">{c.l}</p>
               <p className="text-lg font-semibold tabular-nums">{c.v}</p>

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ExamStatistics } from "@/lib/types";
-import { cn, formatGrade, formatPercent } from "@/lib/utils";
+import { cn, formatGrade, formatPercent, formatStat } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function SummaryPanel({
@@ -56,6 +56,14 @@ export function SummaryPanel({
     {
       label: "Ø Note",
       value: formatGrade(stats.averageGrade),
+    },
+    {
+      label: "Median Note",
+      value: formatGrade(stats.medianGrade),
+    },
+    {
+      label: "Stabw. Note",
+      value: formatStat(stats.stdDevGrade, 2),
     },
     {
       label: "Bestehensquote",

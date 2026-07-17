@@ -16,6 +16,15 @@ function median(values: number[]): number | null {
   return sorted[mid];
 }
 
+/** Stichproben-Standardabweichung (n−1) */
+function stdDevSample(values: number[]): number | null {
+  if (values.length < 2) return null;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance =
+    values.reduce((s, v) => s + (v - mean) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(variance);
+}
+
 export function computeStatistics(
   rows: EnrichedStudentRow[],
   schema: GradeSchema,
@@ -95,11 +104,14 @@ export function computeStatistics(
         ? grades.reduce((a, b) => a + b, 0) / grades.length
         : null,
     medianGrade: median(grades),
+    stdDevGrade: stdDevSample(grades),
     passRate: grades.length > 0 ? passed / grades.length : null,
     averagePoints:
       points.length > 0
         ? points.reduce((a, b) => a + b, 0) / points.length
         : null,
+    medianPoints: median(points),
+    stdDevPoints: stdDevSample(points),
     failCount,
     borderlineCount,
     gradeDistribution,

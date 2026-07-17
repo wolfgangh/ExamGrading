@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
-import { cn, formatGrade, formatPercent } from "@/lib/utils";
+import { cn, formatGrade, formatPercent, formatStat } from "@/lib/utils";
 import {
   CheckCircle2,
   Circle,
@@ -168,7 +168,9 @@ export default function OverviewPage() {
           <CardHeader>
             <CardTitle className="text-base">Notenverteilung</CardTitle>
             <CardDescription>
-              Ø Note {formatGrade(stats.averageGrade)} · Bestehen{" "}
+              Ø {formatGrade(stats.averageGrade)} · Med{" "}
+              {formatGrade(stats.medianGrade)} · s{" "}
+              {formatStat(stats.stdDevGrade, 2)} · Bestehen{" "}
               {formatPercent(stats.passRate)}
             </CardDescription>
           </CardHeader>
@@ -191,6 +193,13 @@ export default function OverviewPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
+        <Link
+          href={`/exam/${id}/export#sicherung`}
+          className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
+        >
+          <Download className="size-4" />
+          Projekt sichern
+        </Link>
         <Link
           href={`/exam/${id}/import`}
           className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}

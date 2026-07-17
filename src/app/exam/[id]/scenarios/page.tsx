@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn, formatGrade } from "@/lib/utils";
+import { cn, formatGrade, formatStat } from "@/lib/utils";
 import { Check } from "lucide-react";
 import { computeScenarioImpact } from "@/lib/grades/scenario-impact";
 import {
@@ -265,6 +265,34 @@ export default function ScenariosPage() {
                     )}
                   >
                     {formatGrade(stats.averageGrade)}
+                  </TableCell>
+                ))}
+              </TableRow>
+              <TableRow>
+                <TableCell>Median Note</TableCell>
+                {comparison.map(({ scenario, stats }) => (
+                  <TableCell
+                    key={scenario.id}
+                    className={cn(
+                      "tabular-nums",
+                      scenario.id === activeId && "bg-primary/5"
+                    )}
+                  >
+                    {formatGrade(stats.medianGrade)}
+                  </TableCell>
+                ))}
+              </TableRow>
+              <TableRow>
+                <TableCell>Stabw. Note</TableCell>
+                {comparison.map(({ scenario, stats }) => (
+                  <TableCell
+                    key={scenario.id}
+                    className={cn(
+                      "tabular-nums",
+                      scenario.id === activeId && "bg-primary/5"
+                    )}
+                  >
+                    {formatStat(stats.stdDevGrade, 2)}
                   </TableCell>
                 ))}
               </TableRow>

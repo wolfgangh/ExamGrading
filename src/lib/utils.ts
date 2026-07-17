@@ -39,6 +39,15 @@ export function formatGrade(grade: number | null | undefined): string {
   return grade.toFixed(1).replace(".", ",");
 }
 
+/** Allgemeine Statistikzahl (z. B. Stabw.) mit deutschem Komma */
+export function formatStat(
+  value: number | null | undefined,
+  digits = 2
+): string {
+  if (value == null || Number.isNaN(value)) return "–";
+  return value.toFixed(digits).replace(".", ",");
+}
+
 export function formatPoints(points: number | null | undefined): string {
   if (points == null || Number.isNaN(points)) return "–";
   if (Number.isInteger(points)) return String(points);

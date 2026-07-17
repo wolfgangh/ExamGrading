@@ -1,5 +1,9 @@
 import localforage from "localforage";
 import { migrateExamProject } from "@/lib/grades/scenarios";
+import {
+  buildProjectArchive,
+  parseProjectArchive,
+} from "@/lib/project-archive";
 import type { ExamProject } from "@/lib/types";
 
 const projectsStore = localforage.createInstance({
@@ -60,24 +64,13 @@ export async function clearDraft(id: string): Promise<void> {
   await draftStore.removeItem(id);
 }
 
+/** Vollständige Projektsicherung (Archive-Format) */
 export function exportExamJson(project: ExamProject): string {
-  return JSON.stringify(project, null, 2);
+  return buildProjectArchive(project);
 }
 
 export function parseExamJson(json: string): ExamProject {
-  const data = JSON.parse(json) as ExamProject;
-  if (!data || typeof data !== "object" || !data.id || !data.name) {
-    throw new Error("Ungültiges Prüfungsprojekt-JSON");
-  }
-  if (!data.schemaVersion) {
-    data.schemaVersion = 1;
-  }
-  data.hisRows = data.hisRows ?? [];
-  data.attendance = data.attendance ?? [];
-  data.points = data.points ?? [];
-  data.students = data.students ?? {};
-  data.importLogs = data.importLogs ?? [];
-  data.subAreas = data.subAreas ?? [];
-  data.lecturers = data.lecturers ?? [];
-  return migrateExamProject(data);
+  return parseProjectArchive(json);
 }
+
+export { buildProjectArchive, parseProjectArchive };
