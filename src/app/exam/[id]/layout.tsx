@@ -5,7 +5,9 @@ import { AppHeader } from "@/components/layout/app-header";
 import { ExamSidebar } from "@/components/layout/exam-sidebar";
 import { SummaryPanel } from "@/components/layout/summary-panel";
 import { ExamProvider, useExamContext } from "@/components/exam/exam-context";
+import { BackupBanner } from "@/components/exam/backup-banner";
 import { Badge } from "@/components/ui/badge";
+import { isBackupStale } from "@/lib/backup-status";
 
 function ExamShell({
   examId,
@@ -48,20 +50,33 @@ function ExamShell({
           ? "Speicherfehler"
           : "Auto-Save aktiv";
 
+  const backupNeeded = isBackupStale(project);
+
   return (
     <div className="page-shell flex min-h-screen flex-col">
       <AppHeader
         subtitle={project.name}
         actions={
-          <Badge
-            variant="outline"
-            className="font-normal"
-            title="Automatisches Speichern im Browser (IndexedDB)"
-          >
-            {saveLabel}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            {backupNeeded && (
+              <Badge
+                variant="outline"
+                className="border-amber-500 bg-amber-100 font-medium text-amber-950 dark:bg-amber-950 dark:text-amber-100"
+              >
+                Sicherung ausstehend
+              </Badge>
+            )}
+            <Badge
+              variant="outline"
+              className="font-normal"
+              title="Automatisches Speichern im Browser (IndexedDB) – nicht dasselbe wie JSON-Sicherung"
+            >
+              {saveLabel}
+            </Badge>
+          </div>
         }
       />
+      <BackupBanner />
       <div className="flex min-h-0 flex-1">
         <ExamSidebar examId={examId} />
         <div className="flex min-w-0 flex-1 flex-col">

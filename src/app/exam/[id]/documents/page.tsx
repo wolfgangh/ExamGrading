@@ -39,9 +39,14 @@ import {
   resolveProgramCode,
 } from "@/lib/pdf/pdf-common";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
+import { downloadAndMarkBackup } from "@/lib/backup-actions";
+import {
+  canAccessProtectedExport,
+  isBackupStale,
+} from "@/lib/backup-status";
 import { formatGrade, formatPoints } from "@/lib/utils";
 import type { PointsRecord } from "@/lib/types";
-import { FileText } from "lucide-react";
+import { FileText, HardDrive, ShieldAlert } from "lucide-react";
 
 function upsertPoints(
   points: PointsRecord[],
@@ -97,7 +102,16 @@ export default function DocumentsPage() {
 
   if (!project) return null;
 
+  const backupOk = canAccessProtectedExport(project);
+  const backupStale = isBackupStale(project);
+
   const run = (key: string, fn: () => void, ok: string) => {
+    if (!backupOk) {
+      setError(
+        "Bitte zuerst die JSON-Projektsicherung durchführen (Export → Projekt sichern)."
+      );
+      return;
+    }
     setBusy(key);
     setMessage(null);
     setError(null);
@@ -133,6 +147,35 @@ export default function DocumentsPage() {
         </p>
       </div>
 
+      {backupStale && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
+        >
+          <ShieldAlert className="mt-0.5 size-5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">PDF-Export gesperrt</p>
+            <p className="mt-0.5 opacity-95">
+              Bitte zuerst die Projektsicherung (JSON) herunterladen und
+              ablegen. Die Sicherung enthält alle Daten – Pfade zu
+              Original-Excel sind nicht erforderlich.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            className="bg-amber-800 text-white hover:bg-amber-900"
+            onClick={() => {
+              downloadAndMarkBackup(project, setProject);
+              setMessage("Projektsicherung heruntergeladen – PDFs freigeschaltet.");
+              setError(null);
+            }}
+          >
+            <HardDrive className="size-4" />
+            Jetzt sichern
+          </Button>
+        </div>
+      )}
+
       {(message || error) && (
         <p
           className={
@@ -159,7 +202,7 @@ export default function DocumentsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={busy != null || rows.length === 0}
+              disabled={busy != null || rows.length === 0 || !backupOk}
               onClick={() =>
                 run(
                   "grades",
@@ -250,7 +293,9 @@ export default function DocumentsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={busy != null || manualRows.length === 0}
+              disabled={
+                busy != null || manualRows.length === 0 || !backupOk
+              }
               onClick={() =>
                 run(
                   "manual",
@@ -287,7 +332,7 @@ export default function DocumentsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={busy != null || !scStatus.ready}
+              disabled={busy != null || !scStatus.ready || !backupOk}
               onClick={() =>
                 run(
                   "failers",
@@ -411,7 +456,9 @@ export default function DocumentsPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={busy != null || changeRows.length === 0}
+              disabled={
+                busy != null || changeRows.length === 0 || !backupOk
+              }
               onClick={() =>
                 run(
                   "changes",

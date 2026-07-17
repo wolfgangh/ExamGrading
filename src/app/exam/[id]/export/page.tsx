@@ -18,19 +18,25 @@ import {
   projectArchiveFilename,
   projectArchiveSummary,
 } from "@/lib/project-archive";
-import { cn, downloadJson } from "@/lib/utils";
-import { exportExamJson } from "@/lib/storage";
+import { downloadAndMarkBackup } from "@/lib/backup-actions";
+import {
+  backupStatusLabel,
+  canAccessProtectedExport,
+  isBackupStale,
+} from "@/lib/backup-status";
+import { cn } from "@/lib/utils";
 import {
   Download,
   FileJson,
   FileSpreadsheet,
   FileText,
   HardDrive,
+  ShieldAlert,
 } from "lucide-react";
 
 export default function ExportPage() {
   const { id } = useParams<{ id: string }>();
-  const { project, rows, stats } = useExamContext();
+  const { project, setProject, rows, stats } = useExamContext();
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -42,8 +48,11 @@ export default function ExportPage() {
   if (!project || !stats) return null;
 
   const hasError = items.some((i) => i.level === "error");
+  const backupOk = canAccessProtectedExport(project);
+  const backupStale = isBackupStale(project);
 
   const doHisExport = async () => {
+    if (!backupOk) return;
     setExporting(true);
     setMessage(null);
     try {
@@ -59,9 +68,9 @@ export default function ExportPage() {
   };
 
   const doProjectBackup = () => {
-    downloadJson(projectArchiveFilename(project), exportExamJson(project));
+    downloadAndMarkBackup(project, setProject);
     setMessage(
-      `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}).`
+      `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}). Bitte neben den Klausurdateien ablegen. HIS-Export und PDFs sind jetzt freigeschaltet.`
     );
   };
 
@@ -70,7 +79,7 @@ export default function ExportPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Export</h1>
         <p className="text-muted-foreground">
-          HIS/QIS-Noteneintrag und Projektsicherung. PDF-Listen unter{" "}
+          Zuerst JSON-Sicherung, dann HIS/QIS-Noteneintrag. PDF-Listen unter{" "}
           <Link
             href={`/exam/${id}/documents`}
             className="font-medium text-foreground underline"
@@ -80,6 +89,58 @@ export default function ExportPage() {
           .
         </p>
       </div>
+
+      {/* Sicherung zuerst – prominente Karte */}
+      <Card
+        id="sicherung"
+        className={cn(
+          "surface-panel scroll-mt-20",
+          backupStale &&
+            "border-amber-500 ring-2 ring-amber-400/40 dark:border-amber-600"
+        )}
+      >
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <HardDrive className="size-4" />
+            1. Projektsicherung (Pflicht)
+          </CardTitle>
+          <CardDescription>
+            Vollständiges JSON-Archiv – enthält alle Daten. Original-Excel-Pfade
+            werden nicht benötigt (nur Dateinamen in den Logs). Status:{" "}
+            <strong>{backupStatusLabel(project)}</strong>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {backupStale && (
+            <div className="flex gap-2 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-50">
+              <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Daten nur in diesem Browser. Ohne Sicherung sind HIS-Export und
+                PDF-Dokumente gesperrt.
+              </span>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              type="button"
+              variant={backupStale ? "default" : "outline"}
+              onClick={doProjectBackup}
+            >
+              <FileJson className="size-4" />
+              Projekt sichern (.json)
+            </Button>
+            {!backupStale && (
+              <span className="text-xs text-emerald-700 dark:text-emerald-300">
+                Aktuell gesichert
+              </span>
+            )}
+          </div>
+          <p className="break-all font-mono text-xs text-muted-foreground">
+            {projectArchiveFilename(project)}
+          </p>
+        </CardContent>
+      </Card>
 
       <Card className="surface-panel">
         <CardHeader>
@@ -112,63 +173,42 @@ export default function ExportPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card className="surface-panel">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">HIS/QIS Excel</CardTitle>
-            <CardDescription>
-              Noteneintragsdatei(en) für den Upload
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              size="sm"
-              onClick={() => void doHisExport()}
-              disabled={exporting || hasError}
-            >
-              <FileSpreadsheet className="size-4" />
-              {exporting ? "Exportiere…" : "Excel exportieren"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card id="sicherung" className="surface-panel scroll-mt-20">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <HardDrive className="size-4" />
-              Projektsicherung
-            </CardTitle>
-            <CardDescription>
-              JSON-Archiv für Ablage neben den Klausurdateien
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button
-              size="sm"
-              type="button"
-              variant="outline"
-              onClick={doProjectBackup}
-            >
-              <FileJson className="size-4" />
-              Projekt sichern
-            </Button>
-            <p className="break-all font-mono text-xs text-muted-foreground">
-              {projectArchiveFilename(project)}
+      <Card className="surface-panel">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">2. HIS/QIS Excel</CardTitle>
+          <CardDescription>
+            Noteneintragsdatei(en) für den Upload – erst nach Sicherung
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Button
+            size="sm"
+            onClick={() => void doHisExport()}
+            disabled={exporting || hasError || !backupOk}
+          >
+            <FileSpreadsheet className="size-4" />
+            {exporting ? "Exportiere…" : "Excel exportieren"}
+          </Button>
+          {!backupOk && (
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              Bitte zuerst die Projektsicherung durchführen.
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="surface-panel">
         <CardContent className="flex flex-wrap items-center gap-3 pt-4">
           <FileText className="size-4 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            Notenliste, manuelle Notenmeldung, Zweitkorrektur und
-            Notenänderungen als PDF:
+            PDF-Listen (ebenfalls erst nach Sicherung):
           </p>
           <Link
             href={`/exam/${id}/documents`}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "gap-1.5"
+            )}
           >
             Zu Dokumente
           </Link>

@@ -45,7 +45,18 @@ export function useExam(id: string) {
     (updater: ExamProject | ((prev: ExamProject) => ExamProject)) => {
       setProject((prev) => {
         if (!prev) return prev;
-        return typeof updater === "function" ? updater(prev) : updater;
+        const next =
+          typeof updater === "function" ? updater(prev) : updater;
+        if (!next) return prev;
+        // Explizites updatedAt (z. B. markProjectBackedUp) beibehalten
+        if (next.updatedAt !== prev.updatedAt) {
+          return next;
+        }
+        // Inhaltliche Änderung → Zeitstempel anheben (Backup wird stale)
+        return {
+          ...next,
+          updatedAt: new Date().toISOString(),
+        };
       });
     },
     []

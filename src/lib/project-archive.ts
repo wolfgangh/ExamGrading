@@ -69,8 +69,6 @@ export function parseProjectArchive(json: string): ExamProject {
   if (isExamGradeArchive(data)) {
     return normalizeProject(data.project);
   }
-
-  // Legacy: reines ExamProject
   return normalizeProject(data as ExamProject);
 }
 

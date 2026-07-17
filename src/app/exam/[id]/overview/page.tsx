@@ -14,11 +14,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  backupStatusLabel,
+  hasSubstantialData,
+  isBackupStale,
+} from "@/lib/backup-status";
 import { cn, formatGrade, formatPercent, formatStat } from "@/lib/utils";
 import {
   CheckCircle2,
   Circle,
   FileSpreadsheet,
+  HardDrive,
   PenLine,
   Table2,
   Download,
@@ -28,6 +34,9 @@ export default function OverviewPage() {
   const { id } = useParams<{ id: string }>();
   const { project, stats, rows } = useExamContext();
   if (!project || !stats) return null;
+
+  const backupOk = hasSubstantialData(project) && !isBackupStale(project);
+  const backupStale = isBackupStale(project);
 
   const steps = [
     {
@@ -59,10 +68,19 @@ export default function OverviewPage() {
       detail: `${stats.graded} Noten`,
     },
     {
-      done: stats.exportReady > 0,
-      label: "Exportbereit",
-      href: `/exam/${id}/export`,
-      detail: `${stats.exportReady} Zeilen`,
+      done: backupOk,
+      label: "Datensicherung",
+      href: `/exam/${id}/export#sicherung`,
+      detail: backupStatusLabel(project),
+      critical: backupStale,
+    },
+    {
+      done: stats.exportReady > 0 && backupOk,
+      label: "Export / Dokumente",
+      href: backupOk ? `/exam/${id}/export` : `/exam/${id}/export#sicherung`,
+      detail: backupStale
+        ? "Zuerst sichern"
+        : `${stats.exportReady} Zeilen exportbereit`,
     },
   ];
 
@@ -137,12 +155,19 @@ export default function OverviewPage() {
             {steps.map((step) => (
               <div
                 key={step.label}
-                className="flex items-center gap-3 rounded-lg border px-3 py-2"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border px-3 py-2",
+                  "critical" in step &&
+                    step.critical &&
+                    "border-amber-400 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-950/30"
+                )}
               >
                 {step.done ? (
-                  <CheckCircle2 className="size-5 text-emerald-600" />
+                  <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
+                ) : "critical" in step && step.critical ? (
+                  <HardDrive className="size-5 shrink-0 text-amber-700 dark:text-amber-300" />
                 ) : (
-                  <Circle className="size-5 text-muted-foreground" />
+                  <Circle className="size-5 shrink-0 text-muted-foreground" />
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{step.label}</p>

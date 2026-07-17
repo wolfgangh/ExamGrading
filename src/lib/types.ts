@@ -199,6 +199,17 @@ export interface ExamProject {
   questionDefs?: QuestionDef[];
 
   importLogs: ImportLogEntry[];
+
+  /**
+   * Letzte JSON-Projektsicherung (Download).
+   * Daten liegen nur im Browser – ohne Sicherung droht Datenverlust.
+   */
+  lastBackupAt?: string;
+  /**
+   * `updatedAt` des Projekts zum Zeitpunkt der letzten Sicherung.
+   * Backup ist veraltet, wenn `updatedAt !== lastBackupSyncedUpdatedAt`.
+   */
+  lastBackupSyncedUpdatedAt?: string;
 }
 
 /** Abgeleitetes Zeilenmodell für Tabellen/Export (nicht persistiert) */

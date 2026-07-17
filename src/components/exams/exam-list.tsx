@@ -27,7 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EXAM_TYPE_LABELS } from "@/lib/types";
+import { EXAM_TYPE_LABELS, type ExamProject } from "@/lib/types";
 import { downloadJson } from "@/lib/utils";
 import {
   exportExamJson,
@@ -38,6 +38,11 @@ import {
   projectArchiveFilename,
   projectArchiveSummary,
 } from "@/lib/project-archive";
+import {
+  isBackupStale,
+  markProjectBackedUp,
+  markProjectRestoredFromBackup,
+} from "@/lib/backup-status";
 import { createId } from "@/lib/id";
 
 export function ExamList() {
@@ -52,14 +57,14 @@ export function ExamList() {
     setImportErr(null);
     try {
       const text = await file.text();
-      const project = parseExamJson(text);
+      let project = parseExamJson(text);
       project.id = createId("exam");
       project.createdAt = new Date().toISOString();
-      project.updatedAt = project.createdAt;
+      project = markProjectRestoredFromBackup(project);
       await saveExam(project);
       await refresh();
       setImportMsg(
-        `Sicherung importiert: ${projectArchiveSummary(project)}`
+        `Sicherung importiert: ${projectArchiveSummary(project)}. Daten liegen wieder nur in diesem Browser – bei Änderungen erneut sichern. Original-Excel-Pfade werden nicht benötigt (Daten stecken in der JSON-Datei).`
       );
       router.push(`/exam/${project.id}/overview`);
     } catch (e) {
@@ -69,6 +74,12 @@ export function ExamList() {
           : "Sicherung konnte nicht importiert werden."
       );
     }
+  };
+
+  const exportBackup = async (exam: ExamProject) => {
+    downloadJson(projectArchiveFilename(exam), exportExamJson(exam));
+    await saveExam(markProjectBackedUp(exam));
+    await refresh();
   };
 
   return (
@@ -101,20 +112,34 @@ export function ExamList() {
       />
 
       <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Prüfungen</h1>
-          <p className="mt-1 text-muted-foreground">
-            Notenvergabe und HIS/QIS-Export – ersetzt den Excel-Workflow.
-            Sicherungen (.json) können neben den Klausur-Excel-Dateien abgelegt
-            und hier wieder importiert werden.
-          </p>
+        <div className="mb-6 space-y-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Prüfungen
+            </h1>
+            <p className="mt-1 text-muted-foreground">
+              Notenvergabe und HIS/QIS-Export – ersetzt den Excel-Workflow.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-amber-300/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-50">
+            <p className="font-medium">Daten nur in diesem Browser</p>
+            <p className="mt-1 opacity-90">
+              Prüfungsprojekte werden lokal gespeichert (IndexedDB), nicht auf
+              dem Server. Nach Importen und vor dem HIS-/PDF-Export:{" "}
+              <strong>JSON-Sicherung</strong> herunterladen und neben den
+              Klausurdateien ablegen. Wechsel des PCs nur über
+              Sicherungs-Import.
+            </p>
+          </div>
+
           {importMsg && (
-            <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">
               {importMsg}
             </p>
           )}
           {importErr && (
-            <p className="mt-2 text-sm text-destructive">{importErr}</p>
+            <p className="text-sm text-destructive">{importErr}</p>
           )}
         </div>
 
@@ -146,99 +171,102 @@ export function ExamList() {
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
-          {exams.map((exam) => (
-            <Card
-              key={exam.id}
-              className="surface-panel transition-shadow hover:shadow-md"
-            >
-              <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
-                <div className="min-w-0">
-                  <CardTitle className="truncate text-lg">
+          {exams.map((exam) => {
+            const stale = isBackupStale(exam);
+            return (
+              <Card
+                key={exam.id}
+                className="surface-panel transition-shadow hover:shadow-md"
+              >
+                <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+                  <div className="min-w-0">
+                    <CardTitle className="truncate text-lg">
+                      <Link
+                        href={`/exam/${exam.id}/overview`}
+                        className="hover:underline"
+                      >
+                        {exam.name}
+                      </Link>
+                    </CardTitle>
+                    <CardDescription className="mt-1 space-y-0.5">
+                      <span className="block">
+                        {exam.examNumber || "ohne Nummer"}
+                        {exam.semester ? ` · ${exam.semester}` : ""}
+                      </span>
+                      <span className="block">
+                        {EXAM_TYPE_LABELS[exam.examType]} ·{" "}
+                        {exam.hisRows.length} HIS · {exam.attendance.length}{" "}
+                        Antritte · {exam.points.length} Punkte
+                      </span>
+                      {stale && (
+                        <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-950 dark:bg-amber-900 dark:text-amber-50">
+                          Sicherung ausstehend
+                        </span>
+                      )}
+                    </CardDescription>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button variant="ghost" size="icon-sm">
+                          <MoreHorizontal />
+                        </Button>
+                      }
+                    />
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => void exportBackup(exam)}
+                      >
+                        <FileJson className="size-4" />
+                        Sicherung exportieren
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => void duplicate(exam, false)}
+                      >
+                        <Copy className="size-4" />
+                        Duplizieren
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => void duplicate(exam, true)}
+                      >
+                        <Copy className="size-4" />
+                        Für Folgesemester (ohne Daten)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `Prüfung „${exam.name}“ wirklich löschen?`
+                            )
+                          ) {
+                            void remove(exam.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                        Löschen
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      Geändert{" "}
+                      {new Date(exam.updatedAt).toLocaleString("de-DE")}
+                    </span>
                     <Link
                       href={`/exam/${exam.id}/overview`}
-                      className="hover:underline"
+                      className="inline-flex h-7 items-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium hover:bg-muted"
                     >
-                      {exam.name}
+                      Öffnen
                     </Link>
-                  </CardTitle>
-                  <CardDescription className="mt-1 space-y-0.5">
-                    <span className="block">
-                      {exam.examNumber || "ohne Nummer"}
-                      {exam.semester ? ` · ${exam.semester}` : ""}
-                    </span>
-                    <span className="block">
-                      {EXAM_TYPE_LABELS[exam.examType]} ·{" "}
-                      {exam.hisRows.length} HIS · {exam.attendance.length}{" "}
-                      Antritte · {exam.points.length} Punkte
-                    </span>
-                  </CardDescription>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button variant="ghost" size="icon-sm">
-                        <MoreHorizontal />
-                      </Button>
-                    }
-                  />
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => {
-                        downloadJson(
-                          projectArchiveFilename(exam),
-                          exportExamJson(exam)
-                        );
-                      }}
-                    >
-                      <FileJson className="size-4" />
-                      Sicherung exportieren
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => void duplicate(exam, false)}
-                    >
-                      <Copy className="size-4" />
-                      Duplizieren
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => void duplicate(exam, true)}
-                    >
-                      <Copy className="size-4" />
-                      Für Folgesemester (ohne Daten)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `Prüfung „${exam.name}“ wirklich löschen?`
-                          )
-                        ) {
-                          void remove(exam.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                      Löschen
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    Geändert{" "}
-                    {new Date(exam.updatedAt).toLocaleString("de-DE")}
-                  </span>
-                  <Link
-                    href={`/exam/${exam.id}/overview`}
-                    className="inline-flex h-7 items-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium hover:bg-muted"
-                  >
-                    Öffnen
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </main>
     </div>

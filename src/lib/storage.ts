@@ -33,11 +33,16 @@ export async function getExam(id: string): Promise<ExamProject | null> {
   return raw ? migrateExamProject(raw) : null;
 }
 
+/**
+ * Persistiert das Projekt. `updatedAt` kommt vom Caller
+ * (setProject / markBackup) – hier nicht überschreiben,
+ * sonst wäre jede Sicherung sofort wieder „veraltet“.
+ */
 export async function saveExam(project: ExamProject): Promise<void> {
   const migrated = migrateExamProject(project);
   const toSave: ExamProject = {
     ...migrated,
-    updatedAt: new Date().toISOString(),
+    updatedAt: migrated.updatedAt || new Date().toISOString(),
   };
   await projectsStore.setItem(toSave.id, toSave);
   await clearDraft(toSave.id);
@@ -51,7 +56,7 @@ export async function deleteExam(id: string): Promise<void> {
 export async function saveDraft(project: ExamProject): Promise<void> {
   await draftStore.setItem(project.id, {
     ...project,
-    updatedAt: new Date().toISOString(),
+    updatedAt: project.updatedAt || new Date().toISOString(),
   });
 }
 
