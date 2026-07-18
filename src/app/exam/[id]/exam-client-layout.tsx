@@ -52,7 +52,7 @@ function ExamShell({
   const backupNeeded = isBackupStale(project);
 
   return (
-    <div className="page-shell flex min-h-screen flex-col">
+    <div className="page-shell flex min-h-0 flex-1 flex-col">
       <AppHeader
         subtitle={project.name}
         actions={

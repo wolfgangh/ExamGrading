@@ -15,53 +15,61 @@ const BUCKET_ORDER: GradeBucketKey[] = [
 
 /**
  * Rendert die Notenverteilung als PNG (data URL) für PDF/Excel-Export.
+ * HiDPI (scale) für scharfe Darstellung in PDF.
  * Balken nach Notenstufe gefärbt; Mittelwert und Median als Linien.
  */
 export function renderGradeDistributionChartPng(
   data: NotenspiegelData,
-  opts?: { width?: number; height?: number }
+  opts?: { width?: number; height?: number; scale?: number }
 ): string {
-  const width = opts?.width ?? 900;
-  const height = opts?.height ?? 420;
+  // Logische Größe (CSS-Pixel / PDF-Layout)
+  const width = opts?.width ?? 1100;
+  const height = opts?.height ?? 500;
+  // Physische Auflösung: 2–3× für scharfen Druck
+  const scale = Math.max(1, opts?.scale ?? 2.5);
 
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("Canvas nicht verfügbar für Notenspiegel-Diagramm.");
   }
 
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
   // Hintergrund
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
-  const pad = { top: 36, right: 24, bottom: 88, left: 52 };
+  const pad = { top: 40, right: 28, bottom: 96, left: 56 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const rows = data.gradeRows;
   const n = rows.length || 1;
   const maxCount = Math.max(1, ...rows.map((r) => r.count));
-  // Y-Achse etwas über Max, mindestens 1
   const yMax = Math.max(1, Math.ceil(maxCount * 1.15));
 
   // Titel
   ctx.fillStyle = "#0f172a";
-  ctx.font = "600 16px system-ui, sans-serif";
-  ctx.fillText("Notenverteilung (Häufigkeit)", pad.left, 22);
+  ctx.font = "600 17px system-ui, -apple-system, sans-serif";
+  ctx.fillText("Notenverteilung (Häufigkeit)", pad.left, 24);
 
   // Plot-Rahmen
   ctx.strokeStyle = "#cbd5e1";
   ctx.lineWidth = 1;
-  ctx.strokeRect(pad.left, pad.top, plotW, plotH);
+  ctx.strokeRect(pad.left + 0.5, pad.top + 0.5, plotW - 1, plotH - 1);
 
   // Horizontale Gitterlinien
   const gridLines = 5;
-  ctx.font = "11px system-ui, sans-serif";
+  ctx.font = "12px system-ui, -apple-system, sans-serif";
   for (let i = 0; i <= gridLines; i++) {
     const val = (yMax * i) / gridLines;
     const y = pad.top + plotH - (plotH * i) / gridLines;
     ctx.strokeStyle = i === 0 ? "#94a3b8" : "#e2e8f0";
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(pad.left, y);
     ctx.lineTo(pad.left + plotW, y);
@@ -81,24 +89,20 @@ export function renderGradeDistributionChartPng(
     const x = pad.left + i * slot + (slot - barW) / 2;
     const y = pad.top + plotH - h;
     ctx.fillStyle = r.color;
-    // abgerundete Optik: einfache Rechtecke
     ctx.fillRect(x, y, barW, Math.max(h, r.count > 0 ? 2 : 0));
 
-    // X-Label
     ctx.fillStyle = "#334155";
-    ctx.font = "11px system-ui, sans-serif";
+    ctx.font = "12px system-ui, -apple-system, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(r.label, x + barW / 2, pad.top + plotH + 16);
+    ctx.fillText(r.label, x + barW / 2, pad.top + plotH + 18);
 
-    // Anzahl über Balken
     if (r.count > 0) {
       ctx.fillStyle = "#0f172a";
-      ctx.font = "600 11px system-ui, sans-serif";
+      ctx.font = "600 12px system-ui, -apple-system, sans-serif";
       ctx.fillText(String(r.count), x + barW / 2, y - 6);
     }
   });
 
-  // Note → X-Position (Mitte des jeweiligen Balkens, interpoliert)
   const gradeToX = (grade: number): number => {
     if (rows.length === 0) return pad.left;
     const first = rows[0].grade;
@@ -106,15 +110,13 @@ export function renderGradeDistributionChartPng(
     if (last === first) return pad.left + plotW / 2;
     const t = (grade - first) / (last - first);
     const clamped = Math.min(1, Math.max(0, t));
-    // Mitte des Slots
     return pad.left + clamped * (plotW - slot) + slot / 2;
   };
 
   const drawMarker = (
     grade: number | null,
     color: string,
-    dash: number[],
-    label: string
+    dash: number[]
   ) => {
     if (grade == null || !Number.isFinite(grade)) return;
     const x = gradeToX(grade);
@@ -127,7 +129,6 @@ export function renderGradeDistributionChartPng(
     ctx.lineTo(x, pad.top + plotH);
     ctx.stroke();
     ctx.setLineDash([]);
-    // Dreieck oben
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.moveTo(x, pad.top - 2);
@@ -136,17 +137,16 @@ export function renderGradeDistributionChartPng(
     ctx.closePath();
     ctx.fill();
     ctx.restore();
-    void label;
   };
 
-  drawMarker(data.averageGrade, "#334155", [6, 4], "Mittelwert");
-  drawMarker(data.medianGrade, "#1d4ed8", [2, 3], "Median");
+  drawMarker(data.averageGrade, "#334155", [6, 4]);
+  drawMarker(data.medianGrade, "#1d4ed8", [2, 3]);
 
   // Y-Achsen-Beschriftung
   ctx.save();
   ctx.fillStyle = "#64748b";
-  ctx.font = "11px system-ui, sans-serif";
-  ctx.translate(14, pad.top + plotH / 2);
+  ctx.font = "12px system-ui, -apple-system, sans-serif";
+  ctx.translate(16, pad.top + plotH / 2);
   ctx.rotate(-Math.PI / 2);
   ctx.textAlign = "center";
   ctx.fillText("Anzahl", 0, 0);
@@ -154,8 +154,8 @@ export function renderGradeDistributionChartPng(
 
   // Legende Notenstufen
   let lx = pad.left;
-  const ly = height - 52;
-  ctx.font = "11px system-ui, sans-serif";
+  const ly = height - 56;
+  ctx.font = "12px system-ui, -apple-system, sans-serif";
   ctx.textAlign = "left";
   for (const key of BUCKET_ORDER) {
     const c = GRADE_BUCKET_COLORS[key];
@@ -167,8 +167,7 @@ export function renderGradeDistributionChartPng(
   }
 
   // Legende Mittelwert / Median
-  const ly2 = height - 28;
-  // Mittelwert
+  const ly2 = height - 30;
   ctx.strokeStyle = "#334155";
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 4]);
@@ -178,7 +177,7 @@ export function renderGradeDistributionChartPng(
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = "#334155";
-  ctx.font = "11px system-ui, sans-serif";
+  ctx.font = "12px system-ui, -apple-system, sans-serif";
   const meanLabel = `Mittelwert ${formatGrade(data.averageGrade)}`;
   ctx.fillText(meanLabel, pad.left + 28, ly2 + 4);
 
@@ -193,6 +192,7 @@ export function renderGradeDistributionChartPng(
   ctx.fillStyle = "#1d4ed8";
   ctx.fillText(`Median ${formatGrade(data.medianGrade)}`, mx + 28, ly2 + 4);
 
+  // PNG ohne zusätzliche Kompression-Artefakte (Browser default)
   return canvas.toDataURL("image/png");
 }
 

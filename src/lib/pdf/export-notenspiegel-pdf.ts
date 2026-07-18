@@ -29,9 +29,11 @@ export function exportNotenspiegelPdf(
   }
 
   const data = buildNotenspiegelData(project, rows, stats);
+  // Hohe logische Auflösung + HiDPI-Scale für scharfe PDF-Einbettung
   const chartPng = renderGradeDistributionChartPng(data, {
-    width: 900,
-    height: 420,
+    width: 1400,
+    height: 620,
+    scale: 2.5,
   });
 
   const { doc, y: y0 } = startPdfWithHeader(project, "Notenspiegel");

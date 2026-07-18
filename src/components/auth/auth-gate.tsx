@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { LoginScreen } from "@/components/auth/login-screen";
+import { AppFooter } from "@/components/layout/app-footer";
 import { TeamsEmbedBanner } from "@/components/layout/teams-embed-banner";
 import {
   AUTH_CHANGE_EVENT,
@@ -43,9 +44,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       <TeamsEmbedBanner />
-      {children}
-    </>
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      <AppFooter />
+    </div>
   );
 }

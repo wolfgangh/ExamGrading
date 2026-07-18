@@ -28,8 +28,9 @@ export async function exportNotenspiegelExcel(
 
   const data = buildNotenspiegelData(project, rows, stats);
   const chartPng = renderGradeDistributionChartPng(data, {
-    width: 900,
-    height: 420,
+    width: 1200,
+    height: 540,
+    scale: 2,
   });
 
   const ExcelJS = await import("exceljs");
