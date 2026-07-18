@@ -32,6 +32,8 @@ import {
   type ExamProject,
   type ExamStatistics,
 } from "@/lib/types";
+import { buildEnrichedRows } from "@/lib/matching/match";
+import { computeStatistics } from "@/lib/grades/statistics";
 
 export type WorkflowStep = {
   id: string;
@@ -411,5 +413,45 @@ export function workflowProgress(steps: WorkflowStep[]): {
     totalCount,
     progressPct: totalCount > 0 ? (doneCount / totalCount) * 100 : 0,
     nextOpen: steps.find((s) => !s.done),
+  };
+}
+
+export type ExamWorkflowSummary = {
+  doneCount: number;
+  totalCount: number;
+  progressPct: number;
+  complete: boolean;
+  nextOpen: WorkflowStep | undefined;
+  /** Kurztext für Karten (nächster Schritt oder Abgeschlossen) */
+  statusLabel: string;
+};
+
+/**
+ * Workflow-Zusammenfassung für die Prüfungsübersicht (Hauptseite).
+ * Berechnet Enriched Rows + Stats pro Projekt – bei üblichen Listengrößen unkritisch.
+ */
+export function getExamWorkflowSummary(
+  project: ExamProject
+): ExamWorkflowSummary {
+  const rows = buildEnrichedRows(project);
+  const stats = computeStatistics(rows, project.gradeSchema, 1, project);
+  const steps = buildWorkflowSteps(project, rows, stats, project.id);
+  const { doneCount, totalCount, progressPct, nextOpen } =
+    workflowProgress(steps);
+  const complete = totalCount > 0 && doneCount === totalCount;
+  const statusLabel = complete
+    ? `Abgeschlossen · ${doneCount}/${totalCount}`
+    : nextOpen
+      ? `${nextOpen.label} · ${doneCount}/${totalCount}`
+      : totalCount === 0
+        ? "Kein Workflow"
+        : `${doneCount}/${totalCount}`;
+  return {
+    doneCount,
+    totalCount,
+    progressPct,
+    complete,
+    nextOpen,
+    statusLabel,
   };
 }

@@ -28,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 import { EXAM_TYPE_LABELS, type ExamProject } from "@/lib/types";
 import { downloadBlob, downloadJson } from "@/lib/download";
 import {
@@ -54,7 +55,8 @@ import {
   currentSemesterLabel,
   semesterSlug,
 } from "@/lib/semester";
-import { datedExportFilename } from "@/lib/utils";
+import { datedExportFilename, cn } from "@/lib/utils";
+import { getExamWorkflowSummary } from "@/lib/workflow-steps";
 
 export function ExamList() {
   const { exams, loading, error, refresh, remove, duplicate } = useExams();
@@ -273,13 +275,20 @@ export function ExamList() {
         <div className="grid gap-3 sm:grid-cols-2">
           {exams.map((exam) => {
             const stale = isBackupStale(exam);
+            const semester = (exam.semester || "").trim();
+            const isCurrentSemester = semester === semesterNow;
+            const workflow = getExamWorkflowSummary(exam);
+            const statusHref = workflow.nextOpen?.href
+              ? workflow.nextOpen.href
+              : `/exam/${exam.id}/overview`;
+
             return (
               <Card
                 key={exam.id}
                 className="surface-panel transition-shadow hover:shadow-md"
               >
                 <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <CardTitle className="truncate text-lg">
                       <Link
                         href={`/exam/${exam.id}/overview`}
@@ -288,13 +297,57 @@ export function ExamList() {
                         {exam.name}
                       </Link>
                     </CardTitle>
-                    <CardDescription className="mt-1 space-y-0.5">
+
+                    {/* Semester · Prüfungsform · Workflow-Status */}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge
+                        variant={isCurrentSemester ? "default" : "secondary"}
+                        className={cn(
+                          "h-6 px-2.5 text-[0.7rem] font-semibold tracking-wide",
+                          !semester && "opacity-70"
+                        )}
+                        title="Semester"
+                      >
+                        {semester || "ohne Semester"}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="h-6 max-w-full px-2.5 text-[0.7rem] font-semibold"
+                        title="Prüfungsform"
+                      >
+                        {EXAM_TYPE_LABELS[exam.examType]}
+                      </Badge>
+                      <Link
+                        href={statusHref}
+                        className="inline-flex max-w-full hover:opacity-90"
+                        title={
+                          workflow.complete
+                            ? "Workflow abgeschlossen"
+                            : "Nächster Workflow-Schritt"
+                        }
+                      >
+                        <Badge
+                          variant={workflow.complete ? "outline" : "default"}
+                          className={cn(
+                            "h-6 max-w-full px-2.5 text-[0.7rem] font-semibold",
+                            workflow.complete
+                              ? "border-emerald-600/40 bg-emerald-50 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-950/50 dark:text-emerald-100"
+                              : workflow.nextOpen?.critical
+                                ? "bg-amber-600 text-white hover:bg-amber-600/90 dark:bg-amber-700"
+                                : undefined
+                          )}
+                        >
+                          {workflow.complete
+                            ? workflow.statusLabel
+                            : `Nächster: ${workflow.nextOpen?.label ?? "—"} · ${workflow.doneCount}/${workflow.totalCount}`}
+                        </Badge>
+                      </Link>
+                    </div>
+
+                    <CardDescription className="mt-2 space-y-0.5">
                       <span className="block">
                         {exam.examNumber || "ohne Nummer"}
-                        {exam.semester ? ` · ${exam.semester}` : ""}
-                      </span>
-                      <span className="block">
-                        {EXAM_TYPE_LABELS[exam.examType]} ·{" "}
+                        {" · "}
                         {exam.hisRows.length} HIS · {exam.attendance.length}{" "}
                         Antritte · {exam.points.length} Punkte
                       </span>
@@ -350,7 +403,20 @@ export function ExamList() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-2">
+                  {/* Fortschrittsbalken Workflow */}
+                  <div
+                    className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    title={`Workflow ${workflow.doneCount}/${workflow.totalCount}`}
+                  >
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        workflow.complete ? "bg-emerald-600" : "bg-primary"
+                      )}
+                      style={{ width: `${workflow.progressPct}%` }}
+                    />
+                  </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>
                       Geändert{" "}
