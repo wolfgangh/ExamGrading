@@ -23,6 +23,11 @@ import {
 import { cn, formatGrade, formatPercent, formatStat } from "@/lib/utils";
 import { orphanCount } from "@/lib/matching/merge-candidates";
 import { listUnresolvedOrphans } from "@/lib/matching/orphan-resolution";
+import {
+  countOpenGradingTasks,
+  hasOpenGrading,
+  openGradingSummary,
+} from "@/lib/grades/open-grading";
 import { HISINONE_LABEL, isOnlineStyleExam } from "@/lib/types";
 import {
   AlertCircle,
@@ -64,6 +69,13 @@ export default function OverviewPage() {
     (d) => d.active
   ).length;
 
+  const openGrading = hasOpenGrading(project);
+  const openGradingCount = countOpenGradingTasks(project);
+  /** Echte Noten exportbereit – No-Shows allein zählen nicht als „Export erledigt“ */
+  const gradedExportReady = rows.filter(
+    (r) => r.status === "export_ready"
+  ).length;
+
   const steps: WorkflowStep[] = [
     {
       id: "his",
@@ -98,28 +110,40 @@ export default function OverviewPage() {
         ]),
     {
       id: "points",
-      done: project.points.length > 0,
-      label: isKlausur ? "Punkte (Vorlage)" : "Punkte",
-      href: `/exam/${id}/import?focus=points`,
-      detail: isKlausur
-        ? project.points.length > 0
-          ? `${project.points.length} mit Punkten`
-          : "Vorlage exportieren & importieren"
+      // Erst erledigt, wenn importiert UND keine „Bewertung notwendig“ mehr
+      done: project.points.length > 0 && !openGrading,
+      label: isKlausur ? "Punkte (Vorlage)" : "Punkte & Bewertung",
+      href: openGrading
+        ? `/exam/${id}/detail-points`
+        : `/exam/${id}/import?focus=points`,
+      detail:
+        project.points.length === 0
+          ? isKlausur
+            ? "Vorlage exportieren & importieren"
+            : "Noch keine Punkte importiert"
+          : openGrading
+            ? openGradingSummary(project)
+            : `${project.points.length} mit Punkten · alle Aufgaben bewertet`,
+      critical: openGrading,
+      actionLabel: openGrading
+        ? "Jetzt bewerten"
         : project.points.length > 0
-          ? `${project.points.length} mit Punkten`
-          : "Noch keine Punkte importiert",
-      actionLabel: project.points.length > 0 ? "Öffnen" : "Importieren",
+          ? "Öffnen"
+          : "Importieren",
     },
     {
       id: "grades",
-      done: rows.some((r) => r.finalGrade != null),
+      // Noten erst „fertig“, wenn Bewertung abgeschlossen und Noten existieren
+      done: !openGrading && stats.graded > 0,
       label: "Noten berechnet",
-      href: `/exam/${id}/grades`,
-      detail:
-        stats.graded > 0
+      href: openGrading ? `/exam/${id}/detail-points` : `/exam/${id}/grades`,
+      detail: openGrading
+        ? `Notenschlüssel gesperrt – ${openGradingCount.people} Person(en), ${openGradingCount.tasks} Aufgabe(n) offen`
+        : stats.graded > 0
           ? `${stats.graded} Noten vorhanden`
           : "Noch keine Noten",
-      actionLabel: "Zur Notenübersicht",
+      critical: openGrading,
+      actionLabel: openGrading ? "Bewertung abschließen" : "Zur Notenübersicht",
     },
     ...(onlineStyle
       ? [
@@ -154,21 +178,36 @@ export default function OverviewPage() {
     {
       id: "documents",
       done:
-        stats.exportReady > 0 &&
+        gradedExportReady > 0 &&
         backupOk &&
+        !openGrading &&
         (!onlineStyle || unresolvedN === 0),
       label: "Dokumente / HISinOne-Export",
-      href: backupOk
-        ? `/exam/${id}/documents`
-        : `/exam/${id}/export#sicherung`,
-      detail: !backupOk
-        ? "Zuerst JSON-Sicherung"
-        : onlineStyle && unresolvedN > 0
-          ? "Zuerst Matrikel-Zuordnung abschließen"
-          : stats.exportReady > 0
-            ? `${stats.exportReady} Zeilen exportbereit`
-            : "Noch nicht exportbereit",
-      actionLabel: backupOk ? "Zu Dokumente" : "Zuerst sichern",
+      href: !backupOk
+        ? `/exam/${id}/export#sicherung`
+        : openGrading
+          ? `/exam/${id}/detail-points`
+          : onlineStyle && unresolvedN > 0
+            ? `/exam/${id}/matching`
+            : `/exam/${id}/documents`,
+      detail: openGrading
+        ? "Zuerst alle Aufgaben bewerten (Export gesperrt)"
+        : !backupOk
+          ? "Zuerst JSON-Sicherung"
+          : onlineStyle && unresolvedN > 0
+            ? "Zuerst Matrikel-Zuordnung abschließen"
+            : gradedExportReady > 0
+              ? `${gradedExportReady} mit Note exportbereit` +
+                (stats.noShow > 0 ? ` · ${stats.noShow} No-Show(s)` : "")
+              : "Noch nicht exportbereit",
+      critical: openGrading || (backupStale && hasSubstantialData(project)),
+      actionLabel: openGrading
+        ? "Bewertung abschließen"
+        : !backupOk
+          ? "Zuerst sichern"
+          : onlineStyle && unresolvedN > 0
+            ? "Zuordnung prüfen"
+            : "Zu Dokumente",
     },
   ];
 
