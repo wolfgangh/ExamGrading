@@ -1,11 +1,20 @@
 import { hasOpenGrading } from "@/lib/grades/open-grading";
-import { isOnlineStyleExam, type ExamProject } from "@/lib/types";
+import {
+  isOnlineStyleExam,
+  isStudienarbeitExam,
+  type ExamProject,
+} from "@/lib/types";
 
 /** Alle relevanten XLSX-Importe vorhanden */
 export function importsComplete(project: ExamProject): boolean {
   const hisOk = (project.hisRows?.length ?? 0) > 0;
+  if (!hisOk) return false;
+  // Studienarbeit / Klausur: nur HISinOne-Masterliste
+  if (isStudienarbeitExam(project.examType) || project.examType === "written") {
+    return true;
+  }
   const pointsOk = (project.points?.length ?? 0) > 0;
-  if (!hisOk || !pointsOk) return false;
+  if (!pointsOk) return false;
   if (isOnlineStyleExam(project.examType)) {
     return (project.attendance?.length ?? 0) > 0;
   }

@@ -2,8 +2,18 @@
 
 import { useExamContext } from "@/components/exam/exam-context";
 import { createId } from "@/lib/id";
-import type { ExamType, SubArea } from "@/lib/types";
-import { EXAM_TYPE_LABELS } from "@/lib/types";
+import type {
+  AssessmentCriterion,
+  CriterionScale,
+  ExamType,
+  SubArea,
+} from "@/lib/types";
+import {
+  EXAM_TYPE_LABELS,
+  isStaCriteriaExam,
+  isStaManualExam,
+  isStudienarbeitExam,
+} from "@/lib/types";
 import { formatGrade } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
@@ -39,6 +49,8 @@ import {
   hasOpenGrading,
   openGradingSummary,
 } from "@/lib/grades/open-grading";
+import { CRITERION_SCALE_LABELS } from "@/lib/grades/sta-criteria";
+import { recomputeStaCriteriaRecord } from "@/lib/grades/sta-criteria";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
@@ -47,12 +59,36 @@ export default function SettingsPage() {
   if (!project) return null;
 
   const gradingLocked = hasOpenGrading(project);
+  const isSta = isStudienarbeitExam(project.examType);
+  const isStaCrit = isStaCriteriaExam(project.examType);
 
   const updateMeta = <K extends keyof typeof project>(
     key: K,
     value: (typeof project)[K]
   ) => {
-    setProject((prev) => ({ ...prev, [key]: value }));
+    setProject((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === "examType" && value === "sta_criteria") {
+        next.criteria = next.criteria ?? [];
+      }
+      return next;
+    });
+  };
+
+  const updateCriterion = (
+    cid: string,
+    patch: Partial<AssessmentCriterion>
+  ) => {
+    setProject((prev) => {
+      const criteria = (prev.criteria ?? []).map((c) =>
+        c.id === cid ? { ...c, ...patch } : c
+      );
+      const max = prev.gradeSchema.maxPoints;
+      const points = prev.points.map((p) =>
+        recomputeStaCriteriaRecord(p, criteria, max)
+      );
+      return { ...prev, criteria, points };
+    });
   };
 
   const updateSubArea = (id: string, patch: Partial<SubArea>) => {
@@ -148,6 +184,158 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {isStaCrit && (
+        <Card className="surface-panel">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">
+                Bewertungskriterien (StA)
+              </CardTitle>
+              <CardDescription>
+                Gewichte relativ (müssen nicht 100 ergeben). Skala: Prozent,
+                Punkte oder Note. Gesamtwert → Notenschlüssel.
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setProject((prev) => ({
+                  ...prev,
+                  criteria: [
+                    ...(prev.criteria ?? []),
+                    {
+                      id: createId("crit"),
+                      name: "Neues Kriterium",
+                      code: `K${(prev.criteria?.length ?? 0) + 1}`,
+                      weight: 1,
+                      scale: "percent" as CriterionScale,
+                      maxPoints: 10,
+                    },
+                  ],
+                }))
+              }
+            >
+              <Plus className="size-4" />
+              Kriterium
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {(project.criteria ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Noch keine Kriterien – bitte hinzufügen, dann unter
+                Kriterienbewertung die Werte eintragen.
+              </p>
+            ) : (
+              (project.criteria ?? []).map((c) => (
+                <div
+                  key={c.id}
+                  className="grid grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_5rem_5rem_9rem_5rem_auto]"
+                >
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Name</Label>
+                    <Input
+                      value={c.name}
+                      onChange={(e) =>
+                        updateCriterion(c.id, { name: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Kürzel</Label>
+                    <Input
+                      value={c.code}
+                      onChange={(e) =>
+                        updateCriterion(c.id, { code: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Gewicht</Label>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      value={c.weight}
+                      onChange={(e) =>
+                        updateCriterion(c.id, {
+                          weight: Number(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Skala</Label>
+                    <Select
+                      value={c.scale}
+                      onValueChange={(v) =>
+                        v &&
+                        updateCriterion(c.id, {
+                          scale: v as CriterionScale,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue>
+                          {CRITERION_SCALE_LABELS[c.scale]}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(
+                          Object.keys(CRITERION_SCALE_LABELS) as CriterionScale[]
+                        ).map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {CRITERION_SCALE_LABELS[s]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Max Pkte</Label>
+                    <Input
+                      type="number"
+                      disabled={c.scale !== "points"}
+                      value={c.maxPoints ?? ""}
+                      onChange={(e) =>
+                        updateCriterion(c.id, {
+                          maxPoints: Number(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="self-end"
+                    onClick={() =>
+                      setProject((prev) => {
+                        const criteria = (prev.criteria ?? []).filter(
+                          (x) => x.id !== c.id
+                        );
+                        const max = prev.gradeSchema.maxPoints;
+                        const points = prev.points.map((p) =>
+                          recomputeStaCriteriaRecord(p, criteria, max)
+                        );
+                        return { ...prev, criteria, points };
+                      })
+                    }
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))
+            )}
+            <Link
+              href={`/exam/${id}/assessment`}
+              className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
+            >
+              Zur Kriterienbewertung
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isSta && (
       <Card className="surface-panel">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -231,14 +419,17 @@ export default function SettingsPage() {
           ))}
         </CardContent>
       </Card>
+      )}
 
+      {!isStaManualExam(project.examType) && (
       <Card className="surface-panel">
         <CardHeader>
           <CardTitle className="text-base">Notenszenarien</CardTitle>
           <CardDescription>
-            Szenarien 45 / 40 / frei – Vergleich und aktives Szenario unter
-            Notenszenarien. Aktive Bestehensgrenze:{" "}
-            {project.gradeSchema.passThreshold} Punkte.
+            {isStaCrit
+              ? "Notenschlüssel für den berechneten Gesamtwert der Kriterien. "
+              : "Szenarien 45 / 40 / frei – Vergleich und aktives Szenario unter Notenszenarien. "}
+            Aktive Bestehensgrenze: {project.gradeSchema.passThreshold} Punkte.
             {gradingLocked && (
               <>
                 {" "}
@@ -280,6 +471,7 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

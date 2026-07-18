@@ -6,7 +6,12 @@ import {
   resolveSubAreasForExamName,
   type CatalogSubArea,
 } from "@/lib/exam-catalog";
-import type { ExamProject, ExamType, SubArea } from "@/lib/types";
+import {
+  isStudienarbeitExam,
+  type ExamProject,
+  type ExamType,
+  type SubArea,
+} from "@/lib/types";
 
 export interface CreateExamInput {
   name: string;
@@ -32,15 +37,24 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
   const now = new Date().toISOString();
   const displayName = resolveExamDisplayName(input.name);
 
+  const examType = input.examType ?? "the";
+  const isSta = isStudienarbeitExam(examType);
+
   let subAreas: SubArea[];
-  if (input.subAreas && input.subAreas.length > 0) {
+  if (isSta) {
+    subAreas = toSubAreas([
+      { name: "Gesamt", code: "G", maxPoints: input.maxPoints ?? 100 },
+    ]);
+  } else if (input.subAreas && input.subAreas.length > 0) {
     subAreas = toSubAreas(input.subAreas);
   } else {
     subAreas = toSubAreas(resolveSubAreasForExamName(input.name));
   }
 
   const sumMax = subAreas.reduce((s, sa) => s + sa.maxPoints, 0);
-  const maxPoints = sumMax || input.maxPoints || 90;
+  const maxPoints = isSta
+    ? input.maxPoints ?? 100
+    : sumMax || input.maxPoints || 90;
   const scenarios = createDefaultScenarios(maxPoints);
 
   return {
@@ -52,7 +66,7 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     examNumber: input.examNumber?.trim() ?? "",
     semester: input.semester?.trim() ?? "",
     lecturers: (input.lecturers ?? []).map((l) => l.trim()).filter(Boolean),
-    examType: input.examType ?? "the",
+    examType,
     subAreas,
     gradeScenarios: scenarios,
     activeScenarioId: scenarios[0].id,
@@ -64,6 +78,7 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     identityMerges: [],
     identityDismissals: [],
     importLogs: [],
+    criteria: examType === "sta_criteria" ? [] : undefined,
   };
 }
 

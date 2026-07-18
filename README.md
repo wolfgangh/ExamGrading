@@ -22,7 +22,7 @@ Geeignet u. a. für:
 
 | Bereich | Inhalt |
 |--------|--------|
-| **Prüfungstypen** | THE, elektrP, Klausur, Sonstige |
+| **Prüfungstypen** | THE, elektrP, Klausur, **Studienarbeit (StA)** Kriterien/manuell, Sonstige |
 | **Import** | HISinOne-Noteneintrag (auch mehrere Dateien), Moodle-Antritt, Moodle-/Punkte-Excel |
 | **Zuordnung** | Matrikel-Tippfehler: Vorschläge, manuell zusammenführen, ablehnen, rückgängig |
 | **Bewertung** | Detailpunkte, offene Aufgaben („Bewertung notwendig“), Teilgebiete |
@@ -113,4 +113,4 @@ Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Deta
 ## Lizenz & Kontakt
 
 Internes Hochschul-Tool.  
-© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.2.4
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.3.0

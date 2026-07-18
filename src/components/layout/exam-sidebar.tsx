@@ -17,26 +17,65 @@ import {
   Settings,
   Table2,
 } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { isOnlineStyleExam, type ExamType } from "@/lib/types";
+import {
+  isOnlineStyleExam,
+  isStaCriteriaExam,
+  isStaManualExam,
+  type ExamType,
+} from "@/lib/types";
 import { useExamContext } from "@/components/exam/exam-context";
 import {
   buildWorkflowSteps,
   workflowProgress,
 } from "@/lib/workflow-steps";
+import { buttonVariants } from "@/components/ui/button";
 
-const NAV_BASE = [
-  { href: "overview", label: "Übersicht", icon: BarChart3 },
-  { href: "import", label: "Importe", icon: FileSpreadsheet },
-  { href: "points", label: "Punkteerfassung", icon: PenLine },
-  { href: "detail-points", label: "Detailpunkte", icon: Grid3x3 },
-  { href: "grades", label: "Notenübersicht", icon: Table2 },
-  { href: "scenarios", label: "Notenszenarien", icon: Layers },
-  { href: "documents", label: "Dokumente", icon: FileText },
-  { href: "export", label: "Sicherung", icon: HardDrive },
-  { href: "settings", label: "Einstellungen", icon: Settings },
-] as const;
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof BarChart3;
+};
+
+function buildNav(examType?: ExamType): NavItem[] {
+  const items: NavItem[] = [
+    { href: "overview", label: "Übersicht", icon: BarChart3 },
+    { href: "import", label: "Importe", icon: FileSpreadsheet },
+  ];
+
+  if (examType && isOnlineStyleExam(examType)) {
+    items.push({ href: "matching", label: "Zuordnung", icon: GitMerge });
+  }
+
+  if (examType && isStaCriteriaExam(examType)) {
+    items.push({
+      href: "assessment",
+      label: "Kriterienbewertung",
+      icon: ClipboardList,
+    });
+  } else if (!(examType && isStaManualExam(examType))) {
+    items.push({ href: "points", label: "Punkteerfassung", icon: PenLine });
+    items.push({
+      href: "detail-points",
+      label: "Detailpunkte",
+      icon: Grid3x3,
+    });
+  }
+
+  items.push({ href: "grades", label: "Notenübersicht", icon: Table2 });
+
+  if (!(examType && isStaManualExam(examType))) {
+    items.push({ href: "scenarios", label: "Notenszenarien", icon: Layers });
+  }
+
+  items.push(
+    { href: "documents", label: "Dokumente", icon: FileText },
+    { href: "export", label: "Sicherung", icon: HardDrive },
+    { href: "settings", label: "Einstellungen", icon: Settings }
+  );
+
+  return items;
+}
 
 export function ExamSidebar({
   examId,
@@ -48,14 +87,7 @@ export function ExamSidebar({
   const pathname = usePathname();
   const base = `/exam/${examId}`;
   const { project, rows, stats } = useExamContext();
-
-  const nav = [
-    ...NAV_BASE.slice(0, 2),
-    ...(examType && isOnlineStyleExam(examType)
-      ? ([{ href: "matching", label: "Zuordnung", icon: GitMerge }] as const)
-      : []),
-    ...NAV_BASE.slice(2),
-  ];
+  const nav = buildNav(examType ?? project?.examType);
 
   const steps =
     project && stats

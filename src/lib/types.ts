@@ -5,8 +5,31 @@ export type MatriculationKey = string;
 /**
  * the / elektr_p: Antritt selbst ausgefüllt, Moodle-Punkte, Matrikel-Zuordnung
  * (elektrP = Ablauf wie THE, Prüfung vor Ort an der Hochschule)
+ * sta_criteria: Studienarbeit mit gewichteten Kriterien
+ * sta_manual: Studienarbeit mit manueller Note
  */
-export type ExamType = "the" | "elektr_p" | "written" | "other";
+export type ExamType =
+  | "the"
+  | "elektr_p"
+  | "written"
+  | "sta_criteria"
+  | "sta_manual"
+  | "other";
+
+/** Skala eines Bewertungskriteriums (Studienarbeit) */
+export type CriterionScale = "percent" | "points" | "grade";
+
+/** Kriterium für Studienarbeit (sta_criteria) */
+export interface AssessmentCriterion {
+  id: string;
+  name: string;
+  code: string;
+  /** Relatives Gewicht (z. B. 1, 2, 30) */
+  weight: number;
+  scale: CriterionScale;
+  /** Bei scale === "points" */
+  maxPoints?: number;
+}
 
 export type StudentStatus =
   | "registered"
@@ -109,6 +132,11 @@ export interface PointsRecord {
   secondCorrectionPoints?: number | null;
   /** Anmerkungen zur Zweitkorrektur */
   secondCorrectionNotes?: string;
+  /**
+   * Rohwerte je Kriterium (Studienarbeit sta_criteria).
+   * Einheit = scale des jeweiligen AssessmentCriterion.
+   */
+  criterionValues?: Record<string, number | null>;
 }
 
 export interface HISTemplateRow {
@@ -288,6 +316,8 @@ export interface ExamProject {
    * (nur relevant bei mehreren Teilgebieten).
    */
   subAreaMappingConfirmedAt?: string;
+  /** Bewertungskriterien (Studienarbeit sta_criteria) */
+  criteria?: AssessmentCriterion[];
 
   /**
    * Dokumentierte manuelle Matrikel-Zusammenführungen (THE/elektrP).
@@ -418,6 +448,8 @@ export const EXAM_TYPE_LABELS: Record<ExamType, string> = {
   the: "Take-Home-Exam (THE)",
   elektr_p: "Elektronische Prüfung (elektrP)",
   written: "Klausur",
+  sta_criteria: "Studienarbeit (StA) – Kriterien",
+  sta_manual: "Studienarbeit (StA) – manuelle Note",
   other: "Sonstige",
 };
 
@@ -430,6 +462,27 @@ export const HISINONE_LABEL = "HISinOne";
  */
 export function isOnlineStyleExam(examType: ExamType): boolean {
   return examType === "the" || examType === "elektr_p";
+}
+
+export function isStudienarbeitExam(examType: ExamType): boolean {
+  return examType === "sta_criteria" || examType === "sta_manual";
+}
+
+export function isStaCriteriaExam(examType: ExamType): boolean {
+  return examType === "sta_criteria";
+}
+
+export function isStaManualExam(examType: ExamType): boolean {
+  return examType === "sta_manual";
+}
+
+/** Kein Moodle-Antritt / keine Matrikel-Zuordnung */
+export function isHisOnlyImportExam(examType: ExamType): boolean {
+  return (
+    examType === "written" ||
+    isStudienarbeitExam(examType) ||
+    examType === "other"
+  );
 }
 
 export const GERMAN_GRADES = [

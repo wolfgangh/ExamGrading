@@ -17,6 +17,12 @@ import {
   needsSubAreaMapping,
   subAreaMappingIssues,
 } from "@/lib/grades/subarea-mapping";
+import {
+  isStaCriteriaExam,
+  isStaManualExam,
+} from "@/lib/types";
+import { countMissingCriteria } from "@/lib/grades/sta-criteria";
+import { normalizeMatriculation } from "@/lib/matching/matriculation";
 
 export interface ValidationItem {
   level: "error" | "warning" | "info";
@@ -71,6 +77,47 @@ export function validateForExport(
       message: `Teilgebiet-Zuordnung unvollständig: ${issues[0] ?? "Aufgaben den Teilgebieten zuordnen (Detailpunkte)"}.`,
       count: issues.length,
     });
+  }
+
+  if (isStaCriteriaExam(project.examType)) {
+    if (!(project.criteria?.length)) {
+      items.push({
+        level: "error",
+        message:
+          "Keine Bewertungskriterien definiert – unter Einstellungen anlegen.",
+      });
+    } else {
+      const incomplete = rows.filter((r) => {
+        if (!r.inHis) return false;
+        const rec = project.points.find(
+          (p) => normalizeMatriculation(p.matriculationNumber) === r.key
+        );
+        return (
+          countMissingCriteria(rec?.criterionValues, project.criteria ?? []) >
+          0
+        );
+      });
+      if (incomplete.length > 0) {
+        items.push({
+          level: "error",
+          message: `Kriterien unvollständig bei ${incomplete.length} Person(en) in HISinOne.`,
+          count: incomplete.length,
+        });
+      }
+    }
+  }
+
+  if (isStaManualExam(project.examType)) {
+    const missingGrade = rows.filter(
+      (r) => r.inHis && r.finalGrade == null
+    );
+    if (missingGrade.length > 0) {
+      items.push({
+        level: "error",
+        message: `Manuelle Note fehlt bei ${missingGrade.length} Person(en) in HISinOne.`,
+        count: missingGrade.length,
+      });
+    }
   }
 
   const missingPoints = rows.filter(

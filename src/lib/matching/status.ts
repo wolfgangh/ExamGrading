@@ -8,6 +8,8 @@ export function deriveStudentStatus(input: {
   hasGradeOverride: boolean;
   /** Offene Detailaufgaben („Bewertung notwendig“) */
   hasOpenGrading?: boolean;
+  /** Studienarbeit o. Ä.: kein No-Show-Konzept über Antrittsliste */
+  skipNoShow?: boolean;
 }): StudentStatus {
   const {
     inHis,
@@ -16,20 +18,26 @@ export function deriveStudentStatus(input: {
     finalGrade,
     hasGradeOverride,
     hasOpenGrading,
+    skipNoShow,
   } = input;
 
   if (!inHis) {
+    // Manuell hinzugefügt: mit Note „graded“, sonst mismatch
+    if (finalGrade != null && !hasOpenGrading) return "graded";
     if (hasPoints || attended) return "mismatch";
     return "mismatch";
   }
 
-  // No-Show: angemeldet und (explizit nicht angetreten ODER keine Antrittsinfo und keine Punkte)
-  if (attended === false) {
+  if (!skipNoShow && attended === false) {
     return "no_show";
   }
 
+  // Manuelle Note (z. B. StA manuell) ohne Punkte
+  if (hasGradeOverride && finalGrade != null && !hasOpenGrading) {
+    return "export_ready";
+  }
+
   if (!hasPoints && attended !== true) {
-    // nur in HIS, weder Antritt noch Punkte
     return "registered";
   }
 
@@ -38,18 +46,13 @@ export function deriveStudentStatus(input: {
   }
 
   if (hasPoints) {
-    // Exportbereit erst, wenn keine offenen Aufgaben mehr
     if (hasOpenGrading) {
       return "points";
     }
     if (finalGrade != null) {
-      return inHis ? "export_ready" : "graded";
+      return "export_ready";
     }
     return "points";
-  }
-
-  if (hasGradeOverride && finalGrade != null && !hasOpenGrading) {
-    return "export_ready";
   }
 
   return "registered";

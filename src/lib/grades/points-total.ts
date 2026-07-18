@@ -1,5 +1,11 @@
-import type { PointsRecord, QuestionDef, SubArea } from "@/lib/types";
+import type {
+  AssessmentCriterion,
+  PointsRecord,
+  QuestionDef,
+  SubArea,
+} from "@/lib/types";
 import { sumSubAreaPoints } from "@/lib/grades/schema";
+import { computeCriteriaTotalPoints } from "@/lib/grades/sta-criteria";
 
 /** Summe der Detailaufgaben (null-Werte = 0 für Summe, aber hasAny prüft separat) */
 export function sumQuestionPoints(
@@ -10,7 +16,6 @@ export function sumQuestionPoints(
     (v): v is number => v != null && Number.isFinite(v)
   );
   if (vals.length === 0) {
-    // alle null, aber Keys vorhanden → 0 Punkte vergeben vs. unbewertet
     const keys = Object.keys(byQuestion);
     if (keys.length === 0) return null;
     return 0;
@@ -18,14 +23,36 @@ export function sumQuestionPoints(
   return Math.round(vals.reduce((a, b) => a + b, 0) * 100) / 100;
 }
 
+export type EffectiveTotalOptions = {
+  criteria?: AssessmentCriterion[];
+  maxPoints?: number;
+};
+
 /**
  * Effektive Gesamtpunkte:
- * 1) Summe byQuestion (wenn vorhanden)
- * 2) Summe Teilgebiete
- * 3) totalPoints / totalOverride (Legacy)
+ * 1) Studienarbeit-Kriterien (wenn criteria gesetzt)
+ * 2) Summe byQuestion
+ * 3) Summe Teilgebiete
+ * 4) totalPoints / totalOverride (Legacy)
  */
-export function computeEffectiveTotal(rec: PointsRecord | null | undefined): number | null {
+export function computeEffectiveTotal(
+  rec: PointsRecord | null | undefined,
+  options?: EffectiveTotalOptions
+): number | null {
   if (!rec) return null;
+
+  const criteria = options?.criteria;
+  if (criteria && criteria.length > 0) {
+    const fromCrit = computeCriteriaTotalPoints(
+      rec.criterionValues,
+      criteria,
+      options?.maxPoints ?? 100
+    );
+    if (fromCrit != null) return fromCrit;
+    // Unvollständig: kein Fallback auf andere Quellen für StA-Kriterien
+    return null;
+  }
+
   if (rec.byQuestion && Object.keys(rec.byQuestion).length > 0) {
     const q = sumQuestionPoints(rec.byQuestion);
     if (q != null) return q;
@@ -41,7 +68,7 @@ export function computeEffectiveTotal(rec: PointsRecord | null | undefined): num
   return null;
 }
 
-/** Teilgebiet-Summen aus Fragen ableiten (F-Aufgaben → Code F / FRM) */
+/** Teilgebiet-Summen aus Fragen ableiten */
 export function recomputeSubAreasFromQuestions(
   byQuestion: Record<string, number | null>,
   questionDefs: QuestionDef[],
@@ -54,7 +81,6 @@ export function recomputeSubAreasFromQuestions(
   for (const q of questionDefs) {
     const pts = byQuestion[q.id];
     if (pts == null || !Number.isFinite(pts)) continue;
-    // Nur explizite Zuordnung – kein stilles Default auf Finanzierung/erstes Gebiet
     const saId = q.subAreaId && validIds.has(q.subAreaId) ? q.subAreaId : null;
     if (!saId) continue;
     bySub[saId] = (bySub[saId] ?? 0) + pts;
@@ -71,7 +97,8 @@ export function recomputeSubAreasFromQuestions(
 export function recomputePointsRecord(
   rec: PointsRecord,
   questionDefs: QuestionDef[],
-  subAreas: SubArea[]
+  subAreas: SubArea[],
+  options?: EffectiveTotalOptions
 ): PointsRecord {
   const byQuestion = rec.byQuestion ?? {};
   const needsGrading = (rec.needsGrading ?? []).filter((id) => {
@@ -88,12 +115,15 @@ export function recomputePointsRecord(
     );
   }
 
-  const totalPoints = computeEffectiveTotal({
-    ...rec,
-    byQuestion,
-    bySubArea,
-    totalOverride: undefined,
-  });
+  const totalPoints = computeEffectiveTotal(
+    {
+      ...rec,
+      byQuestion,
+      bySubArea,
+      totalOverride: undefined,
+    },
+    options
+  );
 
   return {
     ...rec,

@@ -39,6 +39,8 @@ import type {
 import { Button } from "@/components/ui/button";
 import { exportPointsTemplate } from "@/lib/excel/export-points-template";
 import { Download, Trash2 } from "lucide-react";
+import { isStudienarbeitExam } from "@/lib/types";
+import { AddStudentForm } from "@/components/exam/add-student-form";
 
 type PreviewState = {
   type: ImportType;
@@ -417,6 +419,7 @@ export default function ImportPage() {
 
   const hisSources = getHisSources(project);
   const isKlausur = project.examType === "written";
+  const isSta = isStudienarbeitExam(project.examType);
   const canExportTemplate = project.hisRows.length > 0;
 
   const downloadTemplate = async () => {
@@ -429,15 +432,17 @@ export default function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Importe</h1>
         <p className="text-muted-foreground">
-          {isKlausur
-            ? "Klausur: HIS-Masterliste, dann Punkte-Vorlage ausfüllen und importieren."
-            : "HIS-Masterliste (ggf. mehrere Studiengänge), Antrittsliste und Punkte. Matching über Matrikelnummer / Anmeldename."}
+          {isSta
+            ? "Studienarbeit: HISinOne-Masterliste importieren, optional weitere Personen manuell hinzufügen."
+            : isKlausur
+              ? "Klausur: HIS-Masterliste, dann Punkte-Vorlage ausfüllen und importieren."
+              : "HIS-Masterliste (ggf. mehrere Studiengänge), Antrittsliste und Punkte. Matching über Matrikelnummer / Anmeldename."}
         </p>
       </div>
 
       <div
         className={
-          isKlausur
+          isSta || isKlausur
             ? "grid gap-4 md:grid-cols-2"
             : "grid gap-4 md:grid-cols-3"
         }
@@ -483,7 +488,21 @@ export default function ImportPage() {
           )}
         </div>
 
-        {isKlausur ? (
+        {isSta ? (
+          <Card className="surface-panel">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                2. Person manuell hinzufügen
+              </CardTitle>
+              <CardDescription>
+                Zusätzliche Studierende ohne oder mit späterem HIS-Eintrag.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AddStudentForm project={project} onAdd={setProject} />
+            </CardContent>
+          </Card>
+        ) : isKlausur ? (
           <div className="space-y-3">
             <Card className="surface-panel border-dashed">
               <CardHeader className="pb-2">

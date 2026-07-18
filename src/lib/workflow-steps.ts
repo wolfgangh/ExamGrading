@@ -26,11 +26,13 @@ import {
 import {
   HISINONE_LABEL,
   isOnlineStyleExam,
+  isStaCriteriaExam,
+  isStaManualExam,
+  isStudienarbeitExam,
   type EnrichedStudentRow,
   type ExamProject,
   type ExamStatistics,
 } from "@/lib/types";
-
 export type WorkflowStep = {
   id: string;
   done: boolean;
@@ -80,6 +82,8 @@ export function buildWorkflowSteps(
   examId: string
 ): WorkflowStep[] {
   const isKlausur = project.examType === "written";
+  const isSta = isStudienarbeitExam(project.examType);
+  const skipAttendance = isKlausur || isSta;
   const onlineStyle = isOnlineStyleExam(project.examType);
   const openGrading = hasOpenGrading(project);
   const openGradingCount = countOpenGradingTasks(project);
@@ -104,8 +108,25 @@ export function buildWorkflowSteps(
   const gradesBackupDone = backupAfterGradesDone(project) && gradesOk;
   const subMapNeeded = needsSubAreaMapping(project);
   const subMapOk = isSubAreaMappingComplete(project);
-  const pointsDone =
-    project.points.length > 0 && !openGrading && (!subMapNeeded || subMapOk);
+  const hisInRows = rows.filter((r) => r.inHis);
+  const staCriteriaReady =
+    isStaCriteriaExam(project.examType) &&
+    (project.criteria?.length ?? 0) > 0 &&
+    hisInRows.length > 0 &&
+    hisInRows.every((r) => r.finalGrade != null && r.status === "export_ready");
+  const staManualReady =
+    isStaManualExam(project.examType) &&
+    hisInRows.length > 0 &&
+    hisInRows.every(
+      (r) => r.finalGrade != null && (r.gradeOverride != null || r.hasPoints)
+    );
+  const pointsDone = isSta
+    ? isStaCriteriaExam(project.examType)
+      ? staCriteriaReady
+      : staManualReady
+    : project.points.length > 0 &&
+      !openGrading &&
+      (!subMapNeeded || subMapOk);
 
   const steps: WorkflowStep[] = [
     {
@@ -119,7 +140,7 @@ export function buildWorkflowSteps(
           : "Noch nicht importiert",
       actionLabel: project.hisRows.length > 0 ? "Öffnen" : "Importieren",
     },
-    ...(isKlausur
+    ...(skipAttendance
       ? []
       : [
           {
@@ -167,9 +188,9 @@ export function buildWorkflowSteps(
       label: "Sicherung nach Import",
       href: `/exam/${examId}/export?stage=import#sicherung`,
       detail: !importsOk
-        ? `Zuerst alle XLSX importieren (${HISINONE_LABEL}${
-            isKlausur ? ", Punkte" : ", Antritt, Punkte"
-          })`
+        ? isSta || isKlausur
+          ? `Zuerst ${HISINONE_LABEL}-Masterliste importieren`
+          : `Zuerst alle XLSX importieren (${HISINONE_LABEL}, Antritt, Punkte)`
         : importBackupDone
           ? `Erledigt${formatMilestoneAt(
               project.workflowMilestones?.backupAfterImportAt
@@ -178,54 +199,108 @@ export function buildWorkflowSteps(
       critical: importsOk && !importBackupDone,
       actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
     },
-    {
-      id: "points",
-      done: pointsDone,
-      label: isKlausur ? "Punkte (Vorlage)" : "Punkte & Bewertung",
-      href:
-        openGrading || (subMapNeeded && !subMapOk)
-          ? `/exam/${examId}/detail-points`
-          : `/exam/${examId}/import?focus=points`,
-      detail:
-        project.points.length === 0
-          ? isKlausur
-            ? "Vorlage exportieren & importieren"
-            : "Noch keine Punkte importiert"
-          : openGrading
-            ? openGradingSummary(project)
-            : subMapNeeded && !subMapOk
-              ? subAreaMappingSummary(project)
-              : `${project.points.length} mit Punkten · alle Aufgaben bewertet`,
-      critical: openGrading || (subMapNeeded && !subMapOk),
-      actionLabel: openGrading
-        ? "Jetzt bewerten"
-        : subMapNeeded && !subMapOk
-          ? "Teilgebiete zuordnen"
-          : project.points.length > 0
-            ? "Öffnen"
-            : "Importieren",
-    },
+    ...(isStaManualExam(project.examType)
+      ? [
+          {
+            id: "points",
+            done: pointsDone,
+            label: "Noten manuell",
+            href: `/exam/${examId}/grades`,
+            detail: pointsDone
+              ? `${hisInRows.filter((r) => r.finalGrade != null).length} Noten vergeben`
+              : "Noten in der Notenübersicht eintragen",
+            critical: importsOk && !pointsDone,
+            actionLabel: pointsDone ? "Öffnen" : "Noten eintragen",
+          } satisfies WorkflowStep,
+        ]
+      : isStaCriteriaExam(project.examType)
+        ? [
+            {
+              id: "points",
+              done: pointsDone,
+              label: "Kriterienbewertung",
+              href:
+                (project.criteria?.length ?? 0) === 0
+                  ? `/exam/${examId}/settings`
+                  : `/exam/${examId}/assessment`,
+              detail:
+                (project.criteria?.length ?? 0) === 0
+                  ? "Zuerst Kriterien unter Einstellungen anlegen"
+                  : pointsDone
+                    ? "Alle Kriterien bewertet"
+                    : `${project.criteria?.length ?? 0} Kriterien – Werte eintragen`,
+              critical: importsOk && !pointsDone,
+              actionLabel:
+                (project.criteria?.length ?? 0) === 0
+                  ? "Kriterien definieren"
+                  : "Bewerten",
+            } satisfies WorkflowStep,
+          ]
+        : [
+            {
+              id: "points",
+              done: pointsDone,
+              label: isKlausur ? "Punkte (Vorlage)" : "Punkte & Bewertung",
+              href:
+                openGrading || (subMapNeeded && !subMapOk)
+                  ? `/exam/${examId}/detail-points`
+                  : `/exam/${examId}/import?focus=points`,
+              detail:
+                project.points.length === 0
+                  ? isKlausur
+                    ? "Vorlage exportieren & importieren"
+                    : "Noch keine Punkte importiert"
+                  : openGrading
+                    ? openGradingSummary(project)
+                    : subMapNeeded && !subMapOk
+                      ? subAreaMappingSummary(project)
+                      : `${project.points.length} mit Punkten · alle Aufgaben bewertet`,
+              critical: openGrading || (subMapNeeded && !subMapOk),
+              actionLabel: openGrading
+                ? "Jetzt bewerten"
+                : subMapNeeded && !subMapOk
+                  ? "Teilgebiete zuordnen"
+                  : project.points.length > 0
+                    ? "Öffnen"
+                    : "Importieren",
+            } satisfies WorkflowStep,
+          ]),
     {
       id: "grades",
-      done: gradesOk && (!subMapNeeded || subMapOk),
-      label: "Noten berechnet",
-      href:
-        openGrading || (subMapNeeded && !subMapOk)
-          ? `/exam/${examId}/detail-points`
-          : `/exam/${examId}/grades`,
-      detail: openGrading
-        ? `Notenschlüssel gesperrt – ${openGradingCount.people} Person(en), ${openGradingCount.tasks} Aufgabe(n) offen`
-        : subMapNeeded && !subMapOk
-          ? "Zuerst Teilgebiet-Zuordnung bestätigen"
-          : stats.graded > 0
-            ? `${stats.graded} Noten vorhanden`
-            : "Noch keine Noten",
-      critical: openGrading || (subMapNeeded && !subMapOk),
-      actionLabel: openGrading
-        ? "Bewertung abschließen"
-        : subMapNeeded && !subMapOk
-          ? "Teilgebiete zuordnen"
-          : "Zur Notenübersicht",
+      done: gradesOk && (!subMapNeeded || subMapOk) && (!isSta || pointsDone),
+      label: isStaManualExam(project.examType)
+        ? "Notenübersicht"
+        : "Noten berechnet",
+      href: isStaCriteriaExam(project.examType)
+        ? `/exam/${examId}/assessment`
+        : isStaManualExam(project.examType)
+          ? `/exam/${examId}/grades`
+          : openGrading || (subMapNeeded && !subMapOk)
+            ? `/exam/${examId}/detail-points`
+            : `/exam/${examId}/grades`,
+      detail: isSta
+        ? pointsDone
+          ? `${stats.graded} Noten vorhanden`
+          : "Bewertung noch unvollständig"
+        : openGrading
+          ? `Notenschlüssel gesperrt – ${openGradingCount.people} Person(en), ${openGradingCount.tasks} Aufgabe(n) offen`
+          : subMapNeeded && !subMapOk
+            ? "Zuerst Teilgebiet-Zuordnung bestätigen"
+            : stats.graded > 0
+              ? `${stats.graded} Noten vorhanden`
+              : "Noch keine Noten",
+      critical:
+        (!isSta && (openGrading || (subMapNeeded && !subMapOk))) ||
+        (isSta && importsOk && !pointsDone),
+      actionLabel: isSta
+        ? pointsDone
+          ? "Zur Notenübersicht"
+          : "Bewertung fortsetzen"
+        : openGrading
+          ? "Bewertung abschließen"
+          : subMapNeeded && !subMapOk
+            ? "Teilgebiete zuordnen"
+            : "Zur Notenübersicht",
     },
     ...(onlineStyle
       ? [

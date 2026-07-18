@@ -6,6 +6,7 @@ import {
   pointsBelowPass,
 } from "@/lib/grades/next-grade";
 import { ensureScenarios, getActiveScenario } from "@/lib/grades/scenarios";
+import { countMissingCriteria } from "@/lib/grades/sta-criteria";
 import { flattenHisRows, getHisSources } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { deriveStudentStatus } from "@/lib/matching/status";
@@ -16,6 +17,10 @@ import type {
   MatriculationKey,
   PointsRecord,
   Student,
+} from "@/lib/types";
+import {
+  isStaCriteriaExam,
+  isStudienarbeitExam,
 } from "@/lib/types";
 
 function emptyStudent(mat: string, last = "", first = ""): Student {
@@ -87,6 +92,12 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
   const active = getActiveScenario(project);
   const gradeSchema = active.schema;
   const { subAreas } = project;
+  const totalOpts = {
+    criteria: isStaCriteriaExam(project.examType)
+      ? project.criteria
+      : undefined,
+    maxPoints: gradeSchema.maxPoints,
+  };
   const rows: EnrichedStudentRow[] = [];
   const seen = new Set<MatriculationKey>();
 
@@ -169,21 +180,32 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     }
 
     const totalPoints =
-      pointsRec != null ? computeEffectiveTotal(pointsRec) : null;
-    const hasPoints = totalPoints != null;
+      pointsRec != null
+        ? computeEffectiveTotal(pointsRec, totalOpts)
+        : null;
+    const gradeOverride = pointsRec?.gradeOverride ?? null;
+    const hasPoints =
+      totalPoints != null ||
+      (isStudienarbeitExam(project.examType) && gradeOverride != null);
     const needsGradingCount = pointsRec?.needsGrading?.length ?? 0;
-    const hasOpenGrading = needsGradingCount > 0;
+    const missingCriteria =
+      isStaCriteriaExam(project.examType) && project.criteria?.length
+        ? countMissingCriteria(pointsRec?.criterionValues, project.criteria)
+        : 0;
+    const hasOpenGrading = needsGradingCount > 0 || missingCriteria > 0;
     // Punkte retten Antritt (z. B. Moodle-Antritt fehlt, THE aber geschrieben)
     if (hasPoints && attended !== true) {
       attended = true;
     }
-    const effectiveAttended = attended;
+    // Studienarbeit: kein No-Show über Antrittsliste
+    const effectiveAttended = isStudienarbeitExam(project.examType)
+      ? true
+      : attended;
 
     const calculatedGrade =
       totalPoints != null
         ? calculateGrade(totalPoints, gradeSchema)
         : null;
-    const gradeOverride = pointsRec?.gradeOverride ?? null;
     const finalGrade =
       gradeOverride != null ? gradeOverride : calculatedGrade;
 
@@ -194,6 +216,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       finalGrade,
       hasGradeOverride: gradeOverride != null,
       hasOpenGrading,
+      skipNoShow: isStudienarbeitExam(project.examType),
     });
 
     const warnings: string[] = [];
@@ -209,9 +232,14 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     if (gradeOverride != null) {
       warnings.push("Note manuell überschrieben");
     }
-    if (hasOpenGrading) {
+    if (needsGradingCount > 0) {
       warnings.push(
         `${needsGradingCount} Aufgabe(n) „Bewertung notwendig“ – nicht exportbereit`
+      );
+    }
+    if (missingCriteria > 0) {
+      warnings.push(
+        `${missingCriteria} Kriterium/Kriterien ohne Wert – Note noch nicht berechnet`
       );
     }
     const multiProgram = (matInSources.get(key) ?? 0) > 1;
@@ -274,7 +302,9 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       subAreaPoints[sa.id] = pointsRec?.bySubArea[sa.id] ?? null;
     }
     const totalPoints =
-      pointsRec != null ? computeEffectiveTotal(pointsRec) : null;
+      pointsRec != null
+        ? computeEffectiveTotal(pointsRec, totalOpts)
+        : null;
     const calculatedGrade =
       totalPoints != null
         ? calculateGrade(totalPoints, gradeSchema)
@@ -328,7 +358,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     for (const sa of subAreas) {
       subAreaPoints[sa.id] = pointsRec.bySubArea[sa.id] ?? null;
     }
-    const totalPoints = computeEffectiveTotal(pointsRec);
+    const totalPoints = computeEffectiveTotal(pointsRec, totalOpts);
     const calculatedGrade =
       totalPoints != null
         ? calculateGrade(totalPoints, gradeSchema)
@@ -342,7 +372,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       student,
       inHis: false,
       attended: true,
-      hasPoints: totalPoints != null,
+      hasPoints: totalPoints != null || gradeOverride != null,
       totalPoints,
       percent:
         totalPoints != null && gradeSchema.maxPoints > 0
@@ -357,6 +387,76 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       comment: pointsRec.comment,
       attempt: student.attempt ?? null,
       orderIndex: 20_000 + rows.length,
+      multiProgram: false,
+      attendanceWithoutHis: false,
+      ...gradeExtras(
+        totalPoints,
+        finalGrade,
+        gradeSchema,
+        project,
+        gradeOverride
+      ),
+    });
+  }
+
+  // Manuell angelegte Studierende (ohne HIS/Antritt/Punkte-Import)
+  for (const [rawKey, stored] of Object.entries(project.students ?? {})) {
+    const key = normalizeMatriculation(rawKey);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const pointsRec = pointsByKey.get(key);
+    const subAreaPoints: Record<string, number | null> = {};
+    for (const sa of subAreas) {
+      subAreaPoints[sa.id] = pointsRec?.bySubArea[sa.id] ?? null;
+    }
+    const totalPoints =
+      pointsRec != null
+        ? computeEffectiveTotal(pointsRec, totalOpts)
+        : null;
+    const gradeOverride = pointsRec?.gradeOverride ?? null;
+    const calculatedGrade =
+      totalPoints != null
+        ? calculateGrade(totalPoints, gradeSchema)
+        : null;
+    const finalGrade =
+      gradeOverride != null ? gradeOverride : calculatedGrade;
+    const missingCriteria =
+      isStaCriteriaExam(project.examType) && project.criteria?.length
+        ? countMissingCriteria(pointsRec?.criterionValues, project.criteria)
+        : 0;
+    const warnings = ["Manuell hinzugefügt – nicht in HISinOne-Masterliste"];
+    if (missingCriteria > 0) {
+      warnings.push(`${missingCriteria} Kriterium/Kriterien ohne Wert`);
+    }
+
+    rows.push({
+      key,
+      student: stored,
+      inHis: false,
+      attended: true,
+      hasPoints: totalPoints != null || gradeOverride != null,
+      totalPoints,
+      percent:
+        totalPoints != null && gradeSchema.maxPoints > 0
+          ? totalPoints / gradeSchema.maxPoints
+          : null,
+      calculatedGrade,
+      finalGrade,
+      status: deriveStudentStatus({
+        inHis: false,
+        attended: true,
+        hasPoints: totalPoints != null || gradeOverride != null,
+        finalGrade,
+        hasGradeOverride: gradeOverride != null,
+        hasOpenGrading: missingCriteria > 0,
+        skipNoShow: true,
+      }),
+      warnings,
+      subAreaPoints,
+      gradeOverride,
+      comment: pointsRec?.comment,
+      attempt: stored.attempt ?? null,
+      orderIndex: 30_000 + rows.length,
       multiProgram: false,
       attendanceWithoutHis: false,
       ...gradeExtras(
