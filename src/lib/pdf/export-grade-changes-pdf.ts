@@ -2,8 +2,10 @@ import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
 import {
   autoTable,
   drawKeyValueBlock,
+  drawSignatureBlock,
   findPointsRecord,
   formatDeDate,
+  formatLecturerHeaderLines,
   getLastTableY,
   pdfGrade,
   pdfText,
@@ -105,7 +107,6 @@ export function exportGradeChangesPdf(
   doc.setFont("helvetica", "normal");
   y += 8;
 
-  const lecturers = project.lecturers ?? [];
   const programs = [
     ...new Set(changes.map((c) => c.programCode).filter(Boolean)),
   ];
@@ -115,8 +116,7 @@ export function exportGradeChangesPdf(
     `Studiengang: ${pdfText(programs.join(", ") || "–")}`,
     `Anmeldenummer / Prüfungsnr.: ${pdfText(project.examNumber || "–")}`,
     `Fachbezeichnung: ${pdfText(project.name)}`,
-    `Name des/r Prüfers/in: ${pdfText(lecturers[0] || "–")}`,
-    `Name des/r Zweitprüfers/in: ${pdfText(lecturers[1] || "–")}`,
+    ...formatLecturerHeaderLines(project.lecturers),
     `Erstellt: ${formatDeDate()}`,
   ];
   y = drawKeyValueBlock(doc, header, y);
@@ -173,21 +173,10 @@ export function exportGradeChangesPdf(
   doc.setTextColor(0);
   finalY += 12;
 
-  doc.setFontSize(9);
-  const sigLines = [
-    "Datum, Unterschrift Prüfer/in",
-    "Datum, Unterschrift Zweitprüfer/in",
-    "Datum, Unterschrift PK-Vorsitzende/r",
-  ];
-  for (const label of sigLines) {
-    if (finalY > 275) {
-      doc.addPage();
-      finalY = PDF_MARGIN + 10;
-    }
-    doc.line(PDF_MARGIN, finalY, PDF_MARGIN + 70, finalY);
-    doc.text(pdfText(label), PDF_MARGIN, finalY + 4);
-    finalY += 14;
-  }
+  drawSignatureBlock(doc, project.lecturers ?? [], finalY, {
+    label: "Unterschriften der Prüfer",
+    extraLines: ["PK-Vorsitzende/r"],
+  });
 
   savePdf(doc, `Notenaenderung_${project.name || "Pruefung"}`);
 }

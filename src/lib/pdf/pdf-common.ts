@@ -117,6 +117,30 @@ export function drawOthHeader(
   return lineY + 6;
 }
 
+/** Alle Prüfer/Dozenten, bereinigt */
+export function listLecturers(lecturers: string[] | undefined | null): string[] {
+  return (lecturers ?? []).map((l) => l.trim()).filter(Boolean);
+}
+
+/** Eine Zeile: „Prüfer: A, B, C“ */
+export function formatLecturersLine(
+  lecturers: string[] | undefined | null,
+  label = "Prüfer"
+): string {
+  const names = listLecturers(lecturers);
+  return `${label}: ${pdfText(names.length ? names.join(", ") : "–")}`;
+}
+
+/** Zeilen „Prüfer 1: …“, „Prüfer 2: …“ (bei einem Namen ohne Nummer) */
+export function formatLecturerHeaderLines(
+  lecturers: string[] | undefined | null
+): string[] {
+  const names = listLecturers(lecturers);
+  if (names.length === 0) return ["Prüfer: –"];
+  if (names.length === 1) return [`Prüfer: ${pdfText(names[0])}`];
+  return names.map((n, i) => `Prüfer ${i + 1}: ${pdfText(n)}`);
+}
+
 export function examHeaderLines(project: ExamProject): string[] {
   const lines: string[] = [];
   if (project.examNumber) {
@@ -126,9 +150,7 @@ export function examHeaderLines(project: ExamProject): string[] {
   if (project.semester) {
     lines.push(`Semester: ${pdfText(project.semester)}`);
   }
-  if (project.lecturers?.length) {
-    lines.push(`Prüfer: ${pdfText(project.lecturers.join(", "))}`);
-  }
+  lines.push(...formatLecturerHeaderLines(project.lecturers));
   lines.push(
     `Bestehensgrenze: ${project.gradeSchema.passThreshold} Pkt. (von ${project.gradeSchema.maxPoints})`
   );
@@ -178,26 +200,50 @@ export function drawSignatureBlock(
   doc: jsPDF,
   lecturers: string[],
   startY: number,
-  options?: { label?: string }
+  options?: { label?: string; extraLines?: string[] }
 ): number {
-  const names =
-    lecturers.filter(Boolean).length > 0
-      ? lecturers.filter(Boolean)
-      : ["Prüfer"];
+  const names = listLecturers(lecturers);
+  const displayNames = names.length > 0 ? names : ["Prüfer"];
+  const title =
+    options?.label ??
+    (displayNames.length > 1
+      ? "Unterschriften der Prüfer"
+      : "Unterschrift des Prüfers");
   let y = startY + 4;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text(pdfText(options?.label ?? "Unterschriften"), PDF_MARGIN, y);
+  doc.text(pdfText(title), PDF_MARGIN, y);
   y += 8;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
 
-  for (const name of names) {
+  for (let i = 0; i < displayNames.length; i++) {
+    const name = displayNames[i];
     if (y > 270) {
       doc.addPage();
       y = PDF_MARGIN + 10;
     }
-    doc.text(pdfText(name), PDF_MARGIN, y);
+    const label =
+      displayNames.length > 1
+        ? `${i + 1}. ${pdfText(name)}`
+        : pdfText(name);
+    doc.text(label, PDF_MARGIN, y);
+    y += 6;
+    doc.text("Datum: ____________________", PDF_MARGIN, y);
+    doc.text(
+      "Unterschrift: ________________________________",
+      PDF_MARGIN + 70,
+      y
+    );
+    y += 12;
+  }
+
+  for (const extra of options?.extraLines ?? []) {
+    if (y > 270) {
+      doc.addPage();
+      y = PDF_MARGIN + 10;
+    }
+    doc.text(pdfText(extra), PDF_MARGIN, y);
     y += 6;
     doc.text("Datum: ____________________", PDF_MARGIN, y);
     doc.text(

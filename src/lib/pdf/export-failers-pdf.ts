@@ -5,6 +5,7 @@ import {
   drawSignatureBlock,
   findPointsRecord,
   formatDeDate,
+  formatLecturerHeaderLines,
   getLastTableY,
   pdfGrade,
   pdfPoints,
@@ -78,9 +79,6 @@ export function exportFailersPdf(
   doc.setTextColor(0);
   y += 8;
 
-  const lecturers = project.lecturers ?? [];
-  const erst = lecturers[0] || "____________________";
-  const zweit = lecturers[1] || "____________________";
   const programs = [
     ...new Set(
       failers.map((r) => r.programCode).filter((p): p is string => !!p)
@@ -93,8 +91,7 @@ export function exportFailersPdf(
     `Modul / Prüfung: ${pdfText(project.name)}`,
     `Prüfungsnummer: ${pdfText(project.examNumber || "–")}`,
     `Bestehensgrenze: ${project.gradeSchema.passThreshold} von ${project.gradeSchema.maxPoints} Punkten`,
-    `Erstprüfer: ${pdfText(erst)}`,
-    `Zweitprüfer: ${pdfText(zweit)}`,
+    ...formatLecturerHeaderLines(project.lecturers),
   ];
   y = drawKeyValueBlock(doc, header, y);
 
@@ -175,8 +172,8 @@ export function exportFailersPdf(
   doc.setFontSize(9);
   doc.text(pdfText(`Datum: ${formatDeDate()}`), PDF_MARGIN, finalY);
 
-  drawSignatureBlock(doc, [erst, zweit].filter(Boolean), finalY + 4, {
-    label: "Unterschriften Erst- und Zweitprüfer",
+  drawSignatureBlock(doc, project.lecturers ?? [], finalY + 4, {
+    label: "Unterschriften der Prüfer",
   });
 
   savePdf(doc, `Zweitkorrektur_Durchfaller_${project.name || "Pruefung"}`);

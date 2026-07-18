@@ -4,6 +4,7 @@ import {
   drawKeyValueBlock,
   drawSignatureBlock,
   formatDeDate,
+  formatLecturerHeaderLines,
   getLastTableY,
   pdfGrade,
   pdfPoints,
@@ -70,7 +71,7 @@ export function exportManualGradesPdf(
     `Studiengang / Anmeldenr.: ${pdfText(project.examNumber || "–")}`,
     `Fach / Modul: ${pdfText(project.name)}`,
     `Semester: ${pdfText(project.semester || "–")}`,
-    `Prüfer: ${pdfText(project.lecturers?.join(", ") || "–")}`,
+    ...formatLecturerHeaderLines(project.lecturers),
     `Datum der Erstellung: ${formatDeDate()}`,
   ];
   y = drawKeyValueBlock(doc, header, y);
@@ -132,9 +133,7 @@ export function exportManualGradesPdf(
     finalY
   );
 
-  drawSignatureBlock(doc, project.lecturers ?? [], finalY + 6, {
-    label: "Unterschrift des Prüfers",
-  });
+  drawSignatureBlock(doc, project.lecturers ?? [], finalY + 6);
 
   savePdf(doc, `Manuelle_Notenmeldung_${project.name || "Pruefung"}`);
 }

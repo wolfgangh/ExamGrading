@@ -20,6 +20,7 @@ export function AddStudentForm({
   const [mat, setMat] = useState("");
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
+  const [programCode, setProgramCode] = useState("");
   const [groupId, setGroupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export function AddStudentForm({
       firstName: firstName.trim(),
       groupId: showGroup ? groupId : null,
     };
+    const manualProgram = programCode.trim() || null;
 
     onAdd((prev) => {
       const rec: PointsRecord = {
@@ -61,6 +63,7 @@ export function AddStudentForm({
         bySubArea: Object.fromEntries(prev.subAreas.map((s) => [s.id, null])),
         totalPoints: null,
         source: "manual",
+        manualProgramCode: manualProgram,
         criterionValues:
           prev.examType === "sta_criteria"
             ? Object.fromEntries(
@@ -84,6 +87,7 @@ export function AddStudentForm({
     setMat("");
     setLastName("");
     setFirstName("");
+    setProgramCode("");
     setGroupId(null);
   };
 
@@ -92,8 +96,8 @@ export function AddStudentForm({
       <div
         className={
           showGroup
-            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-            : "grid gap-3 sm:grid-cols-3"
+            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
         }
       >
         <div className="grid gap-1.5">
@@ -123,6 +127,15 @@ export function AddStudentForm({
             onChange={(e) => setFirstName(e.target.value)}
           />
         </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="add-prog">Studiengang</Label>
+          <Input
+            id="add-prog"
+            value={programCode}
+            onChange={(e) => setProgramCode(e.target.value)}
+            placeholder="z. B. MEB, MBW"
+          />
+        </div>
         {showGroup && (
           <div className="grid gap-1.5">
             <Label>Gruppe</Label>
@@ -147,8 +160,8 @@ export function AddStudentForm({
         Person hinzufügen
       </Button>
       <p className="text-xs text-muted-foreground">
-        Manuelle Personen erscheinen in der Bewertung. Ohne HIS-Eintrag nicht
-        im HISinOne-Excel – ggf. manuelle Notenmeldung nutzen.
+        Manuelle Personen erscheinen in der Bewertung. Studiengang erscheint in
+        der manuellen Notenmeldung. Ohne HIS-Eintrag nicht im HISinOne-Excel.
       </p>
     </form>
   );
