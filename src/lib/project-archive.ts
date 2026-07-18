@@ -1,4 +1,9 @@
+import { z } from "zod";
 import { migrateExamProject } from "@/lib/grades/scenarios";
+import {
+  assertJsonSizeLimit,
+  MAX_PROJECT_ARCHIVE_BYTES,
+} from "@/lib/import-limits";
 import type { ExamProject } from "@/lib/types";
 import { datedExportFilename } from "@/lib/utils";
 
@@ -13,14 +18,26 @@ export interface ExamGradeArchive {
   project: ExamProject;
 }
 
+/**
+ * Sanfte Validierung: Pflichtfelder id/name, Rest passthrough.
+ * Vermeidet Breaks bei Legacy-Sicherungen und Zusatzfeldern.
+ */
+const projectCoreSchema = z
+  .object({
+    id: z.string().min(1, "Ungültiges Prüfungsprojekt (ID fehlt)."),
+    name: z.string().min(1, "Ungültiges Prüfungsprojekt (Name fehlt)."),
+  })
+  .passthrough();
+
+const archiveWrapperSchema = z
+  .object({
+    format: z.literal(ARCHIVE_FORMAT),
+    project: z.unknown(),
+  })
+  .passthrough();
+
 export function isExamGradeArchive(data: unknown): data is ExamGradeArchive {
-  if (!data || typeof data !== "object") return false;
-  const o = data as Record<string, unknown>;
-  return (
-    o.format === ARCHIVE_FORMAT &&
-    o.project != null &&
-    typeof o.project === "object"
-  );
+  return archiveWrapperSchema.safeParse(data).success;
 }
 
 export function buildProjectArchive(project: ExamProject): string {
@@ -35,10 +52,13 @@ export function buildProjectArchive(project: ExamProject): string {
 }
 
 function normalizeProject(raw: ExamProject): ExamProject {
-  if (!raw || typeof raw !== "object" || !raw.name) {
-    throw new Error("Ungültiges Prüfungsprojekt (Name fehlt).");
+  const parsed = projectCoreSchema.safeParse(raw);
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message;
+    throw new Error(msg || "Ungültiges Prüfungsprojekt.");
   }
-  const data: ExamProject = { ...raw };
+
+  const data: ExamProject = { ...(parsed.data as unknown as ExamProject) };
   if (!data.schemaVersion) {
     data.schemaVersion = 1;
   }
@@ -49,16 +69,16 @@ function normalizeProject(raw: ExamProject): ExamProject {
   data.importLogs = data.importLogs ?? [];
   data.subAreas = data.subAreas ?? [];
   data.lecturers = data.lecturers ?? [];
-  if (!data.id) {
-    throw new Error("Ungültiges Prüfungsprojekt (ID fehlt).");
-  }
   return migrateExamProject(data);
 }
 
 /**
  * Parst Archiv-Wrapper oder Legacy-Rohprojekt (reines ExamProject-JSON).
+ * Größenlimit und sanfte Zod-Pflichtfeldprüfung.
  */
 export function parseProjectArchive(json: string): ExamProject {
+  assertJsonSizeLimit(json, MAX_PROJECT_ARCHIVE_BYTES);
+
   let data: unknown;
   try {
     data = JSON.parse(json);
@@ -67,7 +87,7 @@ export function parseProjectArchive(json: string): ExamProject {
   }
 
   if (isExamGradeArchive(data)) {
-    return normalizeProject(data.project);
+    return normalizeProject(data.project as ExamProject);
   }
   return normalizeProject(data as ExamProject);
 }

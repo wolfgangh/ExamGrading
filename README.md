@@ -52,8 +52,8 @@ Die App ist client-seitig passwortgeschützt (sessionStorage, gilt pro Browser-T
 |----------|-----------|
 | `NEXT_PUBLIC_APP_PASSWORD` | Zugangspasswort (Build-Zeit) |
 
+- **Pflicht:** Ohne gesetzte Variable schlägt der Production-Build fehl (kein Code-Default).
 - **Lokal:** `.env.local` anlegen (Vorlage: `.env.example`), dann `npm run dev` neu starten.
-- **Vercel:** Settings → Environment Variables → `NEXT_PUBLIC_APP_PASSWORD` setzen und neu deployen.
-- **Fallback** (nur wenn Env fehlt): `oth-regensburg` – in Produktion bitte überschreiben.
+- **Vercel:** Settings → Environment Variables → `NEXT_PUBLIC_APP_PASSWORD` setzen (Production + Preview), dann neu deployen.
 
 Hinweis: Das Passwort liegt im Client-Bundle und ist **kein** serverseitiger Geheimnisschutz.

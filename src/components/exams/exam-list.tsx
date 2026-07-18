@@ -43,6 +43,10 @@ import {
   markProjectBackedUp,
   markProjectRestoredFromBackup,
 } from "@/lib/backup-status";
+import {
+  assertFileSizeLimit,
+  MAX_PROJECT_ARCHIVE_BYTES,
+} from "@/lib/import-limits";
 import { createId } from "@/lib/id";
 
 export function ExamList() {
@@ -56,6 +60,11 @@ export function ExamList() {
     setImportMsg(null);
     setImportErr(null);
     try {
+      assertFileSizeLimit(
+        file,
+        MAX_PROJECT_ARCHIVE_BYTES,
+        "JSON-Sicherung"
+      );
       const text = await file.text();
       let project = parseExamJson(text);
       project.id = createId("exam");

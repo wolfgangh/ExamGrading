@@ -24,6 +24,25 @@ export function isLikelyTeamsOrIframeEmbed(): boolean {
   return false;
 }
 
+const MAX_DOWNLOAD_FILENAME_LENGTH = 180;
+
+/** Dateinamen für a[download] / File-Picker bereinigen */
+export function sanitizeDownloadFilename(filename: string): string {
+  let name = filename
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .replace(/[\x00-\x1f\x7f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!name) name = "download";
+  if (name.length > MAX_DOWNLOAD_FILENAME_LENGTH) {
+    const extMatch = name.match(/(\.[a-z0-9]{1,12})$/i);
+    const ext = extMatch ? extMatch[1] : "";
+    const baseMax = MAX_DOWNLOAD_FILENAME_LENGTH - ext.length;
+    name = name.slice(0, Math.max(1, baseMax)) + ext;
+  }
+  return name;
+}
+
 function extensionOf(filename: string): string {
   const m = filename.match(/\.([a-z0-9]+)$/i);
   return m ? m[1].toLowerCase() : "";
@@ -206,7 +225,7 @@ export async function downloadBlob(
   }
 
   const restricted = isLikelyTeamsOrIframeEmbed();
-  const safeName = filename.replace(/[\\/:*?"<>|]+/g, "_");
+  const safeName = sanitizeDownloadFilename(filename);
 
   // In Embeddings zuerst nativen Speichern-Dialog (User-Geste erhalten)
   if (restricted) {

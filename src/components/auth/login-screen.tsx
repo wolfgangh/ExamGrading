@@ -11,7 +11,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { setAuthenticated, verifyPassword } from "@/lib/app-auth";
+import {
+  isAppPasswordConfigured,
+  setAuthenticated,
+  verifyPassword,
+} from "@/lib/app-auth";
 import { Lock, Loader2 } from "lucide-react";
 
 export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
@@ -25,6 +29,13 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
     setLoading(true);
     // Kurzes Loading für UX (Prüfung ist synchron)
     window.setTimeout(() => {
+      if (!isAppPasswordConfigured()) {
+        setError(
+          "App-Passwort ist nicht konfiguriert. Lokal: .env.local mit NEXT_PUBLIC_APP_PASSWORD anlegen und Dev-Server neu starten."
+        );
+        setLoading(false);
+        return;
+      }
       if (verifyPassword(password)) {
         setAuthenticated();
         onSuccess();
@@ -93,6 +104,12 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
                 "Anmelden"
               )}
             </Button>
+            <p className="text-center text-xs leading-relaxed text-muted-foreground">
+              Nur eine Zugangshürde im Browser – das Passwort steckt im
+              App-Bundle und ist kein serverseitiger Geheimnisschutz.
+              Prüfungsdaten bleiben lokal in diesem Browser (keine
+              Serverübertragung).
+            </p>
           </form>
         </CardContent>
       </Card>

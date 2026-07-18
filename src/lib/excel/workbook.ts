@@ -1,6 +1,11 @@
 import type { Workbook, Worksheet } from "exceljs";
+import {
+  assertFileSizeLimit,
+  MAX_EXCEL_IMPORT_BYTES,
+} from "@/lib/import-limits";
 
 export async function loadWorkbookFromFile(file: File): Promise<Workbook> {
+  assertFileSizeLimit(file, MAX_EXCEL_IMPORT_BYTES, "Excel-Datei");
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const buffer = await file.arrayBuffer();
