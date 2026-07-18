@@ -12,10 +12,37 @@ import {
   formatStat,
 } from "@/lib/utils";
 
+export type GradeBucketKey =
+  | "sehr gut"
+  | "gut"
+  | "befriedigend"
+  | "ausreichend"
+  | "nicht ausreichend";
+
+/** Druckgeeignete Stufenfarben */
+export const GRADE_BUCKET_COLORS: Record<GradeBucketKey, string> = {
+  "sehr gut": "#059669",
+  gut: "#0284c7",
+  befriedigend: "#4f46e5",
+  ausreichend: "#d97706",
+  "nicht ausreichend": "#e11d48",
+};
+
+export function gradeBucketForGrade(grade: number): GradeBucketKey {
+  if (grade <= 1.5) return "sehr gut";
+  if (grade <= 2.5) return "gut";
+  if (grade <= 3.5) return "befriedigend";
+  if (grade <= 4.0) return "ausreichend";
+  return "nicht ausreichend";
+}
+
 export interface NotenspiegelRow {
+  grade: number;
   label: string;
   count: number;
   share: number; // 0–1
+  bucket: GradeBucketKey;
+  color: string;
 }
 
 export interface NotenspiegelMetric {
@@ -34,9 +61,16 @@ export interface NotenspiegelData {
   maxPoints: number;
   generatedAt: string;
   graded: number;
+  averageGrade: number | null;
+  medianGrade: number | null;
   metrics: NotenspiegelMetric[];
   gradeRows: NotenspiegelRow[];
-  bucketRows: NotenspiegelRow[];
+  bucketRows: {
+    label: string;
+    count: number;
+    share: number;
+    color: string;
+  }[];
   note: string;
 }
 
@@ -72,27 +106,41 @@ export function buildNotenspiegelData(
     stats.graded ||
     0;
 
-  const gradeRows: NotenspiegelRow[] = stats.gradeDistribution.map((g) => ({
-    label: formatGrade(g.grade),
-    count: g.count,
-    share: shareOf(g.count, total),
-  }));
+  const gradeRows: NotenspiegelRow[] = stats.gradeDistribution.map((g) => {
+    const bucket = gradeBucketForGrade(g.grade);
+    return {
+      grade: g.grade,
+      label: formatGrade(g.grade),
+      count: g.count,
+      share: shareOf(g.count, total),
+      bucket,
+      color: GRADE_BUCKET_COLORS[bucket],
+    };
+  });
 
   const buckets = computeGradeBuckets(rows);
-  const bucketRows: NotenspiegelRow[] = buckets.map((b) => ({
-    label: b.name,
-    count: b.count,
-    share: b.share,
-  }));
+  const bucketRows = buckets.map((b) => {
+    const key = (
+      b.name === "nicht ausr." ? "nicht ausreichend" : b.name
+    ) as GradeBucketKey;
+    const color =
+      GRADE_BUCKET_COLORS[key] ?? GRADE_BUCKET_COLORS["nicht ausreichend"];
+    return {
+      label: b.name,
+      count: b.count,
+      share: b.share,
+      color,
+    };
+  });
 
   const metrics: NotenspiegelMetric[] = [
-    { label: "Anmeldungen (HIS)", value: String(stats.registered) },
+    { label: "Anmeldungen (HISinOne)", value: String(stats.registered) },
     { label: "Bewertet", value: String(stats.graded) },
     {
       label: "No-Shows",
       value: stats.hasAttendanceList ? String(stats.noShow) : "–",
     },
-    { label: "Ø Note", value: formatGrade(stats.averageGrade) },
+    { label: "Ø Note (Mittelwert)", value: formatGrade(stats.averageGrade) },
     { label: "Median Note", value: formatGrade(stats.medianGrade) },
     { label: "Stabw. Note", value: formatStat(stats.stdDevGrade, 2) },
     { label: "Bestehensquote", value: formatPercent(stats.passRate) },
@@ -116,6 +164,8 @@ export function buildNotenspiegelData(
     maxPoints: project.gradeSchema.maxPoints,
     generatedAt: new Date().toISOString(),
     graded: stats.graded,
+    averageGrade: stats.averageGrade,
+    medianGrade: stats.medianGrade,
     metrics,
     gradeRows,
     bucketRows,

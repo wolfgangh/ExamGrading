@@ -7,11 +7,13 @@ import {
   buildNotenspiegelData,
   formatShareDe,
 } from "@/lib/grades/notenspiegel";
+import { renderGradeDistributionChartPng } from "@/lib/charts/grade-distribution-export-chart";
 import {
   autoTable,
   drawKeyValueBlock,
   getLastTableY,
   pdfText,
+  PDF_CONTENT_WIDTH,
   PDF_MARGIN,
   savePdf,
   startPdfWithHeader,
@@ -27,6 +29,11 @@ export function exportNotenspiegelPdf(
   }
 
   const data = buildNotenspiegelData(project, rows, stats);
+  const chartPng = renderGradeDistributionChartPng(data, {
+    width: 900,
+    height: 420,
+  });
+
   const { doc, y: y0 } = startPdfWithHeader(project, "Notenspiegel");
 
   let y = drawKeyValueBlock(
@@ -47,7 +54,7 @@ export function exportNotenspiegelPdf(
   doc.setTextColor(0);
   y += 6;
 
-  // Kennzahlen-Tabelle (2 Spalten als Key/Value-Paare)
+  // Kennzahlen-Tabelle
   const metricBody = data.metrics.map((m) => [
     pdfText(m.label),
     pdfText(m.value),
@@ -71,21 +78,49 @@ export function exportNotenspiegelPdf(
     tableWidth: 100,
   });
 
-  y = getLastTableY(doc, y) + 8;
+  y = getLastTableY(doc, y) + 10;
+
+  // Diagramm oft auf neuer Seite für Platz
+  if (y > 100) {
+    doc.addPage();
+    y = PDF_MARGIN + 16;
+  }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text(pdfText("Notenverteilung"), PDF_MARGIN, y);
+  doc.text(pdfText("Notenverteilung (grafisch)"), PDF_MARGIN, y);
+  y += 4;
+
+  const chartH = 72;
+  const chartW = PDF_CONTENT_WIDTH;
+  try {
+    doc.addImage(chartPng, "PNG", PDF_MARGIN, y, chartW, chartH);
+  } catch {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(
+      pdfText("(Diagramm konnte nicht eingebettet werden)"),
+      PDF_MARGIN,
+      y + 10
+    );
+  }
+  y += chartH + 10;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text(pdfText("Notenverteilung (tabelle)"), PDF_MARGIN, y);
   y += 3;
 
   const gradeBody = [
     ...data.gradeRows.map((r) => [
       pdfText(r.label),
+      pdfText(r.bucket),
       String(r.count),
       pdfText(formatShareDe(r.share)),
     ]),
     [
       pdfText("Summe"),
+      "",
       String(data.graded),
       data.graded > 0 ? "100,0 %" : "–",
     ],
@@ -93,7 +128,7 @@ export function exportNotenspiegelPdf(
 
   autoTable(doc, {
     startY: y,
-    head: [["Note", "Anzahl", "Anteil"]],
+    head: [["Note", "Stufe", "Anzahl", "Anteil"]],
     body: gradeBody,
     styles: { font: "helvetica", fontSize: 9, cellPadding: 1.8 },
     headStyles: {
@@ -103,13 +138,17 @@ export function exportNotenspiegelPdf(
     },
     alternateRowStyles: { fillColor: [245, 247, 250] },
     columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 28, halign: "right" },
-      2: { cellWidth: 28, halign: "right" },
+      0: { cellWidth: 22 },
+      1: { cellWidth: 36 },
+      2: { cellWidth: 24, halign: "right" },
+      3: { cellWidth: 24, halign: "right" },
     },
     margin: { left: PDF_MARGIN, right: PDF_MARGIN },
     didParseCell: (hookData) => {
-      if (hookData.section === "body" && hookData.row.index === gradeBody.length - 1) {
+      if (
+        hookData.section === "body" &&
+        hookData.row.index === gradeBody.length - 1
+      ) {
         hookData.cell.styles.fontStyle = "bold";
       }
     },
@@ -158,7 +197,7 @@ export function exportNotenspiegelPdf(
   doc.setTextColor(100);
   doc.text(
     pdfText(
-      "Erzeugt mit ExamGrade. Notenspiegel basiert auf dem aktiven Notenschlüssel."
+      "Erzeugt mit ExamGrade. Balken nach Notenstufe gefaerbt; Linien = Mittelwert und Median."
     ),
     PDF_MARGIN,
     finalY
