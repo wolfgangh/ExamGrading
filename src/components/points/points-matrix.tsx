@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ExamProject, PointsRecord, QuestionDef } from "@/lib/types";
+import type { ExamProject, PointsRecord, QuestionDef, SubArea } from "@/lib/types";
 import { matrixRows } from "@/lib/grades/question-stats";
+import { subAreaColorAt } from "@/lib/grades/subarea-colors";
 import { cn, formatPoints } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
@@ -36,6 +37,12 @@ export function PointsMatrix({
   const defs = project.questionDefs ?? [];
   const subAreas = project.subAreas;
 
+  const saIndexById = useMemo(() => {
+    const m = new Map<string, number>();
+    subAreas.forEach((sa, i) => m.set(sa.id, i));
+    return m;
+  }, [subAreas]);
+
   const rows = useMemo(() => {
     let list = matrixRows(project);
     const q = search.trim().toLowerCase();
@@ -53,16 +60,19 @@ export function PointsMatrix({
     return list;
   }, [project, search, onlyOpen]);
 
-  const subAreaCols = subAreas.map((sa) => ({
+  const subAreaCols = subAreas.map((sa, i) => ({
     id: sa.id,
     label: `Σ ${sa.code}`,
+    index: i,
   }));
 
+  const resolveSa = (q: QuestionDef): SubArea | null => {
+    if (!q.subAreaId) return null;
+    return subAreas.find((s) => s.id === q.subAreaId) ?? null;
+  };
+
   return (
-    // Fester Viewport: X- und Y-Scrollbar am Rahmen (nicht erst am Tabellenende)
-    <div
-      className="w-full max-h-[min(70vh,720px)] overflow-x-auto overflow-y-auto overscroll-contain rounded-xl border [scrollbar-gutter:stable]"
-    >
+    <div className="w-full max-h-[min(70vh,720px)] overflow-x-auto overflow-y-auto overscroll-contain rounded-xl border [scrollbar-gutter:stable]">
       <Table className="min-w-max w-full">
         <TableHeader className="sticky top-0 z-20 bg-card shadow-sm">
           <TableRow>
@@ -74,32 +84,48 @@ export function PointsMatrix({
             </TableHead>
             {defs.map((q) => {
               const pct = questionStatsPercent?.[q.id];
+              const sa = resolveSa(q);
+              const saIdx = sa ? (saIndexById.get(sa.id) ?? 0) : -1;
+              const colors = saIdx >= 0 ? subAreaColorAt(saIdx) : null;
               return (
                 <TableHead
                   key={q.id}
-                  className="min-w-[72px] text-center whitespace-nowrap"
+                  className={cn(
+                    "min-w-[72px] text-center whitespace-nowrap",
+                    colors?.header
+                  )}
                   title={
-                    pct != null
-                      ? `Kohorte Ø ${pct} % der Max-Punkte`
-                      : undefined
+                    [
+                      sa ? `Teilgebiet ${sa.name} (${sa.code})` : "Kein Teilgebiet",
+                      pct != null ? `Kohorte Ø ${pct} % der Max-Punkte` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
                   }
                 >
                   <div className="font-semibold">{q.label}</div>
-                  <div className="text-[10px] font-normal text-muted-foreground">
-                    max {q.maxPoints}
+                  <div className="text-[10px] font-semibold tabular-nums opacity-90">
+                    {sa ? sa.code : "–"}
+                    {q.maxPoints != null ? ` · max ${q.maxPoints}` : ""}
                     {pct != null ? ` · Ø ${pct}%` : ""}
                   </div>
                 </TableHead>
               );
             })}
-            {subAreaCols.map((c) => (
-              <TableHead
-                key={c.id}
-                className="min-w-[72px] text-center bg-muted/40"
-              >
-                {c.label}
-              </TableHead>
-            ))}
+            {subAreaCols.map((c) => {
+              const colors = subAreaColorAt(c.index);
+              return (
+                <TableHead
+                  key={c.id}
+                  className={cn(
+                    "min-w-[72px] text-center font-semibold",
+                    colors.header
+                  )}
+                >
+                  {c.label}
+                </TableHead>
+              );
+            })}
             <TableHead className="min-w-[72px] text-center bg-muted/60">
               Gesamt
             </TableHead>
@@ -125,7 +151,8 @@ export function PointsMatrix({
                 record={r.record}
                 total={r.total}
                 defs={defs}
-                subAreaIds={subAreas.map((s) => s.id)}
+                subAreas={subAreas}
+                saIndexById={saIndexById}
                 unlocked={unlocked}
                 onCellCommit={onCellCommit}
               />
@@ -144,7 +171,8 @@ function MatrixRow({
   record,
   total,
   defs,
-  subAreaIds,
+  subAreas,
+  saIndexById,
   unlocked,
   onCellCommit,
 }: {
@@ -154,7 +182,8 @@ function MatrixRow({
   record: PointsRecord;
   total: number | null;
   defs: QuestionDef[];
-  subAreaIds: string[];
+  subAreas: SubArea[];
+  saIndexById: Map<string, number>;
   unlocked: boolean;
   onCellCommit: (matKey: string, questionId: string, value: number | null) => void;
 }) {
@@ -173,12 +202,16 @@ function MatrixRow({
       {defs.map((q) => {
         const open = needs.has(q.id);
         const val = record.byQuestion?.[q.id];
+        const saIdx =
+          q.subAreaId != null ? (saIndexById.get(q.subAreaId) ?? -1) : -1;
+        const colors = saIdx >= 0 ? subAreaColorAt(saIdx) : null;
         return (
           <TableCell
             key={q.id}
             className={cn(
               "p-1 text-center",
-              open && "bg-amber-50 dark:bg-amber-950/40"
+              colors?.cell,
+              open && "ring-1 ring-inset ring-amber-400/70"
             )}
           >
             {unlocked ? (
@@ -200,14 +233,20 @@ function MatrixRow({
           </TableCell>
         );
       })}
-      {subAreaIds.map((id) => (
-        <TableCell
-          key={id}
-          className="text-center tabular-nums text-sm bg-muted/20"
-        >
-          {formatPoints(record.bySubArea[id] ?? null)}
-        </TableCell>
-      ))}
+      {subAreas.map((sa, i) => {
+        const colors = subAreaColorAt(i);
+        return (
+          <TableCell
+            key={sa.id}
+            className={cn(
+              "text-center tabular-nums text-sm font-medium",
+              colors.cell
+            )}
+          >
+            {formatPoints(record.bySubArea[sa.id] ?? null)}
+          </TableCell>
+        );
+      })}
       <TableCell className="text-center tabular-nums text-sm font-semibold bg-muted/40">
         {formatPoints(total)}
       </TableCell>
@@ -230,18 +269,23 @@ function CellInput({
 
   return (
     <Input
-      className="h-8 w-16 mx-auto text-center text-sm"
+      className="mx-auto h-8 w-16 bg-background/80 text-center text-sm"
       value={val}
       placeholder={placeholder}
       onChange={(e) => setVal(e.target.value)}
       onBlur={() => {
         const raw = val.trim();
-        if (!raw) {
+        if (raw === "") {
           onCommit(null);
           return;
         }
-        const n = Number(raw.replace(",", "."));
-        onCommit(Number.isFinite(n) ? n : null);
+        const num = Number(raw.replace(",", "."));
+        onCommit(Number.isFinite(num) ? num : null);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          (e.target as HTMLInputElement).blur();
+        }
       }}
     />
   );

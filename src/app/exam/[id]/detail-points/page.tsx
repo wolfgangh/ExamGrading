@@ -83,6 +83,18 @@ export default function DetailPointsPage() {
     return m;
   }, [questionStats]);
 
+  // Nach Bestätigung einklappen; bei unvollständiger Zuordnung wieder öffnen
+  // (vor early return – Hooks-Regeln)
+  useEffect(() => {
+    if (!project) return;
+    if (!needsSubAreaMapping(project)) return;
+    if (isSubAreaMappingComplete(project)) {
+      setSubMapOpen([]);
+    } else {
+      setSubMapOpen(["subareas"]);
+    }
+  }, [project]);
+
   if (!project || !effectiveProject) return null;
 
   const taskCount = ensureQuestionDefs(effectiveProject).length;
@@ -90,16 +102,6 @@ export default function DetailPointsPage() {
     project.points.length > 0 && taskCount === 0;
   const showSubareaMapping = needsSubAreaMapping(effectiveProject);
   const subMapComplete = isSubAreaMappingComplete(effectiveProject);
-
-  // Nach Bestätigung einklappen; bei unvollständiger Zuordnung wieder öffnen
-  useEffect(() => {
-    if (!showSubareaMapping) return;
-    if (subMapComplete) {
-      setSubMapOpen([]);
-    } else {
-      setSubMapOpen(["subareas"]);
-    }
-  }, [showSubareaMapping, subMapComplete, project?.subAreaMappingConfirmedAt]);
 
   const updateQuestionSubAreas = (
     questionIds: string[],

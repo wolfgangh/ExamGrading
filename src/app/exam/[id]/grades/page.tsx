@@ -669,6 +669,13 @@ export default function GradesPage() {
         noShowOnly={noShowOnly}
         orphanOnly={orphanOnly}
         highlightBorderlineMax={highlightMax}
+        subAreaNames={
+          project.subAreas.length > 1
+            ? Object.fromEntries(
+                project.subAreas.map((sa) => [sa.id, sa.code || sa.name])
+              )
+            : {}
+        }
       />
 
       <Dialog open={!!editKey} onOpenChange={(o) => !o && setEditKey(null)}>

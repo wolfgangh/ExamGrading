@@ -5,9 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Dateiname mit Export-Datum: YYYY-MM-DD_basis.ext */
+/**
+ * Dateiname mit Export-Datum und -Uhrzeit (lokal):
+ * YYYY-MM-DD_HHmm_basis.ext
+ */
 export function datedExportFilename(base: string, ext = "json"): string {
-  const d = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const stamp = [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+  ].join("-");
+  const time = `${pad(now.getHours())}${pad(now.getMinutes())}`;
   const safe = base
     .replace(/[^\w\- äöüÄÖÜß.]+/gi, "_")
     .replace(/\s+/g, "_")
@@ -15,7 +25,7 @@ export function datedExportFilename(base: string, ext = "json"): string {
     .replace(/^_|_$/g, "")
     .slice(0, 100);
   const cleanExt = ext.replace(/^\./, "");
-  return `${d}_${safe}.${cleanExt}`;
+  return `${stamp}_${time}_${safe}.${cleanExt}`;
 }
 
 /** @deprecated Import aus `@/lib/download` – re-export für Kompatibilität */
