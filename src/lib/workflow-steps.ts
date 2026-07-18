@@ -13,10 +13,8 @@ import {
 import {
   backupAfterGradesDone,
   backupAfterImportDone,
-  backupAfterMatchingDone,
   gradesDataComplete,
   importsComplete,
-  matchingReadyForBackup,
 } from "@/lib/workflow-milestones";
 import {
   isSubAreaMappingComplete,
@@ -105,8 +103,6 @@ export function buildWorkflowSteps(
     (r) => r.status === "export_ready"
   ).length;
   const importBackupDone = backupAfterImportDone(project);
-  const matchingReady = matchingReadyForBackup(project, unresolvedN);
-  const matchingBackupDone = backupAfterMatchingDone(project, unresolvedN);
   const gradesBackupDone = backupAfterGradesDone(project) && gradesOk;
   const subMapNeeded = needsSubAreaMapping(project);
   const subMapOk = isSubAreaMappingComplete(project);
@@ -191,23 +187,28 @@ export function buildWorkflowSteps(
           } satisfies WorkflowStep,
         ]
       : []),
-    {
-      id: "backup-import",
-      done: importBackupDone,
-      label: "Sicherung nach Import",
-      href: `/exam/${examId}/export?stage=import#sicherung`,
-      detail: !importsOk
-        ? isHisManual || isKlausur
-          ? `Zuerst ${HISINONE_LABEL}-Masterliste importieren`
-          : `Zuerst alle XLSX importieren (${HISINONE_LABEL}, Antritt, Punkte)`
-        : importBackupDone
-          ? `Erledigt${formatMilestoneAt(
-              project.workflowMilestones?.backupAfterImportAt
-            )}`
-          : "JSON-Sicherung …_nach-Import",
-      critical: importsOk && !importBackupDone,
-      actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
-    },
+    // THE/elektrP: nur „Sicherung nach Noten“ – Import-/Zuordnungs-Sicherung weglassen
+    ...(!onlineStyle
+      ? [
+          {
+            id: "backup-import",
+            done: importBackupDone,
+            label: "Sicherung nach Import",
+            href: `/exam/${examId}/export?stage=import#sicherung`,
+            detail: !importsOk
+              ? isHisManual || isKlausur
+                ? `Zuerst ${HISINONE_LABEL}-Masterliste importieren`
+                : `Zuerst alle XLSX importieren (${HISINONE_LABEL}, Antritt, Punkte)`
+              : importBackupDone
+                ? `Erledigt${formatMilestoneAt(
+                    project.workflowMilestones?.backupAfterImportAt
+                  )}`
+                : "JSON-Sicherung …_nach-Import",
+            critical: importsOk && !importBackupDone,
+            actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
+          } satisfies WorkflowStep,
+        ]
+      : []),
     ...(isStaManualExam(project.examType)
       ? [
           {
@@ -338,27 +339,6 @@ export function buildWorkflowSteps(
             ? "Teilgebiete zuordnen"
             : "Zur Notenübersicht",
     },
-    ...(onlineStyle
-      ? [
-          {
-            id: "backup-matching",
-            done: matchingBackupDone,
-            label: "Sicherung nach Zuordnung",
-            href: `/exam/${examId}/export?stage=matching#sicherung`,
-            detail: !matchingReady
-              ? unresolvedN > 0
-                ? "Zuerst alle Orphans prüfen"
-                : "Zuerst Antritt und HISinOne"
-              : matchingBackupDone
-                ? `Erledigt${formatMilestoneAt(
-                    project.workflowMilestones?.backupAfterMatchingAt
-                  )}`
-                : "JSON-Sicherung …_nach-Zuordnung",
-            critical: matchingReady && !matchingBackupDone,
-            actionLabel: matchingBackupDone ? "Öffnen" : "Jetzt sichern",
-          } satisfies WorkflowStep,
-        ]
-      : []),
     {
       id: "backup-grades",
       done: gradesBackupDone,

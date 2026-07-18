@@ -54,6 +54,8 @@ import {
 } from "@/lib/grades/open-grading";
 import { CRITERION_SCALE_LABELS } from "@/lib/grades/sta-criteria";
 import { recomputeStaCriteriaRecord } from "@/lib/grades/sta-criteria";
+import { semesterSelectOptions } from "@/lib/semester";
+import { ComboboxField } from "@/components/ui/combobox-field";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
@@ -158,13 +160,14 @@ export default function SettingsPage() {
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label>Semester</Label>
-              <Input
-                value={project.semester}
-                onChange={(e) => updateMeta("semester", e.target.value)}
-              />
-            </div>
+            <ComboboxField
+              label="Semester"
+              value={project.semester}
+              onChange={(v) => updateMeta("semester", v)}
+              options={semesterSelectOptions()}
+              placeholder={semesterSelectOptions()[0]}
+              clearable
+            />
             <div className="grid gap-1.5">
               <Label>Typ</Label>
               <Select

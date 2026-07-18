@@ -37,7 +37,10 @@ import {
 } from "@/lib/exam-catalog";
 import { createEmptyExamProject } from "@/lib/project-factory";
 import { saveExam } from "@/lib/storage";
-import { currentSemesterLabel } from "@/lib/semester";
+import {
+  currentSemesterLabel,
+  semesterSelectOptions,
+} from "@/lib/semester";
 import { EXAM_TYPE_LABELS, type ExamType } from "@/lib/types";
 
 type ExamTypeValue = ExamType;
@@ -215,16 +218,14 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="semester">Semester</Label>
-              <ClearableInput
-                id="semester"
-                value={semester}
-                onChange={setSemester}
-                placeholder={currentSemesterLabel()}
-                clearLabel="Semester löschen"
-              />
-            </div>
+            <ComboboxField
+              label="Semester"
+              value={semester}
+              onChange={setSemester}
+              options={semesterSelectOptions()}
+              placeholder={currentSemesterLabel()}
+              clearable
+            />
             <div className="grid gap-1.5">
               <Label>Prüfungstyp</Label>
               <Select
