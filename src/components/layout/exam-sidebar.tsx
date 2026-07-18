@@ -6,11 +6,11 @@ import {
   ArrowLeft,
   BarChart3,
   ClipboardList,
-  Download,
   FileSpreadsheet,
   FileText,
   GitMerge,
   Grid3x3,
+  HardDrive,
   Layers,
   PenLine,
   Settings,
@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ExamType } from "@/lib/types";
+import { isOnlineStyleExam, type ExamType } from "@/lib/types";
 
 const NAV_BASE = [
   { href: "overview", label: "Übersicht", icon: BarChart3 },
@@ -28,7 +28,7 @@ const NAV_BASE = [
   { href: "grades", label: "Notenübersicht", icon: Table2 },
   { href: "scenarios", label: "Notenszenarien", icon: Layers },
   { href: "documents", label: "Dokumente", icon: FileText },
-  { href: "export", label: "Export", icon: Download },
+  { href: "export", label: "Sicherung", icon: HardDrive },
   { href: "settings", label: "Einstellungen", icon: Settings },
 ] as const;
 
@@ -44,7 +44,7 @@ export function ExamSidebar({
 
   const nav = [
     ...NAV_BASE.slice(0, 2),
-    ...(examType === "the"
+    ...(examType && isOnlineStyleExam(examType)
       ? ([{ href: "matching", label: "Zuordnung", icon: GitMerge }] as const)
       : []),
     ...NAV_BASE.slice(2),

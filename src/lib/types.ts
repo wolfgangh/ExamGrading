@@ -2,7 +2,11 @@
 
 export type MatriculationKey = string;
 
-export type ExamType = "the" | "written" | "other";
+/**
+ * the / elektr_p: Antritt selbst ausgefüllt, Moodle-Punkte, Matrikel-Zuordnung
+ * (elektrP = Ablauf wie THE, Prüfung vor Ort an der Hochschule)
+ */
+export type ExamType = "the" | "elektr_p" | "written" | "other";
 
 export type StudentStatus =
   | "registered"
@@ -182,7 +186,7 @@ export interface ImportLogEntry {
 
 /**
  * Manuelle Zusammenführung einer fehlerhaften Antritts-/Punkte-Matrikel
- * mit der korrekten HIS-Matrikel (typisch THE: Tippfehler in der Antrittsliste).
+ * mit der korrekten HISinOne-Matrikel (THE/elektrP: Tippfehler in der Antrittsliste).
  * Nie automatisch – nur nach Prüfer-Freigabe.
  */
 export interface IdentityMerge {
@@ -191,7 +195,7 @@ export interface IdentityMerge {
   examType: ExamType;
   /** Falsche Matr. (Antritt/Punkte) */
   sourceMatriculation: string;
-  /** Korrekte HIS-Matr. */
+  /** Korrekte HISinOne-Matr. */
   targetMatriculation: string;
   sourceSnapshot: {
     lastName: string;
@@ -207,7 +211,28 @@ export interface IdentityMerge {
   };
   /** Pflicht: Prüfer-Begründung */
   reason: string;
-  /** z. B. „nach Abgleich HIS-Dokument und Antrittsdaten“ */
+  /** z. B. „nach Abgleich HISinOne-Dokument und Antrittsdaten“ */
+  confirmedByNote: string;
+  active: boolean;
+}
+
+/**
+ * Orphan geprüft und bewusst nicht zusammengeführt
+ * (kein Tippfehler / andere Person / …).
+ */
+export interface IdentityDismissal {
+  id: string;
+  at: string;
+  examType: ExamType;
+  sourceMatriculation: string;
+  sourceSnapshot: {
+    lastName: string;
+    firstName: string;
+    email?: string;
+    totalPoints?: number | null;
+    finalGrade?: number | null;
+  };
+  reason: string;
   confirmedByNote: string;
   active: boolean;
 }
@@ -244,11 +269,13 @@ export interface ExamProject {
   questionDefs?: QuestionDef[];
 
   /**
-   * Dokumentierte manuelle Matrikel-Zusammenführungen (THE).
+   * Dokumentierte manuelle Matrikel-Zusammenführungen (THE/elektrP).
    * Wirksam bereits durch physisches Verschieben von Antritt/Punkten;
    * Einträge dienen Audit und Hinweisen.
    */
   identityMerges?: IdentityMerge[];
+  /** Orphans geprüft und abgelehnt (nicht zusammengeführt) */
+  identityDismissals?: IdentityDismissal[];
 
   importLogs: ImportLogEntry[];
 
@@ -354,10 +381,22 @@ export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
 };
 
 export const EXAM_TYPE_LABELS: Record<ExamType, string> = {
-  the: "Take-Home-Exam",
+  the: "Take-Home-Exam (THE)",
+  elektr_p: "Elektronische Prüfung (elektrP)",
   written: "Klausur",
   other: "Sonstige",
 };
+
+/** Anzeigename des Campus-Systems (UI; Code-Interna bleiben his*) */
+export const HISINONE_LABEL = "HISinOne";
+
+/**
+ * THE und elektrP: selbst ausgefüllter Antritt, Moodle-Punkte, Matrikel-Zuordnung.
+ * (elektrP: Prüfung vor Ort, Ablauf sonst wie THE)
+ */
+export function isOnlineStyleExam(examType: ExamType): boolean {
+  return examType === "the" || examType === "elektr_p";
+}
 
 export const GERMAN_GRADES = [
   1.0, 1.3, 1.7, 2.0, 2.3, 2.7, 3.0, 3.3, 3.7, 4.0, 5.0,

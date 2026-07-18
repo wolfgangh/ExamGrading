@@ -21,6 +21,8 @@ import {
 } from "@/lib/backup-status";
 import { cn, formatGrade, formatPercent, formatStat } from "@/lib/utils";
 import { orphanCount } from "@/lib/matching/merge-candidates";
+import { listUnresolvedOrphans } from "@/lib/matching/orphan-resolution";
+import { HISINONE_LABEL, isOnlineStyleExam } from "@/lib/types";
 import {
   CheckCircle2,
   Circle,
@@ -41,14 +43,20 @@ export default function OverviewPage() {
   const backupStale = isBackupStale(project);
 
   const isKlausur = project.examType === "written";
-  const isThe = project.examType === "the";
-  const orphanN = isThe ? orphanCount(project) : 0;
+  const onlineStyle = isOnlineStyleExam(project.examType);
+  const orphanN = onlineStyle ? orphanCount(project) : 0;
+  const unresolvedN = onlineStyle
+    ? listUnresolvedOrphans(project, rows).length
+    : 0;
   const mergeN = (project.identityMerges ?? []).filter((m) => m.active).length;
+  const dismissN = (project.identityDismissals ?? []).filter(
+    (d) => d.active
+  ).length;
 
   const steps = [
     {
       done: project.hisRows.length > 0,
-      label: "HIS-Masterliste",
+      label: `${HISINONE_LABEL}-Masterliste`,
       href: `/exam/${id}/import`,
       detail: `${project.hisRows.length} Anmeldungen`,
     },
@@ -122,24 +130,25 @@ export default function OverviewPage() {
         <div className="rounded-xl border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
           <p className="font-medium">
             {stats.attendedOrphan} Antritt/Antritte ohne HIS-Anmeldung
-            {isThe && orphanN > 0 && (
+            {onlineStyle && orphanN > 0 && (
               <span className="font-normal">
                 {" "}
                 · {orphanN} mögliche Matrikel-Konflikte
+                {unresolvedN > 0 && ` · ${unresolvedN} ungeprüft`}
               </span>
             )}
           </p>
           <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
-            Diese Personen sind in der Moodle-Antrittsliste, aber nicht in den
-            HIS-Dateien
-            {isThe
+            Diese Personen sind in der Moodle-Antrittsliste, aber nicht in den{" "}
+            {HISINONE_LABEL}-Dateien
+            {onlineStyle
               ? " – oft Tippfehler in der selbst eingetragenen Matrikelnummer."
               : "."}{" "}
             Bitte in der{" "}
             <Link href={`/exam/${id}/grades`} className="font-medium underline">
               Notenübersicht
             </Link>
-            {isThe ? (
+            {onlineStyle ? (
               <>
                 {" "}
                 oder unter{" "}
@@ -150,13 +159,18 @@ export default function OverviewPage() {
                   <GitMerge className="size-3.5" />
                   Zuordnung
                 </Link>{" "}
-                manuell zusammenführen (nie automatisch).
+                zusammenführen oder ablehnen (nie automatisch). Ungeprüfte
+                Fälle blockieren Notenliste und {HISINONE_LABEL}-Export.
               </>
             ) : (
               <> prüfen (Filter „Antritt ohne HIS“).</>
             )}
-            {mergeN > 0 && (
-              <> · {mergeN} Zusammenführung(en) dokumentiert.</>
+            {(mergeN > 0 || dismissN > 0) && (
+              <>
+                {" "}
+                · {mergeN} Zusammenführung(en)
+                {dismissN > 0 && `, ${dismissN} Ablehnung(en)`} dokumentiert.
+              </>
             )}
           </p>
           {orphans.length > 0 && orphans.length <= 8 && (

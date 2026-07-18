@@ -12,7 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { exportHisExcel } from "@/lib/excel/export-his";
 import { validateForExport } from "@/lib/validations";
 import {
   projectArchiveFilename,
@@ -21,23 +20,21 @@ import {
 import { downloadAndMarkBackup } from "@/lib/backup-actions";
 import {
   backupStatusLabel,
-  canAccessProtectedExport,
   isBackupStale,
 } from "@/lib/backup-status";
 import { cn } from "@/lib/utils";
 import {
   Download,
   FileJson,
-  FileSpreadsheet,
   FileText,
   HardDrive,
   ShieldAlert,
 } from "lucide-react";
+import { HISINONE_LABEL } from "@/lib/types";
 
 export default function ExportPage() {
   const { id } = useParams<{ id: string }>();
   const { project, setProject, rows, stats } = useExamContext();
-  const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const items = useMemo(
@@ -47,53 +44,32 @@ export default function ExportPage() {
 
   if (!project || !stats) return null;
 
-  const hasError = items.some((i) => i.level === "error");
-  const backupOk = canAccessProtectedExport(project);
   const backupStale = isBackupStale(project);
-
-  const doHisExport = async () => {
-    if (!backupOk) return;
-    setExporting(true);
-    setMessage(null);
-    try {
-      await exportHisExcel(project, rows, stats);
-      setMessage(
-        "HIS-Excel (formatgetreu aus Originalvorlage) wurde heruntergeladen."
-      );
-    } catch (e) {
-      setMessage(
-        e instanceof Error ? e.message : "Export fehlgeschlagen"
-      );
-    } finally {
-      setExporting(false);
-    }
-  };
 
   const doProjectBackup = () => {
     downloadAndMarkBackup(project, setProject);
     setMessage(
-      `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}). Bitte neben den Klausurdateien ablegen. HIS-Export und PDFs sind jetzt freigeschaltet.`
+      `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}). Bitte neben den Klausurdateien ablegen. Notenliste und ${HISINONE_LABEL}-Export sind freigeschaltet (sofern keine weiteren Sperren).`
     );
   };
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Export</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Sicherung</h1>
         <p className="text-muted-foreground">
-          Zuerst JSON-Sicherung, dann HIS/QIS-Noteneintrag. PDF-Listen unter{" "}
+          JSON-Projektsicherung – jederzeit und bei Änderungen. Notenliste und{" "}
+          {HISINONE_LABEL}-Dateien exportieren Sie unter{" "}
           <Link
             href={`/exam/${id}/documents`}
             className="font-medium text-foreground underline"
           >
             Dokumente
           </Link>
-          . In MS Teams können Downloads blockiert sein – ggf. im Browser
-          öffnen oder den Speichern-Dialog / Link am Seitenende nutzen.
+          . In MS Teams können Downloads blockiert sein – ggf. im Browser öffnen.
         </p>
       </div>
 
-      {/* Sicherung zuerst – prominente Karte */}
       <Card
         id="sicherung"
         className={cn(
@@ -105,12 +81,11 @@ export default function ExportPage() {
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <HardDrive className="size-4" />
-            1. Projektsicherung (Pflicht)
+            Projektsicherung (Pflicht vor Exporten)
           </CardTitle>
           <CardDescription>
-            Vollständiges JSON-Archiv – enthält alle Daten. Original-Excel-Pfade
-            werden nicht benötigt (nur Dateinamen in den Logs). Status:{" "}
-            <strong>{backupStatusLabel(project)}</strong>
+            Vollständiges JSON-Archiv – enthält alle Daten inkl. Matrikel-Audits.
+            Status: <strong>{backupStatusLabel(project)}</strong>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -118,8 +93,8 @@ export default function ExportPage() {
             <div className="flex gap-2 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-50">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" />
               <span>
-                Daten nur in diesem Browser. Ohne Sicherung sind HIS-Export und
-                PDF-Dokumente gesperrt.
+                Daten nur in diesem Browser. Ohne aktuelle Sicherung sind{" "}
+                {HISINONE_LABEL}-Export und PDF-Dokumente gesperrt.
               </span>
             </div>
           )}
@@ -147,9 +122,10 @@ export default function ExportPage() {
 
       <Card className="surface-panel">
         <CardHeader>
-          <CardTitle className="text-base">Validierung</CardTitle>
+          <CardTitle className="text-base">Validierung (Export-Status)</CardTitle>
           <CardDescription>
-            Vor dem HIS-Upload prüfen – No-Shows erhalten eine leere Note.
+            Prüft u. a. offene Bewertungen, ungeprüfte Matrikel-Sonderfälle und{" "}
+            {HISINONE_LABEL}-Vorlagen.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -177,53 +153,10 @@ export default function ExportPage() {
       </Card>
 
       <Card className="surface-panel">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">2. HIS/QIS Excel</CardTitle>
-          <CardDescription>
-            Formatgetreu aus der importierten HisinOne-Vorlage – nur die
-            Notenspalte wird gesetzt. Eine Datei pro Studiengang, erst nach
-            Sicherung.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Button
-            size="sm"
-            onClick={() => void doHisExport()}
-            disabled={exporting || hasError || !backupOk}
-          >
-            <FileSpreadsheet className="size-4" />
-            {exporting ? "Exportiere…" : "Excel exportieren"}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Die exportierte Datei entspricht der Originalstruktur (kein
-            zusätzliches Statistik-Blatt). Bei älteren Projekten HIS-Datei unter{" "}
-            <Link
-              href={`/exam/${id}/import`}
-              className="font-medium text-foreground underline"
-            >
-              Import
-            </Link>{" "}
-            erneut einlesen.
-          </p>
-          {!backupOk && (
-            <p className="text-xs text-amber-800 dark:text-amber-200">
-              Bitte zuerst die Projektsicherung durchführen.
-            </p>
-          )}
-          {hasError && backupOk && (
-            <p className="text-xs text-destructive">
-              Export blockiert – siehe Validierung (z. B. offene Bewertungen
-              oder fehlende Original-HIS-Datei).
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="surface-panel">
         <CardContent className="flex flex-wrap items-center gap-3 pt-4">
           <FileText className="size-4 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            PDF-Listen (nach Sicherung und vollständiger Bewertung):
+            Notenliste → {HISINONE_LABEL} → manuelle Notenmeldung:
           </p>
           <Link
             href={`/exam/${id}/documents`}

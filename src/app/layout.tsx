@@ -25,7 +25,7 @@ const sourceSerif = Source_Serif_4({
 export const metadata: Metadata = {
   title: "ExamGrade – Prüfungsnoten-Tool",
   description:
-    "Client-seitige Notenvergabe und HIS/QIS-Export für Prüfungen an deutschen Hochschulen.",
+    "Client-seitige Notenvergabe und HISinOne-Export für Prüfungen an deutschen Hochschulen.",
 };
 
 const themeInitScript = `

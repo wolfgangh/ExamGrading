@@ -7,8 +7,17 @@ import {
   orphanCount,
 } from "@/lib/matching/merge-candidates";
 import { applyIdentityMerge } from "@/lib/matching/apply-identity-merge";
+import { applyIdentityDismissal } from "@/lib/matching/apply-identity-dismissal";
+import {
+  listUnresolvedOrphans,
+  unresolvedOrphanSummary,
+} from "@/lib/matching/orphan-resolution";
 import { flattenHisRows } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
+import {
+  HISINONE_LABEL,
+  isOnlineStyleExam,
+} from "@/lib/types";
 import { formatGrade, formatPoints } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,16 +54,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { GitMerge, ShieldAlert } from "lucide-react";
+import { Ban, GitMerge, ShieldAlert } from "lucide-react";
+
+type DialogMode = "merge" | "dismiss";
 
 export default function MatchingPage() {
   const { project, setProject, rows } = useExamContext();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<DialogMode>("merge");
   const [sourceMat, setSourceMat] = useState("");
   const [targetMat, setTargetMat] = useState("");
   const [reason, setReason] = useState("");
   const [confirmedNote, setConfirmedNote] = useState(
-    "Daten und HIS-Dokument gesichtet"
+    `Daten und ${HISINONE_LABEL}-Dokument gesichtet`
   );
   const [reviewed, setReviewed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +89,11 @@ export default function MatchingPage() {
     [rows]
   );
 
+  const unresolved = useMemo(
+    () => (project ? listUnresolvedOrphans(project, rows) : []),
+    [project, rows]
+  );
+
   const hisOptions = useMemo(() => {
     if (!project) return [];
     return flattenHisRows(project)
@@ -90,48 +107,100 @@ export default function MatchingPage() {
   }, [project]);
 
   const merges = project?.identityMerges ?? [];
+  const dismissals = project?.identityDismissals ?? [];
 
   if (!project) return null;
 
-  const isThe = project.examType === "the";
+  const onlineStyle = isOnlineStyleExam(project.examType);
 
-  const openCandidate = (source: string, target: string) => {
+  const openMerge = (source: string, target: string) => {
+    setDialogMode("merge");
     setSourceMat(source);
     setTargetMat(target);
     setReason("");
-    setConfirmedNote("Daten und HIS-Dokument gesichtet");
+    setConfirmedNote(`Daten und ${HISINONE_LABEL}-Dokument gesichtet`);
     setReviewed(false);
     setError(null);
     setDialogOpen(true);
   };
 
-  const doMerge = () => {
+  const openDismiss = (source: string) => {
+    setDialogMode("dismiss");
+    setSourceMat(source);
+    setTargetMat("");
+    setReason("");
+    setConfirmedNote(`Daten und ${HISINONE_LABEL}-Dokument gesichtet`);
+    setReviewed(false);
+    setError(null);
+    setDialogOpen(true);
+  };
+
+  const doConfirm = () => {
     if (!reviewed) {
       setError(
-        "Bitte bestätigen Sie, dass Sie die Daten und das HIS-Dokument gesichtet haben."
+        "Bitte bestätigen Sie, dass Sie die Daten und das HISinOne-Dokument gesichtet haben."
       );
       return;
     }
-    const result = applyIdentityMerge(project, {
-      sourceMatriculation: sourceMat,
-      targetMatriculation: targetMat,
-      reason,
-      confirmedByNote: confirmedNote,
-    });
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    if (dialogMode === "merge") {
+      const result = applyIdentityMerge(project, {
+        sourceMatriculation: sourceMat,
+        targetMatriculation: targetMat,
+        reason,
+        confirmedByNote: confirmedNote,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setProject(() => result.project);
+      setMessage(
+        `Zusammengeführt: ${result.merge.sourceMatriculation} → ${result.merge.targetMatriculation}`
+      );
+    } else {
+      const result = applyIdentityDismissal(project, {
+        sourceMatriculation: sourceMat,
+        reason,
+        confirmedByNote: confirmedNote,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setProject(() => result.project);
+      setMessage(
+        `Abgelehnt (kein Merge): ${result.dismissal.sourceMatriculation}`
+      );
     }
-    setProject(() => result.project);
     setDialogOpen(false);
-    setMessage(
-      `Zusammengeführt: ${result.merge.sourceMatriculation} → ${result.merge.targetMatriculation}`
-    );
     setError(null);
   };
 
   const orphanRow = rows.find((r) => r.key === sourceMat);
   const hisRow = rows.find((r) => r.key === targetMat && r.inHis);
+
+  const auditRows = [
+    ...merges.map((m) => ({
+      id: m.id,
+      at: m.at,
+      kind: "merge" as const,
+      detail: `${m.sourceMatriculation} → ${m.targetMatriculation}`,
+      name: `${m.sourceSnapshot.lastName}, ${m.sourceSnapshot.firstName}`,
+      reason: m.reason,
+      note: m.confirmedByNote,
+      active: m.active,
+    })),
+    ...dismissals.map((d) => ({
+      id: d.id,
+      at: d.at,
+      kind: "dismiss" as const,
+      detail: d.sourceMatriculation,
+      name: `${d.sourceSnapshot.lastName}, ${d.sourceSnapshot.firstName}`,
+      reason: d.reason,
+      note: d.confirmedByNote,
+      active: d.active,
+    })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
@@ -140,22 +209,38 @@ export default function MatchingPage() {
           Matrikel-Zuordnung
         </h1>
         <p className="text-muted-foreground">
-          THE: manuelle Zusammenführung bei Tippfehlern in der selbst
-          eingetragenen Matrikelnummer (Antritt). Nie automatisch – nur nach
-          Sichtung von Antrittsdaten und HIS-Dokument.
+          THE / elektronische Prüfung: manuelle Zusammenführung bei Tippfehlern
+          in der selbst eingetragenen Matrikelnummer. Nie automatisch – nur nach
+          Sichtung von Antrittsdaten und {HISINONE_LABEL}-Dokument. Offene Fälle
+          blockieren Notenliste und {HISINONE_LABEL}-Export.
         </p>
       </div>
 
-      {!isThe && (
+      {!onlineStyle && (
         <div
           role="status"
           className="flex gap-3 rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
         >
           <ShieldAlert className="mt-0.5 size-5 shrink-0" />
           <p>
-            Diese Funktion ist für Take-Home-Exams gedacht. Bei Klausuren tritt
-            das beschriebene Matrikel-Tippfehler-Problem in der Regel nicht
-            auf.
+            Diese Funktion ist für Take-Home-Exams und elektronische Prüfungen
+            gedacht. Bei Klausuren tritt das Matrikel-Tippfehler-Problem in der
+            Regel nicht auf.
+          </p>
+        </div>
+      )}
+
+      {onlineStyle && unresolved.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
+        >
+          <p className="font-semibold">
+            {unresolvedOrphanSummary(project, rows)}
+          </p>
+          <p className="mt-1 opacity-95">
+            Notenliste-PDF und {HISINONE_LABEL}-Excel sind gesperrt, bis alle
+            Fälle zusammengeführt oder abgelehnt sind.
           </p>
         </div>
       )}
@@ -176,18 +261,18 @@ export default function MatchingPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Vorschläge</CardTitle>
           <CardDescription>
-            Orphans (Antritt/Punkte ohne HIS) vs. HIS-No-Shows mit ähnlichem
-            Namen oder 1-Ziffer-Differenz in der Matrikelnummer.{" "}
+            Orphans (Antritt/Punkte ohne {HISINONE_LABEL}) vs. No-Shows mit
+            ähnlichem Namen oder 1-Ziffer-Differenz.{" "}
             {orphanCount(project) === 0
               ? "Keine Orphans vorhanden."
-              : `${orphans.length} Orphan(s), ${candidates.length} Vorschlag/Vorschläge.`}
+              : `${orphans.length} Orphan(s), ${unresolved.length} ungeprüft, ${candidates.length} Vorschlag/Vorschläge.`}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {candidates.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Keine automatischen Vorschläge. Unten manuell zuordnen, falls
-              nötig.
+              Keine automatischen Vorschläge. Unten manuell zuordnen oder
+              ablehnen.
             </p>
           ) : (
             <div className="overflow-auto rounded-lg border">
@@ -196,7 +281,7 @@ export default function MatchingPage() {
                   <TableRow>
                     <TableHead>Score</TableHead>
                     <TableHead>Orphan (Antritt)</TableHead>
-                    <TableHead>HIS-Ziel</TableHead>
+                    <TableHead>{HISINONE_LABEL}-Ziel</TableHead>
                     <TableHead>Gründe</TableHead>
                     <TableHead />
                   </TableRow>
@@ -236,17 +321,28 @@ export default function MatchingPage() {
                         {c.reasons.join(" · ")}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!isThe}
-                          onClick={() =>
-                            openCandidate(c.orphanKey, c.hisKey)
-                          }
-                        >
-                          <GitMerge className="size-3.5" />
-                          Prüfen
-                        </Button>
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!onlineStyle}
+                            onClick={() =>
+                              openMerge(c.orphanKey, c.hisKey)
+                            }
+                          >
+                            <GitMerge className="size-3.5" />
+                            Zusammenführen
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!onlineStyle}
+                            onClick={() => openDismiss(c.orphanKey)}
+                          >
+                            <Ban className="size-3.5" />
+                            Ablehnen
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -257,86 +353,126 @@ export default function MatchingPage() {
         </CardContent>
       </Card>
 
-      <Card className="surface-panel">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Manuelle Zuordnung</CardTitle>
-          <CardDescription>
-            Orphan und HIS-Matrikel selbst wählen (wenn kein Vorschlag passt).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="grid gap-1">
-            <Label className="text-xs">Orphan (falsche Matr.)</Label>
-            <Select
-              value={manualOrphan}
-              onValueChange={(v) => v && setManualOrphan(v)}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Manuell zusammenführen</CardTitle>
+            <CardDescription>
+              Orphan und korrekte {HISINONE_LABEL}-Matrikel selbst wählen.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="grid gap-1">
+              <Label className="text-xs">Orphan (falsche Matr.)</Label>
+              <Select
+                value={manualOrphan}
+                onValueChange={(v) => v && setManualOrphan(v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="wählen…">
+                    {manualOrphan || "wählen…"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {orphans.map((o) => (
+                    <SelectItem key={o.key} value={o.key}>
+                      {o.student.lastName}, {o.student.firstName} · {o.key}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs">
+                {HISINONE_LABEL}-Ziel (korrekte Matr.)
+              </Label>
+              <Select
+                value={manualHis}
+                onValueChange={(v) => v && setManualHis(v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="wählen…">
+                    {manualHis || "wählen…"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {hisOptions.map((h) => (
+                    <SelectItem key={h.mat} value={h.mat}>
+                      {h.lastName}, {h.firstName} · {h.mat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!onlineStyle || !manualOrphan || !manualHis}
+              onClick={() => openMerge(manualOrphan, manualHis)}
             >
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="wählen…">
-                  {manualOrphan
-                    ? orphans.find((o) => o.key === manualOrphan)
-                      ? `${orphans.find((o) => o.key === manualOrphan)!.student.lastName} (${manualOrphan})`
-                      : manualOrphan
-                    : "wählen…"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {orphans.map((o) => (
-                  <SelectItem key={o.key} value={o.key}>
-                    {o.student.lastName}, {o.student.firstName} · {o.key}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1">
-            <Label className="text-xs">HIS-Ziel (korrekte Matr.)</Label>
-            <Select
-              value={manualHis}
-              onValueChange={(v) => v && setManualHis(v)}
-            >
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="wählen…">
-                  {manualHis
-                    ? hisOptions.find((h) => h.mat === manualHis)
-                      ? `${hisOptions.find((h) => h.mat === manualHis)!.lastName} (${manualHis})`
-                      : manualHis
-                    : "wählen…"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {hisOptions.map((h) => (
-                  <SelectItem key={h.mat} value={h.mat}>
-                    {h.lastName}, {h.firstName} · {h.mat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!isThe || !manualOrphan || !manualHis}
-            onClick={() => openCandidate(manualOrphan, manualHis)}
-          >
-            <GitMerge className="size-3.5" />
-            Prüfen &amp; zusammenführen
-          </Button>
-        </CardContent>
-      </Card>
+              <GitMerge className="size-3.5" />
+              Prüfen &amp; zusammenführen
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              Ungeprüfte Orphans ablehnen
+            </CardTitle>
+            <CardDescription>
+              Wenn kein Tippfehler vorliegt: Fall dokumentiert schließen, ohne
+              Merge.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {unresolved.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine ungeprüften Orphans.
+              </p>
+            ) : (
+              unresolved.map((o) => (
+                <div
+                  key={o.key}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+                >
+                  <div>
+                    <span className="font-medium">
+                      {o.student.lastName}, {o.student.firstName}
+                    </span>
+                    <span className="ml-2 font-mono text-xs text-muted-foreground">
+                      {o.key}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!onlineStyle}
+                    onClick={() => openDismiss(o.key)}
+                  >
+                    <Ban className="size-3.5" />
+                    Ablehnen
+                  </Button>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card className="surface-panel">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Dokumentation (Audit)</CardTitle>
           <CardDescription>
-            Alle durchgeführten Zusammenführungen – enthalten in der
-            JSON-Projektsicherung.
+            Zusammenführungen und Ablehnungen – in der JSON-Sicherung und der
+            Notenliste-PDF.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {merges.length === 0 ? (
+          {auditRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Noch keine Zusammenführungen.
+              Noch keine Einträge.
             </p>
           ) : (
             <div className="overflow-auto rounded-lg border">
@@ -344,34 +480,41 @@ export default function MatchingPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Datum</TableHead>
-                    <TableHead>Von → Nach</TableHead>
+                    <TableHead>Art</TableHead>
+                    <TableHead>Matrikel</TableHead>
                     <TableHead>Begründung</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...merges].reverse().map((m) => (
+                  {auditRows.map((m) => (
                     <TableRow key={m.id}>
                       <TableCell className="whitespace-nowrap text-xs">
                         {new Date(m.at).toLocaleString("de-DE")}
                       </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            m.kind === "merge" ? "default" : "secondary"
+                          }
+                        >
+                          {m.kind === "merge" ? "Merge" : "Abgelehnt"}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
-                        {m.sourceMatriculation} → {m.targetMatriculation}
+                        {m.detail}
                         <div className="font-sans text-muted-foreground">
-                          {m.sourceSnapshot.lastName},{" "}
-                          {m.sourceSnapshot.firstName}
+                          {m.name}
                         </div>
                       </TableCell>
                       <TableCell className="max-w-xs text-sm">
                         {m.reason}
                         <div className="text-xs text-muted-foreground">
-                          {m.confirmedByNote}
+                          {m.note}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={m.active ? "default" : "secondary"}
-                        >
+                        <Badge variant={m.active ? "outline" : "secondary"}>
                           {m.active ? "aktiv" : "inaktiv"}
                         </Badge>
                       </TableCell>
@@ -387,50 +530,63 @@ export default function MatchingPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Zusammenführung bestätigen</DialogTitle>
+            <DialogTitle>
+              {dialogMode === "merge"
+                ? "Zusammenführung bestätigen"
+                : "Ablehnung bestätigen"}
+            </DialogTitle>
             <DialogDescription>
-              Nur nach klarer Prüfung der Eingabe- und HIS-Daten. Die
-              HIS-Matrikel bleibt die Identität für Notenmeldung und Export.
+              {dialogMode === "merge"
+                ? `Nur nach klarer Prüfung. Die ${HISINONE_LABEL}-Matrikel bleibt die Identität für Notenmeldung und Export.`
+                : "Dokumentiert, dass kein Merge erfolgen soll (z. B. andere Person, kein Tippfehler)."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="mb-1 text-xs font-medium text-muted-foreground">
-                Orphan (Quelle)
-              </p>
+          {dialogMode === "merge" ? (
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  Orphan (Quelle)
+                </p>
+                <p className="font-medium">
+                  {orphanRow
+                    ? `${orphanRow.student.lastName}, ${orphanRow.student.firstName}`
+                    : "–"}
+                </p>
+                <p className="font-mono text-xs">{sourceMat}</p>
+                <p className="mt-1 text-xs">
+                  Punkte: {formatPoints(orphanRow?.totalPoints)} · Note:{" "}
+                  {formatGrade(orphanRow?.finalGrade)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  {HISINONE_LABEL} (Ziel)
+                </p>
+                <p className="font-medium">
+                  {hisRow
+                    ? `${hisRow.student.lastName}, ${hisRow.student.firstName}`
+                    : "–"}
+                </p>
+                <p className="font-mono text-xs">{targetMat}</p>
+                <p className="mt-1 text-xs">
+                  Status: {hisRow?.status ?? "–"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
               <p className="font-medium">
                 {orphanRow
                   ? `${orphanRow.student.lastName}, ${orphanRow.student.firstName}`
                   : "–"}
               </p>
               <p className="font-mono text-xs">{sourceMat}</p>
-              {orphanRow?.student.email && (
-                <p className="truncate text-xs text-muted-foreground">
-                  {orphanRow.student.email}
-                </p>
-              )}
-              <p className="mt-1 text-xs">
-                Punkte: {formatPoints(orphanRow?.totalPoints)} · Note:{" "}
-                {formatGrade(orphanRow?.finalGrade)}
+              <p className="mt-1 text-xs text-muted-foreground">
+                Bleibt als Sonderfall ohne {HISINONE_LABEL}-Match (kein Merge).
               </p>
             </div>
-            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
-              <p className="mb-1 text-xs font-medium text-muted-foreground">
-                HIS (Ziel)
-              </p>
-              <p className="font-medium">
-                {hisRow
-                  ? `${hisRow.student.lastName}, ${hisRow.student.firstName}`
-                  : "–"}
-              </p>
-              <p className="font-mono text-xs">{targetMat}</p>
-              <p className="mt-1 text-xs">
-                Status: {hisRow?.status ?? "–"} · Note:{" "}
-                {formatGrade(hisRow?.finalGrade)}
-              </p>
-            </div>
-          </div>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="merge-reason">Begründung (Pflicht)</Label>
@@ -439,7 +595,11 @@ export default function MatchingPage() {
               rows={3}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="z. B. Tippfehler in Antrittsliste, Name und Anmeldename stimmen mit HIS überein…"
+              placeholder={
+                dialogMode === "merge"
+                  ? "z. B. Tippfehler in Antrittsliste, Name und Anmeldename stimmen mit HISinOne überein…"
+                  : "z. B. andere Person / Matrikel korrekt, kein Tippfehler…"
+              }
             />
           </div>
           <div className="grid gap-2">
@@ -458,8 +618,8 @@ export default function MatchingPage() {
               onChange={(e) => setReviewed(e.target.checked)}
             />
             <span>
-              Ich habe Antrittsdaten, Punkte und HIS-Dokument verglichen und
-              bestätige die Zusammenführung.
+              Ich habe Antrittsdaten, Punkte und {HISINONE_LABEL}-Dokument
+              verglichen und bestätige diese Entscheidung.
             </span>
           </label>
 
@@ -473,9 +633,18 @@ export default function MatchingPage() {
             >
               Abbrechen
             </Button>
-            <Button type="button" onClick={doMerge} disabled={!isThe}>
-              <GitMerge className="size-4" />
-              Zusammenführen
+            <Button type="button" onClick={doConfirm} disabled={!onlineStyle}>
+              {dialogMode === "merge" ? (
+                <>
+                  <GitMerge className="size-4" />
+                  Zusammenführen
+                </>
+              ) : (
+                <>
+                  <Ban className="size-4" />
+                  Ablehnung speichern
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

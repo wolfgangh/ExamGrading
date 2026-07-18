@@ -118,7 +118,7 @@ export function ExamList() {
               Prüfungen
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Notenvergabe und HIS/QIS-Export – ersetzt den Excel-Workflow.
+              Notenvergabe und HISinOne-Export – ersetzt den Excel-Workflow.
             </p>
           </div>
 
@@ -126,7 +126,7 @@ export function ExamList() {
             <p className="font-medium">Daten nur in diesem Browser</p>
             <p className="mt-1 opacity-90">
               Prüfungsprojekte werden lokal gespeichert (IndexedDB), nicht auf
-              dem Server. Nach Importen und vor dem HIS-/PDF-Export:{" "}
+              dem Server. Nach Importen und vor dem HISinOne-/PDF-Export:{" "}
               <strong>JSON-Sicherung</strong> herunterladen und neben den
               Klausurdateien ablegen. Wechsel des PCs nur über
               Sicherungs-Import.

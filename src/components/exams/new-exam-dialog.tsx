@@ -205,7 +205,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
               id="examNumber"
               value={examNumber}
               onChange={setExamNumber}
-              placeholder="optional – oder aus HIS-Import"
+              placeholder="optional – oder aus HISinOne-Import"
               clearLabel="Prüfungsnummer löschen"
             />
           </div>
@@ -235,6 +235,9 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
                 <SelectContent>
                   <SelectItem value="the">
                     {EXAM_TYPE_LABELS.the}
+                  </SelectItem>
+                  <SelectItem value="elektr_p">
+                    {EXAM_TYPE_LABELS.elektr_p}
                   </SelectItem>
                   <SelectItem value="written">
                     {EXAM_TYPE_LABELS.written}

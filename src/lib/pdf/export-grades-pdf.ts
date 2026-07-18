@@ -1,4 +1,5 @@
 import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
+import { HISINONE_LABEL } from "@/lib/types";
 import {
   autoTable,
   drawKeyValueBlock,
@@ -22,7 +23,21 @@ function sortRows(rows: EnrichedStudentRow[]): EnrichedStudentRow[] {
   });
 }
 
-/** Gesamte Notenliste inkl. No-Shows und ohne HIS */
+function formatDeDateTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/** Gesamte Notenliste inkl. No-Shows und ohne HISinOne */
 export function exportGradesListPdf(
   project: ExamProject,
   rows: EnrichedStudentRow[]
@@ -34,7 +49,7 @@ export function exportGradesListPdf(
   doc.setTextColor(80);
   doc.text(
     pdfText(
-      "Alle Prüfungsteilnehmer einschließlich No-Shows und Kandidaten ohne HIS-Anmeldung."
+      `Alle Prüfungsteilnehmer einschließlich No-Shows und Kandidaten ohne ${HISINONE_LABEL}-Anmeldung.`
     ),
     PDF_MARGIN,
     y
@@ -75,7 +90,7 @@ export function exportGradesListPdf(
       2: { cellWidth: 28 },
       3: { halign: "right", cellWidth: 18 },
       4: { halign: "right", cellWidth: 16 },
-      5: { cellWidth: 22 },
+      5: { cellWidth: 28 },
     },
     margin: { left: PDF_MARGIN, right: PDF_MARGIN },
   });
@@ -83,30 +98,125 @@ export function exportGradesListPdf(
   let finalY = getLastTableY(doc, 200);
 
   const merges = (project.identityMerges ?? []).filter((m) => m.active);
-  if (merges.length > 0) {
-    let y = finalY + 8;
-    if (y > 250) {
-      doc.addPage();
-      y = PDF_MARGIN + 12;
-    }
+  const dismissals = (project.identityDismissals ?? []).filter((d) => d.active);
+
+  if (merges.length > 0 || dismissals.length > 0) {
+    doc.addPage();
+    let ay = PDF_MARGIN + 14;
+
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(pdfText("Matrikel-Zusammenführungen (THE)"), PDF_MARGIN, y);
-    y += 5;
+    doc.setFontSize(12);
+    doc.text(
+      pdfText("Dokumentierte Matrikel-Pruefungen"),
+      PDF_MARGIN,
+      ay
+    );
+    ay += 6;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    for (const m of merges) {
-      if (y > 275) {
-        doc.addPage();
-        y = PDF_MARGIN + 12;
-      }
-      const line = `${m.sourceMatriculation} → ${m.targetMatriculation}: ${m.sourceSnapshot.lastName}, ${m.sourceSnapshot.firstName} · ${m.reason}`;
-      doc.text(pdfText(line), PDF_MARGIN, y, {
-        maxWidth: 180,
+    doc.setTextColor(80);
+    doc.text(
+      pdfText(
+        `Nach Sichtung der Antrittsdaten und der ${HISINONE_LABEL}-Unterlagen. ` +
+          "Zusammenfuehrungen korrigieren Tippfehler in der selbst eingetragenen Matrikelnummer; " +
+          "Ablehnungen bestaetigen, dass kein Merge erfolgen soll."
+      ),
+      PDF_MARGIN,
+      ay,
+      { maxWidth: 180 }
+    );
+    doc.setTextColor(0);
+    ay += 12;
+
+    if (merges.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(pdfText("A) Zusammengefuehrt"), PDF_MARGIN, ay);
+      ay += 2;
+
+      autoTable(doc, {
+        startY: ay,
+        head: [
+          [
+            "Datum",
+            "Falsche Matr.",
+            `Korrekt (${HISINONE_LABEL})`,
+            "Name (Antritt)",
+            "Begruendung",
+          ],
+        ],
+        body: merges.map((m) => [
+          pdfText(formatDeDateTime(m.at)),
+          pdfText(m.sourceMatriculation),
+          pdfText(m.targetMatriculation),
+          pdfText(
+            `${m.sourceSnapshot.lastName}, ${m.sourceSnapshot.firstName}`
+          ),
+          pdfText(m.reason),
+        ]),
+        styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.4 },
+        headStyles: {
+          fillColor: [68, 112, 153],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        alternateRowStyles: { fillColor: [236, 253, 245] },
+        columnStyles: {
+          0: { cellWidth: 28 },
+          1: { cellWidth: 24 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 36 },
+          4: { cellWidth: 56 },
+        },
+        margin: { left: PDF_MARGIN, right: PDF_MARGIN },
       });
-      y += 5;
+      ay = getLastTableY(doc, ay) + 10;
     }
-    finalY = y;
+
+    if (dismissals.length > 0) {
+      if (ay > 240) {
+        doc.addPage();
+        ay = PDF_MARGIN + 14;
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(
+        pdfText("B) Geprueft, nicht zusammengefuehrt"),
+        PDF_MARGIN,
+        ay
+      );
+      ay += 2;
+
+      autoTable(doc, {
+        startY: ay,
+        head: [["Datum", "Matr. (Antritt)", "Name", "Begruendung"]],
+        body: dismissals.map((d) => [
+          pdfText(formatDeDateTime(d.at)),
+          pdfText(d.sourceMatriculation),
+          pdfText(
+            `${d.sourceSnapshot.lastName}, ${d.sourceSnapshot.firstName}`
+          ),
+          pdfText(d.reason),
+        ]),
+        styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.4 },
+        headStyles: {
+          fillColor: [68, 112, 153],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        alternateRowStyles: { fillColor: [255, 247, 237] },
+        columnStyles: {
+          0: { cellWidth: 28 },
+          1: { cellWidth: 28 },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 76 },
+        },
+        margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+      });
+      ay = getLastTableY(doc, ay) + 8;
+    }
+
+    finalY = ay;
   }
 
   let sigY = finalY + 8;

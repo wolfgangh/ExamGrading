@@ -1,4 +1,5 @@
 import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
+import { HISINONE_LABEL, isOnlineStyleExam } from "@/lib/types";
 import {
   countOpenGradingTasks,
   hasOpenGrading,
@@ -7,6 +8,10 @@ import {
   getHisSources,
   sourcesMissingOriginalTemplate,
 } from "@/lib/his-sources";
+import {
+  hasUnresolvedOrphans,
+  listUnresolvedOrphans,
+} from "@/lib/matching/orphan-resolution";
 
 export interface ValidationItem {
   level: "error" | "warning" | "info";
@@ -23,7 +28,7 @@ export function validateForExport(
   if (project.hisRows.length === 0) {
     items.push({
       level: "error",
-      message: "Keine HIS-Masterliste importiert – Export unvollständig.",
+      message: `Keine ${HISINONE_LABEL}-Masterliste importiert – Export unvollständig.`,
     });
   }
 
@@ -31,8 +36,7 @@ export function validateForExport(
   if (missingOriginal.length > 0 && getHisSources(project).length > 0) {
     items.push({
       level: "error",
-      message:
-        "Original-HIS-Datei fehlt für formatgetreuen HisinOne-Export – bitte HIS-Datei(en) unter Import erneut einlesen.",
+      message: `Original-${HISINONE_LABEL}-Datei fehlt für formatgetreuen Export – bitte Datei(en) unter Import erneut einlesen.`,
       count: missingOriginal.length,
     });
   }
@@ -43,6 +47,15 @@ export function validateForExport(
       level: "error",
       message: `Offene Aufgaben „Bewertung notwendig“ (${people} Person(en), ${tasks} Aufgabe(n)) – Export und PDF gesperrt, bis alle bewertet sind.`,
       count: tasks,
+    });
+  }
+
+  if (isOnlineStyleExam(project.examType) && hasUnresolvedOrphans(project, rows)) {
+    const n = listUnresolvedOrphans(project, rows).length;
+    items.push({
+      level: "error",
+      message: `${n} Antritt/Punkte ohne ${HISINONE_LABEL} noch ungeprüft – unter Zuordnung zusammenführen oder ablehnen (Notenliste und ${HISINONE_LABEL}-Export gesperrt).`,
+      count: n,
     });
   }
 
@@ -61,7 +74,7 @@ export function validateForExport(
   if (mismatches.length > 0) {
     items.push({
       level: "warning",
-      message: "Unstimmigkeiten (nicht in HIS oder nur in Antritt/Punkte)",
+      message: `Unstimmigkeiten (nicht in ${HISINONE_LABEL} oder nur in Antritt/Punkte)`,
       count: mismatches.length,
     });
   }
@@ -97,20 +110,6 @@ export function validateForExport(
     });
   }
 
-  const orphans = rows.filter(
-    (r) =>
-      (!r.inHis || r.attendanceWithoutHis) &&
-      (r.attended === true || r.hasPoints)
-  );
-  if (orphans.length > 0 && project.examType === "the") {
-    items.push({
-      level: "warning",
-      message:
-        "Antritt/Punkte ohne HIS (mögliche Matrikel-Tippfehler) – unter Zuordnung prüfen",
-      count: orphans.length,
-    });
-  }
-
   const merges = (project.identityMerges ?? []).filter((m) => m.active);
   if (merges.length > 0) {
     items.push({
@@ -120,12 +119,21 @@ export function validateForExport(
     });
   }
 
+  const dismissals = (project.identityDismissals ?? []).filter((d) => d.active);
+  if (dismissals.length > 0) {
+    items.push({
+      level: "info",
+      message: "Matrikel-Sonderfälle geprüft und abgelehnt",
+      count: dismissals.length,
+    });
+  }
+
   const exportReady = rows.filter(
     (r) => r.inHis && (r.status === "export_ready" || r.status === "no_show")
   );
   items.push({
     level: "info",
-    message: "Für Export vorgesehene HIS-Zeilen",
+    message: `Für ${HISINONE_LABEL}-Export vorgesehene Zeilen`,
     count: exportReady.length,
   });
 

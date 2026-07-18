@@ -62,6 +62,7 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     points: [],
     students: {},
     identityMerges: [],
+    identityDismissals: [],
     importLogs: [],
   };
 }

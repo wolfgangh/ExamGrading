@@ -3,6 +3,7 @@ import { flattenHisRows } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { buildEnrichedRows } from "@/lib/matching/match";
 import { computeEffectiveTotal } from "@/lib/grades/points-total";
+import { isOnlineStyleExam } from "@/lib/types";
 import type {
   ExamProject,
   IdentityMerge,
@@ -66,11 +67,23 @@ export function applyIdentityMerge(
     };
   }
 
-  if (project.examType !== "the") {
+  if (!isOnlineStyleExam(project.examType)) {
     return {
       ok: false,
       error:
-        "Zusammenführung ist für diese Prüfungsform nicht vorgesehen (nur THE).",
+        "Zusammenführung ist nur für THE / elektronische Prüfung vorgesehen.",
+    };
+  }
+
+  const alreadyDismissed = (project.identityDismissals ?? []).some(
+    (d) =>
+      d.active && normalizeMatriculation(d.sourceMatriculation) === sourceMat
+  );
+  if (alreadyDismissed) {
+    return {
+      ok: false,
+      error:
+        "Diese Matrikel wurde als „nicht zusammenführen“ dokumentiert. Bitte zuerst klären.",
     };
   }
 

@@ -69,6 +69,7 @@ import { exportNotenspiegelExcel } from "@/lib/excel/export-notenspiegel";
 import {
   canAccessProtectedExport,
 } from "@/lib/backup-status";
+import { hasUnresolvedOrphans } from "@/lib/matching/orphan-resolution";
 import {
   Table,
   TableBody,
@@ -155,8 +156,13 @@ export default function GradesPage() {
 
   const gradingLocked = hasOpenGrading(project);
   const backupOk = canAccessProtectedExport(project);
+  const orphansLocked = hasUnresolvedOrphans(project, rows);
   const notenspiegelReady =
-    !gradingLocked && backupOk && stats != null && stats.graded > 0;
+    !gradingLocked &&
+    !orphansLocked &&
+    backupOk &&
+    stats != null &&
+    stats.graded > 0;
 
   const runNotenspiegel = (key: "pdf" | "xlsx", fn: () => void | Promise<void>) => {
     if (!notenspiegelReady || !stats) return;

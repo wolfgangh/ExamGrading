@@ -36,7 +36,7 @@ export function BackupBanner() {
             Prüfungsdaten liegen <strong>nur in diesem Browser</strong>{" "}
             (IndexedDB) – nicht auf dem Server. Bitte JSON-Sicherung
             herunterladen und neben den Klausur-Excel-Dateien ablegen.
-            HIS-Export und PDF-Dokumente sind gesperrt, bis die Sicherung
+            HISinOne-Export und PDF-Dokumente sind gesperrt, bis die Sicherung
             erfolgt ist.
           </p>
           <p className="text-xs opacity-80">

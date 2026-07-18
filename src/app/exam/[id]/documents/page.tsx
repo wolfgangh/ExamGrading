@@ -38,6 +38,7 @@ import {
 } from "@/lib/pdf/export-grade-changes-pdf";
 import { exportNotenspiegelPdf } from "@/lib/pdf/export-notenspiegel-pdf";
 import { exportNotenspiegelExcel } from "@/lib/excel/export-notenspiegel";
+import { exportHisExcel } from "@/lib/excel/export-his";
 import {
   findPointsRecord,
   resolveProgramCode,
@@ -52,11 +53,17 @@ import {
   hasOpenGrading,
   openGradingSummary,
 } from "@/lib/grades/open-grading";
+import {
+  hasUnresolvedOrphans,
+  unresolvedOrphanSummary,
+} from "@/lib/matching/orphan-resolution";
 import { cn, formatGrade, formatPoints } from "@/lib/utils";
-import type { PointsRecord } from "@/lib/types";
+import { HISINONE_LABEL, type PointsRecord } from "@/lib/types";
+import { validateForExport } from "@/lib/validations";
 import {
   FileSpreadsheet,
   FileText,
+  GitMerge,
   HardDrive,
   ListChecks,
   ShieldAlert,
@@ -115,25 +122,46 @@ export default function DocumentsPage() {
     [project, rows]
   );
 
+  const validation = useMemo(
+    () => (project && rows ? validateForExport(project, rows) : []),
+    [project, rows]
+  );
+  const validationBlocked = validation.some((i) => i.level === "error");
+
   if (!project) return null;
 
   const backupOk = canAccessProtectedExport(project);
   const backupStale = isBackupStale(project);
   const gradingLocked = hasOpenGrading(project);
-  const pdfAllowed = backupOk && !gradingLocked;
+  const orphansLocked = hasUnresolvedOrphans(project, rows);
+  const exportAllowed =
+    backupOk && !gradingLocked && !orphansLocked && !validationBlocked;
+  const pdfAllowed = exportAllowed;
   const notenspiegelReady =
     pdfAllowed && stats != null && stats.graded > 0;
 
   const run = (key: string, fn: () => void | Promise<void>, ok: string) => {
     if (gradingLocked) {
       setError(
-        `PDF-Export gesperrt: ${openGradingSummary(project)}. Bitte zuerst alle Aufgaben bewerten.`
+        `Export gesperrt: ${openGradingSummary(project)}. Bitte zuerst alle Aufgaben bewerten.`
+      );
+      return;
+    }
+    if (orphansLocked) {
+      setError(
+        `Export gesperrt: ${unresolvedOrphanSummary(project, rows)}.`
       );
       return;
     }
     if (!backupOk) {
       setError(
-        "Bitte zuerst die JSON-Projektsicherung durchführen (Export → Projekt sichern)."
+        "Bitte zuerst die JSON-Projektsicherung durchführen (Menü Sicherung)."
+      );
+      return;
+    }
+    if (validationBlocked) {
+      setError(
+        "Export gesperrt – siehe Validierung (z. B. fehlende HISinOne-Vorlage)."
       );
       return;
     }
@@ -169,12 +197,43 @@ export default function DocumentsPage() {
       <div className="max-w-2xl">
         <h1 className="text-2xl font-semibold tracking-tight">Dokumente</h1>
         <p className="text-muted-foreground">
-          PDF-Listen mit OTH-Letterhead für Akte, Fachbereich und
-          Prüfungsamt. Daten vor dem Export ggf. ergänzen.
+          Empfohlener Ablauf: Notenliste → {HISINONE_LABEL}-Excel hochladen →
+          ggf. manuelle Notenmeldung. Zuerst JSON-Sicherung unter{" "}
+          <Link
+            href={`/exam/${id}/export`}
+            className="font-medium text-foreground underline"
+          >
+            Sicherung
+          </Link>
+          .
         </p>
       </div>
 
-      {gradingLocked && (
+      {orphansLocked && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
+        >
+          <GitMerge className="mt-0.5 size-5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">
+              Notenliste / {HISINONE_LABEL} gesperrt
+            </p>
+            <p className="mt-0.5 opacity-95">
+              {unresolvedOrphanSummary(project, rows)}. Bitte unter Zuordnung
+              zusammenführen oder ablehnen.
+            </p>
+          </div>
+          <Link
+            href={`/exam/${id}/matching`}
+            className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+          >
+            Zu Zuordnung
+          </Link>
+        </div>
+      )}
+
+      {gradingLocked && !orphansLocked && (
         <div
           role="alert"
           className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
@@ -196,18 +255,17 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {backupStale && !gradingLocked && (
+      {backupStale && !gradingLocked && !orphansLocked && (
         <div
           role="alert"
           className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
         >
           <ShieldAlert className="mt-0.5 size-5 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="font-semibold">PDF-Export gesperrt</p>
+            <p className="font-semibold">Export gesperrt</p>
             <p className="mt-0.5 opacity-95">
               Bitte zuerst die Projektsicherung (JSON) herunterladen und
-              ablegen. Die Sicherung enthält alle Daten – Pfade zu
-              Original-Excel sind nicht erforderlich.
+              ablegen.
             </p>
           </div>
           <Button
@@ -215,7 +273,7 @@ export default function DocumentsPage() {
             className="bg-amber-800 text-white hover:bg-amber-900"
             onClick={() => {
               downloadAndMarkBackup(project, setProject);
-              setMessage("Projektsicherung heruntergeladen – PDFs freigeschaltet.");
+              setMessage("Projektsicherung heruntergeladen – Exporte freigeschaltet.");
               setError(null);
             }}
           >
@@ -238,6 +296,73 @@ export default function DocumentsPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
+        {/* 1 Notenliste */}
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">1. Notenliste</CardTitle>
+            <CardDescription>
+              Alle Teilnehmer inkl. No-Shows, mit Unterschriftsfeldern und
+              dokumentierten Matrikel-Prüfungen.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy != null || rows.length === 0 || !pdfAllowed}
+              onClick={() =>
+                run(
+                  "grades",
+                  () => exportGradesListPdf(project, rows),
+                  "Notenliste heruntergeladen."
+                )
+              }
+            >
+              <FileText className="size-4" />
+              {busy === "grades" ? "…" : "PDF erzeugen"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* 2 HISinOne */}
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              2. {HISINONE_LABEL} Excel
+            </CardTitle>
+            <CardDescription>
+              Formatgetreu aus der importierten Vorlage – nur die Notenspalte.
+              Eine Datei pro Studiengang, danach in {HISINONE_LABEL} hochladen.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                busy != null ||
+                !pdfAllowed ||
+                !stats ||
+                project.hisRows.length === 0
+              }
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "hisinone",
+                  () => exportHisExcel(project, rows, stats),
+                  `${HISINONE_LABEL}-Excel heruntergeladen.`
+                );
+              }}
+            >
+              <FileSpreadsheet className="size-4" />
+              {busy === "hisinone" ? "…" : "Excel exportieren"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Bei älteren Projekten Originaldatei unter Import erneut einlesen.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Notenspiegel */}
         <Card className="surface-panel md:col-span-2">
           <CardHeader className="pb-2">
@@ -288,39 +413,11 @@ export default function DocumentsPage() {
           </CardContent>
         </Card>
 
-        {/* Notenliste */}
-        <Card className="surface-panel">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Notenliste</CardTitle>
-            <CardDescription>
-              Alle Teilnehmer inkl. No-Shows und ohne HIS, mit
-              Unterschriftsfeldern.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy != null || rows.length === 0 || !pdfAllowed}
-              onClick={() =>
-                run(
-                  "grades",
-                  () => exportGradesListPdf(project, rows),
-                  "Notenliste heruntergeladen."
-                )
-              }
-            >
-              <FileText className="size-4" />
-              {busy === "grades" ? "…" : "PDF erzeugen"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Manuelle Notenmeldung */}
+        {/* 3 Manuelle Notenmeldung */}
         <Card className="surface-panel">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
-              Manuelle Notenmeldung
+              3. Manuelle Notenmeldung
               {manualRows.length > 0 && (
                 <Badge variant="secondary" className="ml-2 font-normal">
                   {manualRows.length}
@@ -328,13 +425,14 @@ export default function DocumentsPage() {
               )}
             </CardTitle>
             <CardDescription>
-              Sonderfälle ohne HIS. Studiengang aus Import oder manuell.
+              Sonderfälle ohne {HISINONE_LABEL}-Anmeldung. Studiengang aus
+              Import oder manuell.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {manualRows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Keine Kandidaten ohne HIS-Anmeldung.
+                Keine Kandidaten ohne {HISINONE_LABEL}-Anmeldung.
               </p>
             ) : (
               <div className="max-h-48 overflow-auto rounded-lg border">
