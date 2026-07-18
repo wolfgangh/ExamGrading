@@ -14,11 +14,20 @@ export const DISMISS_REASON_TEMPLATES: string[] = [
   "Unzureichende Übereinstimmung von Name und Matrikel; Fall bleibt Sonderfall ohne HISinOne-Match.",
   "Nach Prüfung der Antritts- und HISinOne-Daten kein belastbarer Identitätsnachweis; kein Merge.",
   "Orphan bewusst belassen (z. B. externe Person / Sonderfall für manuelle Notenmeldung).",
+  "Sammelablehnung: für diese Orphans existieren keine automatischen Merge-Vorschläge; nach Sichtung bewusst nicht zusammengeführt.",
 ];
 
+/** Aufheben einer Zusammenführung */
 export const UNDO_REASON_TEMPLATES: string[] = [
   "Zusammenführung fälschlich durchgeführt – Zuordnung zurückgenommen.",
   "Nach erneuter Prüfung ist die Identität nicht eindeutig – Merge aufgehoben.",
   "Falsches HISinOne-Ziel gewählt – Merge rückgängig gemacht.",
   "Punkte/Antritt sollen wieder unter der ursprünglichen (Antritts-)Matrikel geführt werden.",
+];
+
+/** Aufheben einer Ablehnung (Orphan wieder ungeprüft) */
+export const UNDO_DISMISS_REASON_TEMPLATES: string[] = [
+  "Ablehnung fälschlich gesetzt – Orphan wieder zur Prüfung freigegeben.",
+  "Nach erneuter Prüfung soll der Fall doch zusammengeführt werden können.",
+  "Ablehnung zurückgenommen, um den Fall erneut zu bewerten.",
 ];

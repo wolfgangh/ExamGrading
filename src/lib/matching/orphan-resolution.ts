@@ -1,4 +1,5 @@
 import { buildEnrichedRows } from "@/lib/matching/match";
+import { findMergeCandidates } from "@/lib/matching/merge-candidates";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { isOnlineStyleExam } from "@/lib/types";
 import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
@@ -57,4 +58,21 @@ export function unresolvedOrphanSummary(
   const list = listUnresolvedOrphans(project, rows);
   if (list.length === 0) return "Alle Matrikel-Sonderfälle geprüft";
   return `${list.length} Antritt/Punkte ohne HISinOne noch ungeprüft – bitte unter Zuordnung zusammenführen oder ablehnen`;
+}
+
+/**
+ * Ungeprüfte Orphans ohne automatischen Merge-Vorschlag
+ * (kein Eintrag in findMergeCandidates).
+ */
+export function listUnresolvedOrphansWithoutSuggestion(
+  project: ExamProject,
+  rows?: EnrichedStudentRow[]
+): EnrichedStudentRow[] {
+  const unresolved = listUnresolvedOrphans(project, rows);
+  if (unresolved.length === 0) return [];
+  const all = rows ?? buildEnrichedRows(project);
+  const withSuggestion = new Set(
+    findMergeCandidates(project, all).map((c) => c.orphanKey)
+  );
+  return unresolved.filter((r) => !withSuggestion.has(r.key));
 }

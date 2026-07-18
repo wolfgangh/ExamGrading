@@ -245,6 +245,12 @@ export interface IdentityDismissal {
   reason: string;
   confirmedByNote: string;
   active: boolean;
+  /** true bei Sammelablehnung „ohne Vorschlag“ */
+  bulk?: boolean;
+  /** Undo-Dokumentation */
+  undoneAt?: string;
+  undoReason?: string;
+  undoConfirmedByNote?: string;
 }
 
 export interface ExamProject {

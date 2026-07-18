@@ -7,15 +7,21 @@ import {
   orphanCount,
 } from "@/lib/matching/merge-candidates";
 import { applyIdentityMerge } from "@/lib/matching/apply-identity-merge";
-import { applyIdentityDismissal } from "@/lib/matching/apply-identity-dismissal";
+import {
+  applyIdentityDismissal,
+  applyIdentityDismissalBulk,
+} from "@/lib/matching/apply-identity-dismissal";
 import { revertIdentityMerge } from "@/lib/matching/revert-identity-merge";
+import { revertIdentityDismissal } from "@/lib/matching/revert-identity-dismissal";
 import {
   listUnresolvedOrphans,
+  listUnresolvedOrphansWithoutSuggestion,
   unresolvedOrphanSummary,
 } from "@/lib/matching/orphan-resolution";
 import {
   DISMISS_REASON_TEMPLATES,
   MERGE_REASON_TEMPLATES,
+  UNDO_DISMISS_REASON_TEMPLATES,
   UNDO_REASON_TEMPLATES,
 } from "@/lib/matching/reason-templates";
 import { ReasonField } from "@/components/matching/reason-field";
@@ -49,17 +55,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Ban, GitMerge, ShieldAlert, Undo2 } from "lucide-react";
 
-type DialogMode = "merge" | "dismiss" | "undo";
+type DialogMode = "merge" | "dismiss" | "dismiss-bulk" | "undo-merge" | "undo-dismiss";
 
 export default function MatchingPage() {
   const { project, setProject, rows } = useExamContext();
@@ -67,7 +65,7 @@ export default function MatchingPage() {
   const [dialogMode, setDialogMode] = useState<DialogMode>("merge");
   const [sourceMat, setSourceMat] = useState("");
   const [targetMat, setTargetMat] = useState("");
-  const [mergeId, setMergeId] = useState("");
+  const [recordId, setRecordId] = useState("");
   const [reason, setReason] = useState("");
   const [confirmedNote, setConfirmedNote] = useState(
     `Daten und ${HISINONE_LABEL}-Dokument gesichtet`
@@ -98,6 +96,12 @@ export default function MatchingPage() {
     [project, rows]
   );
 
+  const withoutSuggestion = useMemo(
+    () =>
+      project ? listUnresolvedOrphansWithoutSuggestion(project, rows) : [],
+    [project, rows]
+  );
+
   const hisOptions = useMemo(() => {
     if (!project) return [];
     return flattenHisRows(project)
@@ -113,6 +117,7 @@ export default function MatchingPage() {
   const merges = project?.identityMerges ?? [];
   const dismissals = project?.identityDismissals ?? [];
   const activeMerges = merges.filter((m) => m.active);
+  const activeDismissals = dismissals.filter((d) => d.active);
 
   if (!project) return null;
 
@@ -129,7 +134,7 @@ export default function MatchingPage() {
     setDialogMode("merge");
     setSourceMat(source);
     setTargetMat(target);
-    setMergeId("");
+    setRecordId("");
     resetDialogMeta();
     setDialogOpen(true);
   };
@@ -138,16 +143,37 @@ export default function MatchingPage() {
     setDialogMode("dismiss");
     setSourceMat(source);
     setTargetMat("");
-    setMergeId("");
+    setRecordId("");
     resetDialogMeta();
     setDialogOpen(true);
   };
 
-  const openUndo = (id: string, source: string, target: string) => {
-    setDialogMode("undo");
-    setMergeId(id);
+  const openDismissBulk = () => {
+    setDialogMode("dismiss-bulk");
+    setSourceMat("");
+    setTargetMat("");
+    setRecordId("");
+    resetDialogMeta();
+    setReason(
+      "Sammelablehnung: für diese Orphans existieren keine automatischen Merge-Vorschläge; nach Sichtung bewusst nicht zusammengeführt."
+    );
+    setDialogOpen(true);
+  };
+
+  const openUndoMerge = (id: string, source: string, target: string) => {
+    setDialogMode("undo-merge");
+    setRecordId(id);
     setSourceMat(source);
     setTargetMat(target);
+    resetDialogMeta();
+    setDialogOpen(true);
+  };
+
+  const openUndoDismiss = (id: string, source: string) => {
+    setDialogMode("undo-dismiss");
+    setRecordId(id);
+    setSourceMat(source);
+    setTargetMat("");
     resetDialogMeta();
     setDialogOpen(true);
   };
@@ -188,8 +214,9 @@ export default function MatchingPage() {
       setMessage(
         `Abgelehnt (kein Merge): ${result.dismissal.sourceMatriculation}`
       );
-    } else {
-      const result = revertIdentityMerge(project, mergeId, {
+    } else if (dialogMode === "dismiss-bulk") {
+      const result = applyIdentityDismissalBulk(project, {
+        sourceMatriculations: withoutSuggestion.map((o) => o.key),
         reason,
         confirmedByNote: confirmedNote,
       });
@@ -199,7 +226,33 @@ export default function MatchingPage() {
       }
       setProject(() => result.project);
       setMessage(
-        `Zusammenführung aufgehoben: ${result.merge.sourceMatriculation} ↩︎ (war → ${result.merge.targetMatriculation})`
+        `${result.count} Orphan(s) ohne Vorschlag abgelehnt (Sicherung erneut empfohlen).`
+      );
+    } else if (dialogMode === "undo-merge") {
+      const result = revertIdentityMerge(project, recordId, {
+        reason,
+        confirmedByNote: confirmedNote,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setProject(() => result.project);
+      setMessage(
+        `Zusammenführung aufgehoben: ${result.merge.sourceMatriculation} (Sicherung erneut erforderlich).`
+      );
+    } else {
+      const result = revertIdentityDismissal(project, recordId, {
+        reason,
+        confirmedByNote: confirmedNote,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setProject(() => result.project);
+      setMessage(
+        `Ablehnung aufgehoben: ${result.dismissal.sourceMatriculation} – Orphan wieder ungeprüft (Sicherung erforderlich).`
       );
     }
     setDialogOpen(false);
@@ -212,9 +265,11 @@ export default function MatchingPage() {
   const reasonTemplates =
     dialogMode === "merge"
       ? MERGE_REASON_TEMPLATES
-      : dialogMode === "dismiss"
+      : dialogMode === "dismiss" || dialogMode === "dismiss-bulk"
         ? DISMISS_REASON_TEMPLATES
-        : UNDO_REASON_TEMPLATES;
+        : dialogMode === "undo-merge"
+          ? UNDO_REASON_TEMPLATES
+          : UNDO_DISMISS_REASON_TEMPLATES;
 
   const auditRows = [
     ...merges.map((m) => ({
@@ -224,28 +279,39 @@ export default function MatchingPage() {
       detail: `${m.sourceMatriculation} → ${m.targetMatriculation}`,
       name: `${m.sourceSnapshot.lastName}, ${m.sourceSnapshot.firstName}`,
       reason: m.reason,
-      note: m.confirmedByNote,
       active: m.active,
       undoReason: m.undoReason,
       source: m.sourceMatriculation,
       target: m.targetMatriculation,
-      canUndo: m.active,
+      canUndoMerge: m.active,
+      canUndoDismiss: false,
     })),
     ...dismissals.map((d) => ({
       id: d.id,
       at: d.at,
       kind: "dismiss" as const,
-      detail: d.sourceMatriculation,
+      detail: d.sourceMatriculation + (d.bulk ? " (Sammel)" : ""),
       name: `${d.sourceSnapshot.lastName}, ${d.sourceSnapshot.firstName}`,
       reason: d.reason,
-      note: d.confirmedByNote,
       active: d.active,
-      undoReason: undefined as string | undefined,
+      undoReason: d.undoReason,
       source: d.sourceMatriculation,
       target: "",
-      canUndo: false,
+      canUndoMerge: false,
+      canUndoDismiss: d.active,
     })),
   ].sort((a, b) => b.at.localeCompare(a.at));
+
+  const dialogTitle =
+    dialogMode === "merge"
+      ? "Zusammenführung bestätigen"
+      : dialogMode === "dismiss"
+        ? "Ablehnung bestätigen"
+        : dialogMode === "dismiss-bulk"
+          ? "Sammelablehnung bestätigen"
+          : dialogMode === "undo-merge"
+            ? "Zusammenführung aufheben"
+            : "Ablehnung aufheben";
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
@@ -254,10 +320,9 @@ export default function MatchingPage() {
           Matrikel-Zuordnung
         </h1>
         <p className="text-muted-foreground">
-          THE / elektronische Prüfung: manuelle Zusammenführung bei Tippfehlern
-          in der selbst eingetragenen Matrikelnummer. Nie automatisch – nur nach
-          Sichtung. Offene Fälle blockieren Notenliste und {HISINONE_LABEL}
-          -Export. Merges können dokumentiert aufgehoben werden.
+          THE / elektronische Prüfung: manuelle Zusammenführung bei Tippfehlern.
+          Merges und Ablehnungen können dokumentiert aufgehoben werden – danach
+          ist erneut eine JSON-Sicherung nötig.
         </p>
       </div>
 
@@ -283,8 +348,8 @@ export default function MatchingPage() {
             {unresolvedOrphanSummary(project, rows)}
           </p>
           <p className="mt-1 opacity-95">
-            Notenliste-PDF und {HISINONE_LABEL}-Excel sind gesperrt, bis alle
-            Fälle zusammengeführt oder abgelehnt sind.
+            Notenliste und {HISINONE_LABEL}-Excel sind gesperrt, bis alle Fälle
+            zusammengeführt oder abgelehnt sind.
           </p>
         </div>
       )}
@@ -301,22 +366,20 @@ export default function MatchingPage() {
         </p>
       )}
 
-      {/* Vorschläge – Karten, Buttons nie überlagert */}
+      {/* Vorschläge */}
       <Card className="surface-panel">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Vorschläge</CardTitle>
           <CardDescription>
-            Orphans (Antritt/Punkte ohne {HISINONE_LABEL}) vs. No-Shows.{" "}
             {orphanCount(project) === 0
               ? "Keine Orphans vorhanden."
-              : `${orphans.length} Orphan(s), ${unresolved.length} ungeprüft, ${candidates.length} Vorschlag/Vorschläge.`}
+              : `${orphans.length} Orphan(s), ${unresolved.length} ungeprüft, ${candidates.length} Vorschlag/Vorschläge, ${withoutSuggestion.length} ohne Vorschlag.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {candidates.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Keine automatischen Vorschläge. Unten manuell zuordnen oder
-              ablehnen.
+              Keine automatischen Vorschläge.
             </p>
           ) : (
             candidates.map((c) => (
@@ -463,10 +526,28 @@ export default function MatchingPage() {
               Ungeprüfte Orphans ablehnen
             </CardTitle>
             <CardDescription>
-              Wenn kein Tippfehler vorliegt: Fall dokumentiert schließen.
+              Einzeln oder alle ohne automatischen Merge-Vorschlag.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
+            {withoutSuggestion.length > 0 && (
+              <div className="rounded-lg border border-amber-300/60 bg-amber-50/50 p-3 dark:bg-amber-950/20">
+                <p className="text-sm">
+                  <strong>{withoutSuggestion.length}</strong> Orphan(s) ohne
+                  automatischen Vorschlag
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2"
+                  disabled={!onlineStyle}
+                  onClick={openDismissBulk}
+                >
+                  <Ban className="size-3.5" />
+                  Alle ohne Vorschlag ablehnen
+                </Button>
+              </div>
+            )}
             {unresolved.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Keine ungeprüften Orphans.
@@ -502,157 +583,196 @@ export default function MatchingPage() {
         </Card>
       </div>
 
-      {activeMerges.length > 0 && (
-        <Card className="surface-panel">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              Aktive Zusammenführungen aufheben
-            </CardTitle>
-            <CardDescription>
-              Bei fälschlichem Merge: dokumentiert rückgängig machen (Orphan
-              wird wiederhergestellt).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {activeMerges.map((m) => (
-              <div
-                key={m.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
-              >
-                <div className="min-w-0">
-                  <span className="font-mono text-xs">
-                    {m.sourceMatriculation} → {m.targetMatriculation}
-                  </span>
-                  <div className="text-muted-foreground">
-                    {m.sourceSnapshot.lastName}, {m.sourceSnapshot.firstName}
+      {(activeMerges.length > 0 || activeDismissals.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {activeMerges.length > 0 && (
+            <Card className="surface-panel">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">
+                  Aktive Zusammenführungen
+                </CardTitle>
+                <CardDescription>
+                  Bei fälschlichem Merge dokumentiert aufheben.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {activeMerges.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-mono text-xs">
+                        {m.sourceMatriculation} → {m.targetMatriculation}
+                      </span>
+                      <div className="text-muted-foreground">
+                        {m.sourceSnapshot.lastName},{" "}
+                        {m.sourceSnapshot.firstName}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      disabled={!onlineStyle}
+                      onClick={() =>
+                        openUndoMerge(
+                          m.id,
+                          m.sourceMatriculation,
+                          m.targetMatriculation
+                        )
+                      }
+                    >
+                      <Undo2 className="size-3.5" />
+                      Aufheben
+                    </Button>
                   </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  disabled={!onlineStyle}
-                  onClick={() =>
-                    openUndo(
-                      m.id,
-                      m.sourceMatriculation,
-                      m.targetMatriculation
-                    )
-                  }
-                >
-                  <Undo2 className="size-3.5" />
-                  Aufheben
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {activeDismissals.length > 0 && (
+            <Card className="surface-panel">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Aktive Ablehnungen</CardTitle>
+                <CardDescription>
+                  Ablehnung aufheben → Orphan wieder ungeprüft (Sicherung
+                  nötig).
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {activeDismissals.map((d) => (
+                  <div
+                    key={d.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-mono text-xs">
+                        {d.sourceMatriculation}
+                        {d.bulk ? " · Sammel" : ""}
+                      </span>
+                      <div className="text-muted-foreground">
+                        {d.sourceSnapshot.lastName},{" "}
+                        {d.sourceSnapshot.firstName}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      disabled={!onlineStyle}
+                      onClick={() =>
+                        openUndoDismiss(d.id, d.sourceMatriculation)
+                      }
+                    >
+                      <Undo2 className="size-3.5" />
+                      Aufheben
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
+      {/* Audit – Karten, nichts überdeckt */}
       <Card className="surface-panel">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Dokumentation (Audit)</CardTitle>
           <CardDescription>
-            Zusammenführungen, Ablehnungen und Aufhebungen – in der
-            JSON-Sicherung und der Notenliste-PDF.
+            Zusammenführungen und Ablehnungen – in JSON-Sicherung und
+            Notenliste-PDF.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           {auditRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Noch keine Einträge.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="whitespace-nowrap">Datum</TableHead>
-                    <TableHead>Art</TableHead>
-                    <TableHead>Matrikel</TableHead>
-                    <TableHead className="min-w-[10rem]">Begründung</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="min-w-[7rem]">Aktion</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {auditRows.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="whitespace-nowrap text-xs">
-                        {new Date(m.at).toLocaleString("de-DE")}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            m.kind === "merge" ? "default" : "secondary"
-                          }
-                        >
-                          {m.kind === "merge" ? "Merge" : "Abgelehnt"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {m.detail}
-                        <div className="font-sans text-muted-foreground">
-                          {m.name}
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-xs text-sm">
-                        {m.reason}
-                        {m.undoReason && (
-                          <div className="mt-1 text-xs text-amber-800 dark:text-amber-200">
-                            Aufgehoben: {m.undoReason}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={m.active ? "outline" : "secondary"}>
-                          {m.active
-                            ? "aktiv"
-                            : m.kind === "merge"
-                              ? "aufgehoben"
-                              : "inaktiv"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {m.canUndo && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={!onlineStyle}
-                            onClick={() =>
-                              openUndo(m.id, m.source, m.target)
-                            }
-                          >
-                            <Undo2 className="size-3.5" />
-                            Aufheben
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            auditRows.map((m) => (
+              <div
+                key={m.id}
+                className="rounded-xl border bg-card p-3 text-sm"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <Badge
+                      variant={m.kind === "merge" ? "default" : "secondary"}
+                    >
+                      {m.kind === "merge" ? "Merge" : "Abgelehnt"}
+                    </Badge>
+                    <Badge variant={m.active ? "outline" : "secondary"}>
+                      {m.active
+                        ? "aktiv"
+                        : m.kind === "merge"
+                          ? "aufgehoben"
+                          : "aufgehoben"}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(m.at).toLocaleString("de-DE")}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    {m.canUndoMerge && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!onlineStyle}
+                        onClick={() =>
+                          openUndoMerge(m.id, m.source, m.target)
+                        }
+                      >
+                        <Undo2 className="size-3.5" />
+                        Aufheben
+                      </Button>
+                    )}
+                    {m.canUndoDismiss && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!onlineStyle}
+                        onClick={() => openUndoDismiss(m.id, m.source)}
+                      >
+                        <Undo2 className="size-3.5" />
+                        Aufheben
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="mt-2 font-mono text-xs break-all">{m.detail}</p>
+                <p className="text-muted-foreground">{m.name}</p>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-snug">
+                  {m.reason}
+                </p>
+                {m.undoReason && (
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                    Aufgehoben: {m.undoReason}
+                  </p>
+                )}
+              </div>
+            ))
           )}
         </CardContent>
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {dialogMode === "merge"
-                ? "Zusammenführung bestätigen"
-                : dialogMode === "dismiss"
-                  ? "Ablehnung bestätigen"
-                  : "Zusammenführung aufheben"}
-            </DialogTitle>
+            <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>
-              {dialogMode === "merge"
-                ? `Nur nach klarer Prüfung. Die ${HISINONE_LABEL}-Matrikel bleibt die Identität für Notenmeldung und Export.`
-                : dialogMode === "dismiss"
-                  ? "Dokumentiert, dass kein Merge erfolgen soll."
-                  : "Stellt Antritt/Punkte unter der ursprünglichen Matrikel wieder her. Export kann danach erneut gesperrt sein, bis der Fall geklärt ist."}
+              {dialogMode === "merge" &&
+                `Nur nach klarer Prüfung. Die ${HISINONE_LABEL}-Matrikel bleibt die Identität für den Export.`}
+              {dialogMode === "dismiss" &&
+                "Dokumentiert, dass kein Merge erfolgen soll."}
+              {dialogMode === "dismiss-bulk" &&
+                `${withoutSuggestion.length} Orphan(s) ohne automatischen Vorschlag werden mit derselben Begründung abgelehnt.`}
+              {dialogMode === "undo-merge" &&
+                "Stellt Antritt/Punkte unter der ursprünglichen Matrikel wieder her. Danach Sicherung und erneute Prüfung nötig."}
+              {dialogMode === "undo-dismiss" &&
+                "Orphan wird wieder ungeprüft. Export bleibt bzw. wird gesperrt, bis gelöst und gesichert."}
             </DialogDescription>
           </DialogHeader>
 
@@ -660,7 +780,7 @@ export default function MatchingPage() {
             <div className="grid gap-3 text-sm sm:grid-cols-2">
               <div className="rounded-lg border bg-muted/30 p-3">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">
-                  Orphan (Quelle)
+                  Orphan
                 </p>
                 <p className="font-medium">
                   {orphanRow
@@ -668,14 +788,10 @@ export default function MatchingPage() {
                     : "–"}
                 </p>
                 <p className="font-mono text-xs">{sourceMat}</p>
-                <p className="mt-1 text-xs">
-                  Punkte: {formatPoints(orphanRow?.totalPoints)} · Note:{" "}
-                  {formatGrade(orphanRow?.finalGrade)}
-                </p>
               </div>
               <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">
-                  {HISINONE_LABEL} (Ziel)
+                  {HISINONE_LABEL}
                 </p>
                 <p className="font-medium">
                   {hisRow
@@ -683,32 +799,39 @@ export default function MatchingPage() {
                     : "–"}
                 </p>
                 <p className="font-mono text-xs">{targetMat}</p>
-                <p className="mt-1 text-xs">
-                  Status: {hisRow?.status ?? "–"}
-                </p>
               </div>
             </div>
           )}
 
-          {dialogMode === "dismiss" && (
+          {(dialogMode === "dismiss" || dialogMode === "undo-dismiss") && (
             <div className="rounded-lg border bg-muted/30 p-3 text-sm">
               <p className="font-medium">
                 {orphanRow
                   ? `${orphanRow.student.lastName}, ${orphanRow.student.firstName}`
-                  : "–"}
+                  : sourceMat}
               </p>
               <p className="font-mono text-xs">{sourceMat}</p>
             </div>
           )}
 
-          {dialogMode === "undo" && (
+          {dialogMode === "dismiss-bulk" && (
+            <div className="max-h-40 overflow-auto rounded-lg border bg-muted/30 p-3 text-xs">
+              <ul className="space-y-1">
+                {withoutSuggestion.map((o) => (
+                  <li key={o.key}>
+                    <span className="font-mono">{o.key}</span>
+                    {" · "}
+                    {o.student.lastName}, {o.student.firstName}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {dialogMode === "undo-merge" && (
             <div className="rounded-lg border border-amber-300/50 bg-amber-50/50 p-3 text-sm dark:bg-amber-950/20">
               <p className="font-mono text-xs">
                 {sourceMat} → {targetMat}
-              </p>
-              <p className="mt-1 text-muted-foreground">
-                Nach dem Aufheben gilt die Antritts-Matrikel wieder als Orphan
-                (bis neu zugeordnet).
               </p>
             </div>
           )}
@@ -736,8 +859,8 @@ export default function MatchingPage() {
               onChange={(e) => setReviewed(e.target.checked)}
             />
             <span>
-              Ich habe Antrittsdaten, Punkte und {HISINONE_LABEL}-Dokument
-              verglichen und bestätige diese Entscheidung.
+              Ich habe die relevanten Daten gesichtet und bestätige diese
+              Entscheidung.
             </span>
           </label>
 
@@ -752,19 +875,24 @@ export default function MatchingPage() {
               Abbrechen
             </Button>
             <Button type="button" onClick={doConfirm} disabled={!onlineStyle}>
-              {dialogMode === "merge" && (
+              {(dialogMode === "merge" ||
+                dialogMode === "dismiss" ||
+                dialogMode === "dismiss-bulk") && (
                 <>
-                  <GitMerge className="size-4" />
-                  Zusammenführen
+                  {dialogMode === "merge" ? (
+                    <GitMerge className="size-4" />
+                  ) : (
+                    <Ban className="size-4" />
+                  )}
+                  {dialogMode === "merge"
+                    ? "Zusammenführen"
+                    : dialogMode === "dismiss-bulk"
+                      ? "Sammelablehnung speichern"
+                      : "Ablehnung speichern"}
                 </>
               )}
-              {dialogMode === "dismiss" && (
-                <>
-                  <Ban className="size-4" />
-                  Ablehnung speichern
-                </>
-              )}
-              {dialogMode === "undo" && (
+              {(dialogMode === "undo-merge" ||
+                dialogMode === "undo-dismiss") && (
                 <>
                   <Undo2 className="size-4" />
                   Aufheben bestätigen

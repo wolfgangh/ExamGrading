@@ -102,8 +102,16 @@ export function exportGradesListPdf(
     (m) => !m.active && m.undoneAt
   );
   const dismissals = (project.identityDismissals ?? []).filter((d) => d.active);
+  const undoneDismissals = (project.identityDismissals ?? []).filter(
+    (d) => !d.active && d.undoneAt
+  );
 
-  if (merges.length > 0 || dismissals.length > 0 || undoneMerges.length > 0) {
+  if (
+    merges.length > 0 ||
+    dismissals.length > 0 ||
+    undoneMerges.length > 0 ||
+    undoneDismissals.length > 0
+  ) {
     doc.addPage();
     let ay = PDF_MARGIN + 14;
 
@@ -257,6 +265,45 @@ export function exportGradesListPdf(
           1: { cellWidth: 32 },
           2: { cellWidth: 40 },
           3: { cellWidth: 68 },
+        },
+        margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+      });
+      ay = getLastTableY(doc, ay) + 8;
+    }
+
+    if (undoneDismissals.length > 0) {
+      if (ay > 240) {
+        doc.addPage();
+        ay = PDF_MARGIN + 14;
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(pdfText("D) Ablehnungen aufgehoben"), PDF_MARGIN, ay);
+      ay += 2;
+
+      autoTable(doc, {
+        startY: ay,
+        head: [
+          ["Ablehnung am", "Aufgehoben am", "Matr.", "Begruendung Aufhebung"],
+        ],
+        body: undoneDismissals.map((d) => [
+          pdfText(formatDeDateTime(d.at)),
+          pdfText(d.undoneAt ? formatDeDateTime(d.undoneAt) : "–"),
+          pdfText(d.sourceMatriculation),
+          pdfText(d.undoReason ?? "–"),
+        ]),
+        styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.4 },
+        headStyles: {
+          fillColor: [100, 100, 100],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+          0: { cellWidth: 32 },
+          1: { cellWidth: 32 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 80 },
         },
         margin: { left: PDF_MARGIN, right: PDF_MARGIN },
       });

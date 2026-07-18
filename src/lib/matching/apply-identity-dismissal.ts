@@ -104,3 +104,89 @@ export function applyIdentityDismissal(
     },
   };
 }
+
+export type BulkDismissResult =
+  | {
+      ok: true;
+      project: ExamProject;
+      dismissals: IdentityDismissal[];
+      count: number;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Alle übergebenen Orphans mit derselben Begründung ablehnen.
+ * Typisch: ungeprüfte Orphans ohne Merge-Vorschlag.
+ */
+export function applyIdentityDismissalBulk(
+  project: ExamProject,
+  input: {
+    sourceMatriculations: string[];
+    reason: string;
+    confirmedByNote: string;
+  }
+): BulkDismissResult {
+  const reason = input.reason.trim();
+  const confirmedByNote = input.confirmedByNote.trim();
+  if (reason.length < 8) {
+    return {
+      ok: false,
+      error: "Bitte eine aussagekräftige Begründung angeben (mind. 8 Zeichen).",
+    };
+  }
+  if (confirmedByNote.length < 4) {
+    return {
+      ok: false,
+      error: "Bitte bestätigen, dass die Daten gesichtet wurden.",
+    };
+  }
+  if (!input.sourceMatriculations.length) {
+    return { ok: false, error: "Keine Orphans zum Ablehnen ausgewählt." };
+  }
+
+  let current = project;
+  const created: IdentityDismissal[] = [];
+  for (const mat of input.sourceMatriculations) {
+    const result = applyIdentityDismissal(current, {
+      sourceMatriculation: mat,
+      reason,
+      confirmedByNote,
+    });
+    if (!result.ok) {
+      // bereits abgelehnt/merged: überspringen wenn „bereits“, sonst abbrechen
+      if (
+        result.error.includes("bereits") ||
+        result.error.includes("Kein offener Orphan")
+      ) {
+        continue;
+      }
+      return { ok: false, error: result.error };
+    }
+    current = result.project;
+    created.push({ ...result.dismissal, bulk: true });
+  }
+
+  if (created.length === 0) {
+    return {
+      ok: false,
+      error: "Keine Orphans konnten abgelehnt werden (bereits erledigt?).",
+    };
+  }
+
+  // bulk-Flag auf den gerade erzeugten Einträgen setzen
+  const ids = new Set(created.map((d) => d.id));
+  const identityDismissals = (current.identityDismissals ?? []).map((d) =>
+    ids.has(d.id) ? { ...d, bulk: true } : d
+  );
+
+  return {
+    ok: true,
+    count: created.length,
+    dismissals: created,
+    project: {
+      ...current,
+      identityDismissals,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
