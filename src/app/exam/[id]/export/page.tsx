@@ -88,7 +88,8 @@ export default function ExportPage() {
           >
             Dokumente
           </Link>
-          .
+          . In MS Teams können Downloads blockiert sein – ggf. im Browser
+          öffnen oder den Speichern-Dialog / Link am Seitenende nutzen.
         </p>
       </div>
 

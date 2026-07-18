@@ -7,7 +7,7 @@ import {
   sourcesMissingOriginalTemplate,
 } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
-import { downloadBlob } from "@/lib/utils";
+import { downloadBlob } from "@/lib/download";
 import type {
   EnrichedStudentRow,
   ExamProject,
@@ -205,7 +205,7 @@ async function exportOneSourceFromTemplate(
   });
 
   const fileName = exportFileName(source);
-  downloadBlob(fileName, blob);
+  await downloadBlob(fileName, blob);
 }
 
 function exportFileName(source: HisSource): string {

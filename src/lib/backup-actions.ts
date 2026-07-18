@@ -4,7 +4,7 @@ import {
 } from "@/lib/project-archive";
 import { markProjectBackedUp } from "@/lib/backup-status";
 import type { ExamProject } from "@/lib/types";
-import { downloadJson } from "@/lib/utils";
+import { downloadJson } from "@/lib/download";
 
 /**
  * JSON-Sicherung herunterladen und Projekt als gesichert markieren.
@@ -17,7 +17,11 @@ export function downloadAndMarkBackup(
   ) => void
 ): ExamProject {
   // Aktuellen Stand sichern (inkl. bisheriger Backup-Felder)
-  downloadJson(projectArchiveFilename(project), buildProjectArchive(project));
+  // Download ist async (Teams-Fallback); Markierung sofort, damit Workflow weiterläuft
+  void downloadJson(
+    projectArchiveFilename(project),
+    buildProjectArchive(project)
+  );
   const marked = markProjectBackedUp(project);
   setProject(() => marked);
   return marked;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { LoginScreen } from "@/components/auth/login-screen";
+import { TeamsEmbedBanner } from "@/components/layout/teams-embed-banner";
 import {
   AUTH_CHANGE_EVENT,
   isAuthenticated,
@@ -41,5 +42,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return <LoginScreen onSuccess={refresh} />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <TeamsEmbedBanner />
+      {children}
+    </>
+  );
 }

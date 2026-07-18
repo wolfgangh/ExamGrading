@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EXAM_TYPE_LABELS, type ExamProject } from "@/lib/types";
-import { downloadJson } from "@/lib/utils";
+import { downloadJson } from "@/lib/download";
 import {
   exportExamJson,
   parseExamJson,
@@ -77,7 +77,7 @@ export function ExamList() {
   };
 
   const exportBackup = async (exam: ExamProject) => {
-    downloadJson(projectArchiveFilename(exam), exportExamJson(exam));
+    void downloadJson(projectArchiveFilename(exam), exportExamJson(exam));
     await saveExam(markProjectBackedUp(exam));
     await refresh();
   };

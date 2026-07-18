@@ -1,7 +1,8 @@
 import type { ExamProject, Student } from "@/lib/types";
 import { getHisSources } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
-import { datedExportFilename, downloadBlob } from "@/lib/utils";
+import { downloadBlob } from "@/lib/download";
+import { datedExportFilename } from "@/lib/utils";
 
 const EXTRA_EMPTY_ROWS = 15;
 
@@ -129,7 +130,7 @@ export async function exportPointsTemplate(
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  downloadBlob(
+  await downloadBlob(
     datedExportFilename(
       `Klausur_Punktevorlage_${project.name || "Pruefung"}`,
       "xlsx"

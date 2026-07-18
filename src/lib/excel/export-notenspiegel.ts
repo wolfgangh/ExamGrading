@@ -7,7 +7,8 @@ import type {
   ExamProject,
   ExamStatistics,
 } from "@/lib/types";
-import { datedExportFilename, downloadBlob } from "@/lib/utils";
+import { downloadBlob } from "@/lib/download";
+import { datedExportFilename } from "@/lib/utils";
 
 /**
  * Notenspiegel als Excel (ein Arbeitsblatt: Metadaten, Kennzahlen, Verteilung, Stufen).
@@ -123,7 +124,7 @@ export async function exportNotenspiegelExcel(
   }
 
   const buffer = await wb.xlsx.writeBuffer();
-  downloadBlob(
+  await downloadBlob(
     datedExportFilename(`Notenspiegel_${project.name || "Pruefung"}`, "xlsx"),
     new Blob([buffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

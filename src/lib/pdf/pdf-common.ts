@@ -6,12 +6,8 @@ import type {
   PointsRecord,
 } from "@/lib/types";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
-import {
-  datedExportFilename,
-  downloadBlob,
-  formatGrade,
-  formatPoints,
-} from "@/lib/utils";
+import { downloadBlob } from "@/lib/download";
+import { datedExportFilename, formatGrade, formatPoints } from "@/lib/utils";
 
 export const PDF_MARGIN = 14;
 export const PDF_PAGE_WIDTH = 210;
@@ -236,7 +232,7 @@ export function getLastTableY(doc: jsPDF, fallback: number): number {
 export function savePdf(doc: jsPDF, baseName: string): void {
   addPageNumbers(doc);
   const blob = doc.output("blob");
-  downloadBlob(datedExportFilename(baseName, "pdf"), blob);
+  void downloadBlob(datedExportFilename(baseName, "pdf"), blob);
 }
 
 export function shortStatus(row: {

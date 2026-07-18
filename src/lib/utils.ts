@@ -18,21 +18,12 @@ export function datedExportFilename(base: string, ext = "json"): string {
   return `${d}_${safe}.${cleanExt}`;
 }
 
-export function downloadBlob(filename: string, blob: Blob): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export function downloadJson(filename: string, data: string): void {
-  downloadBlob(
-    filename,
-    new Blob([data], { type: "application/json;charset=utf-8" })
-  );
-}
+/** @deprecated Import aus `@/lib/download` – re-export für Kompatibilität */
+export {
+  downloadBlob,
+  downloadJson,
+  isLikelyTeamsOrIframeEmbed,
+} from "@/lib/download";
 
 export function formatGrade(grade: number | null | undefined): string {
   if (grade == null || Number.isNaN(grade)) return "–";
