@@ -28,8 +28,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import { Lock, LockOpen, RefreshCw } from "lucide-react";
+import { CheckCircle2, Lock, LockOpen, RefreshCw } from "lucide-react";
 import type { PointsRecord } from "@/lib/types";
 import {
   isSubAreaMappingComplete,
@@ -42,6 +48,8 @@ export default function DetailPointsPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [search, setSearch] = useState("");
   const [onlyOpen, setOnlyOpen] = useState(false);
+  /** Accordion value: ["subareas"] open, [] closed */
+  const [subMapOpen, setSubMapOpen] = useState<string[]>(["subareas"]);
 
   // questionDefs aus byQuestion rekonstruieren und einmal persistieren
   useEffect(() => {
@@ -82,6 +90,16 @@ export default function DetailPointsPage() {
     project.points.length > 0 && taskCount === 0;
   const showSubareaMapping = needsSubAreaMapping(effectiveProject);
   const subMapComplete = isSubAreaMappingComplete(effectiveProject);
+
+  // Nach Bestätigung einklappen; bei unvollständiger Zuordnung wieder öffnen
+  useEffect(() => {
+    if (!showSubareaMapping) return;
+    if (subMapComplete) {
+      setSubMapOpen([]);
+    } else {
+      setSubMapOpen(["subareas"]);
+    }
+  }, [showSubareaMapping, subMapComplete, project?.subAreaMappingConfirmedAt]);
 
   const updateQuestionSubAreas = (
     questionIds: string[],
@@ -264,39 +282,52 @@ export default function DetailPointsPage() {
       </div>
 
       {showSubareaMapping && (
-        <Card
+        <Accordion
           className={cn(
-            "surface-panel",
+            "surface-panel rounded-xl border px-3",
             subMapComplete
               ? "border-emerald-400/80 ring-1 ring-emerald-400/30 dark:border-emerald-700"
               : "border-amber-500 ring-2 ring-amber-400/40 dark:border-amber-600"
           )}
+          value={subMapOpen}
+          onValueChange={(v) =>
+            setSubMapOpen(Array.isArray(v) ? (v as string[]) : [])
+          }
         >
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              Zuordnung Teilgebiete
-              <Badge
-                variant="outline"
-                className="ml-2 font-normal"
-              >
-                {taskCount} Aufg. · {effectiveProject.subAreas.length} Gebiete
-              </Badge>
-            </CardTitle>
-            <CardDescription>
-              Pflicht bei mehreren Teilgebieten – steuert Σ-Spalten und
-              Auswertungen. Bitte zuordnen und bestätigen.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <QuestionSubareaMapper
-              project={effectiveProject}
-              questionDefs={ensureQuestionDefs(effectiveProject)}
-              subAreas={effectiveProject.subAreas}
-              onChangeMany={updateQuestionSubAreas}
-              onConfirm={confirmSubAreaMapping}
-            />
-          </CardContent>
-        </Card>
+          <AccordionItem value="subareas" className="border-0">
+            <AccordionTrigger className="py-3 hover:no-underline">
+              <span className="flex flex-wrap items-center gap-2 pr-2 text-left">
+                <span className="font-semibold">Zuordnung Teilgebiete</span>
+                <Badge variant="outline" className="font-normal">
+                  {taskCount} Aufg. · {effectiveProject.subAreas.length} Gebiete
+                </Badge>
+                {subMapComplete ? (
+                  <Badge className="border-transparent bg-emerald-600/15 text-emerald-900 dark:text-emerald-100">
+                    <CheckCircle2 className="mr-1 size-3.5" />
+                    Bestätigt
+                  </Badge>
+                ) : (
+                  <Badge className="border-transparent bg-amber-600/20 text-amber-950 dark:text-amber-50">
+                    Erforderlich
+                  </Badge>
+                )}
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pb-3">
+              <p className="mb-3 text-sm text-muted-foreground">
+                Pflicht bei mehreren Teilgebieten – steuert Σ-Spalten und
+                Auswertungen. Bitte zuordnen und bestätigen.
+              </p>
+              <QuestionSubareaMapper
+                project={effectiveProject}
+                questionDefs={ensureQuestionDefs(effectiveProject)}
+                subAreas={effectiveProject.subAreas}
+                onChangeMany={updateQuestionSubAreas}
+                onConfirm={confirmSubAreaMapping}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       )}
 
       <Card className="surface-panel overflow-hidden">

@@ -12,7 +12,11 @@ import {
   isSubAreaMappingBalanced,
   isSubAreaMappingComplete,
 } from "@/lib/grades/subarea-mapping";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  UNASSIGNED_TILE,
+  subAreaColorAt,
+} from "@/lib/grades/subarea-colors";
+import { ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
 
 export function QuestionSubareaMapper({
   project,
@@ -30,6 +34,12 @@ export function QuestionSubareaMapper({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const ids = useMemo(() => new Set(subAreas.map((s) => s.id)), [subAreas]);
+  const indexById = useMemo(() => {
+    const m = new Map<string, number>();
+    subAreas.forEach((sa, i) => m.set(sa.id, i));
+    return m;
+  }, [subAreas]);
+
   const assigned = isSubAreaMappingAssigned(project);
   const balanced = isSubAreaMappingBalanced(project);
   const complete = isSubAreaMappingComplete(project);
@@ -76,7 +86,7 @@ export function QuestionSubareaMapper({
     setSelected(new Set());
   };
 
-  const saName = (saId: string | undefined) => {
+  const saById = (saId: string | undefined) => {
     if (!saId || !ids.has(saId)) return null;
     return subAreas.find((s) => s.id === saId) ?? null;
   };
@@ -89,8 +99,8 @@ export function QuestionSubareaMapper({
             Aufgaben den Teilgebieten zuordnen
           </Label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Kacheln auswählen (Mehrfach), dann Teilgebiet zuweisen. Steuert
-            Summen je Gebiet (z. B. Finanzierung vs. Investition).
+            Kacheln markieren, dann unten farblich zuweisen. Jedes Teilgebiet
+            hat eine eigene Farbe.
           </p>
         </div>
         <Badge
@@ -115,65 +125,105 @@ export function QuestionSubareaMapper({
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs">
-        {perSa.map(({ subArea, count, maxPoints }) => (
-          <span
-            key={subArea.id}
-            className={cn(
-              "rounded-md border px-2 py-1 tabular-nums",
-              count === 0
-                ? "border-amber-400 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
-                : "border-emerald-200 bg-emerald-50/80 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"
-            )}
-          >
-            {subArea.name}: {count} Aufg. · max {maxPoints} P
-          </span>
-        ))}
+        {perSa.map(({ subArea, count, maxPoints }, i) => {
+          const c = subAreaColorAt(i);
+          return (
+            <span
+              key={subArea.id}
+              className={cn(
+                "rounded-md border px-2 py-1 font-medium tabular-nums",
+                c.solid,
+                count === 0 && "opacity-70 ring-1 ring-amber-400/60"
+              )}
+            >
+              {subArea.name}: {count} Aufg. · max {maxPoints} P
+            </span>
+          );
+        })}
       </div>
 
       {/* Auswahl-Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          Auswahl:
-        </span>
-        <Button type="button" size="sm" variant="ghost" onClick={selectAll}>
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+        <span className="text-xs font-semibold">Auswahl:</span>
+        <Button type="button" size="sm" variant="outline" onClick={selectAll}>
           Alle
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={selectNone}>
+        <Button type="button" size="sm" variant="outline" onClick={selectNone}>
           Keine
         </Button>
         <Button
           type="button"
           size="sm"
-          variant="ghost"
+          variant="outline"
           onClick={selectOpen}
           disabled={unassignedIds.length === 0}
         >
           Nur offene ({unassignedIds.length})
         </Button>
-        <Badge variant="secondary" className="tabular-nums font-normal">
+        <Badge
+          variant="secondary"
+          className={cn(
+            "tabular-nums font-semibold",
+            selectedCount > 0 && "bg-primary text-primary-foreground"
+          )}
+        >
           {selectedCount} markiert
         </Badge>
       </div>
 
-      {/* Bulk-Zuordnung */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          Markierte zuweisen:
-        </span>
-        {subAreas.map((sa) => (
-          <Button
-            key={sa.id}
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={selectedCount === 0}
-            onClick={() => assignSelected(sa.id)}
-          >
-            {selectedCount > 0 ? `${selectedCount} → ` : ""}
-            {sa.name}
-            <span className="ml-1 opacity-70">({sa.code})</span>
-          </Button>
-        ))}
+      {/* Bulk – prominent */}
+      <div
+        className={cn(
+          "rounded-xl border-2 px-4 py-3 shadow-sm",
+          selectedCount > 0
+            ? "border-primary/50 bg-primary/10 dark:bg-primary/15"
+            : "border-dashed border-primary/35 bg-muted/40"
+        )}
+      >
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold tracking-tight">
+            Markierte zuweisen
+            {selectedCount > 0 && (
+              <span className="ml-1.5 font-normal text-muted-foreground">
+                ({selectedCount} Aufgabe{selectedCount === 1 ? "" : "n"})
+              </span>
+            )}
+          </p>
+          {selectedCount === 0 && (
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+              Zuerst Kacheln markieren
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {subAreas.map((sa, i) => {
+            const c = subAreaColorAt(i);
+            return (
+              <Button
+                key={sa.id}
+                type="button"
+                size="default"
+                disabled={selectedCount === 0}
+                className={cn(
+                  "h-10 border-2 font-semibold shadow-sm",
+                  c.solid,
+                  selectedCount === 0 && "opacity-50"
+                )}
+                variant="outline"
+                onClick={() => assignSelected(sa.id)}
+              >
+                {selectedCount > 0 && (
+                  <>
+                    <span className="tabular-nums">{selectedCount}</span>
+                    <ArrowRight className="size-4" />
+                  </>
+                )}
+                {sa.name}
+                <span className="opacity-80">({sa.code})</span>
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Kachel-Raster */}
@@ -184,9 +234,11 @@ export function QuestionSubareaMapper({
         aria-label="Aufgaben zur Teilgebiet-Zuordnung"
       >
         {questionDefs.map((q) => {
-          const sa = saName(q.subAreaId);
+          const sa = saById(q.subAreaId);
           const hasValid = sa != null;
           const isSel = selected.has(q.id);
+          const saIdx = sa ? (indexById.get(sa.id) ?? 0) : -1;
+          const colors = hasValid ? subAreaColorAt(saIdx) : null;
           return (
             <button
               key={q.id}
@@ -195,13 +247,11 @@ export function QuestionSubareaMapper({
               aria-selected={isSel}
               onClick={() => toggle(q.id)}
               className={cn(
-                "flex flex-col items-start gap-0.5 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors",
-                "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                hasValid
-                  ? "border-emerald-300 bg-emerald-50/70 dark:border-emerald-800 dark:bg-emerald-950/30"
-                  : "border-amber-400 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-950/35",
+                "flex flex-col items-start gap-0.5 rounded-lg border-2 px-2.5 py-2 text-left text-sm transition-colors",
+                "hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                hasValid && colors ? colors.tile : UNASSIGNED_TILE,
                 isSel &&
-                  "ring-2 ring-primary ring-offset-1 ring-offset-background"
+                  "ring-2 ring-primary ring-offset-2 ring-offset-background"
               )}
             >
               <span className="w-full truncate font-semibold leading-tight">
@@ -213,13 +263,13 @@ export function QuestionSubareaMapper({
               <Badge
                 variant="outline"
                 className={cn(
-                  "mt-0.5 max-w-full truncate px-1.5 py-0 text-[10px] font-normal",
-                  hasValid
-                    ? "border-emerald-500/40 text-emerald-900 dark:text-emerald-100"
-                    : "border-amber-500/50 text-amber-950 dark:text-amber-100"
+                  "mt-0.5 max-w-full truncate border px-1.5 py-0 text-[10px] font-semibold",
+                  hasValid && colors
+                    ? colors.solid
+                    : "border-amber-500/50 bg-amber-100/80 text-amber-950 dark:text-amber-100"
                 )}
               >
-                {hasValid ? `${sa.code}` : "offen"}
+                {hasValid ? sa.code : "offen"}
               </Badge>
             </button>
           );
@@ -229,9 +279,10 @@ export function QuestionSubareaMapper({
       <div className="flex flex-wrap items-center gap-2 border-t pt-3">
         <Button
           type="button"
-          size="sm"
+          size="default"
           disabled={!canConfirm}
           variant={complete && balanced ? "outline" : "default"}
+          className="font-semibold"
           onClick={onConfirm}
         >
           <CheckCircle2 className="size-4" />
@@ -253,7 +304,7 @@ export function QuestionSubareaMapper({
         )}
         {complete && (
           <p className="text-xs text-emerald-700 dark:text-emerald-300">
-            Gespeichert – Teilgebietssummen sind freigegeben.
+            Gespeichert – Bereich klappt nach Bestätigung ein.
           </p>
         )}
       </div>
