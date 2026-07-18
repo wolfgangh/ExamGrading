@@ -1,59 +1,116 @@
-# ExamGrade – Prüfungsnoten-Tool
+# ExamGrade
 
-Client-seitige Webanwendung zur effizienten Notenvergabe und Dokumentation von Prüfungen (Take-Home-Exams, Klausuren). Ablösung des Excel-Workflows (HIS → Antritt → Punkte → Note → QIS-Upload).
+**Client-seitiges Prüfungsnoten-Tool** für deutsche Hochschulen – von der HISinOne-Masterliste über Antritt und Punkte bis zum formatgetreuen Notenexport.
 
-## Stack
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · *Client-seitig · Keine Serverübertragung*
 
-- Next.js 15 (App Router) + TypeScript
-- Tailwind CSS 4 + shadcn/ui
-- exceljs, TanStack Table, Recharts
-- localforage (IndexedDB) – kein Backend
-- Deutsch, Light-Design (ThesisEval-Optik)
+---
 
-## Lokal starten
+## Was ist ExamGrade?
+
+ExamGrade ersetzt den klassischen Excel-Workflow (HISinOne → Antritt → Punkte → Note → Upload) durch eine geführte Web-Oberfläche im Browser. Alle Prüfungsdaten bleiben **lokal** (IndexedDB); es gibt **keine App-API** und **keine Übertragung von Noten an einen Server**.
+
+Geeignet u. a. für:
+
+- **Take-Home-Exams (THE)** und **elektronische Prüfungen (elektrP)** mit Moodle-Antritt und -Punkten  
+- **Klausuren** mit Punktevorlage und Notenschlüssel  
+- Mehrere HISinOne-Quellen (Studiengänge) in einer Prüfung  
+
+---
+
+## Funktionen
+
+| Bereich | Inhalt |
+|--------|--------|
+| **Prüfungstypen** | THE, elektrP, Klausur, Sonstige |
+| **Import** | HISinOne-Noteneintrag (auch mehrere Dateien), Moodle-Antritt, Moodle-/Punkte-Excel |
+| **Zuordnung** | Matrikel-Tippfehler: Vorschläge, manuell zusammenführen, ablehnen, rückgängig |
+| **Bewertung** | Detailpunkte, offene Aufgaben („Bewertung notwendig“), Teilgebiete |
+| **Noten** | Szenarien (Bestehensgrenzen), Overrides, Notenspiegel mit Diagrammen |
+| **Export** | Formatgetreues HISinOne-XLSX, Notenliste/Änderungen/Manuell/Durchfaller (PDF), Notenspiegel PDF/Excel, JSON-Sicherung |
+| **Workflow** | Fortschrittsanzeige, Meilensteine „Sicherung nach Import/Noten“ |
+| **Teams** | Einbettung als Website-Tab; robuste Downloads (File-Picker / manueller Link) |
+| **Darstellung** | Hell/Dunkel, Schrift, hoher Kontrast |
+
+---
+
+## Schnellstart (lokal)
+
+**Voraussetzungen:** Node.js 20+ (empfohlen), npm.
 
 ```bash
+git clone <repo-url>
+cd grading   # bzw. Projektordner
+cp .env.example .env.local
+# In .env.local: NEXT_PUBLIC_APP_PASSWORD=… setzen
 npm install
 npm run dev
 ```
 
-Öffnen: [http://localhost:3000](http://localhost:3000)
+App öffnen: [http://localhost:3000](http://localhost:3000)
 
-## Workflow
+Beispieldateien: [`sample/`](sample/) (`his-mini.xlsx`, `attendance-mini.xlsx`, `points-mini.xlsx`).
 
-1. **Neue Prüfung** anlegen (Name, P.-Nr., Teilgebiete, max. Punkte, Bestehensgrenze)
-2. **HIS/QIS-Noteneintragsdatei** importieren (Masterliste)
-3. **Antrittsliste** (Moodle) importieren
-4. **Punkte** importieren (Moodle-THE) oder manuell erfassen
-5. Noten prüfen, bei Bedarf Override mit Kommentar
-6. **HIS-Excel exportieren** und in QIS hochladen
-7. Optional: JSON-Backup speichern
+---
 
-## Daten
+## Dokumentation
 
-Alles bleibt im Browser (IndexedDB). JSON-Export/Import für Backup und Austausch.
+| Dokument | Zielgruppe |
+|----------|------------|
+| [**Benutzerhandbuch**](docs/BENUTZERHANDBUCH.md) | Prüferinnen und Prüfer – Workflow, Import, Export, Backup |
+| [**Architektur**](docs/ARCHITEKTUR.md) | Entwicklung – Stack, Module, Datenhaltung |
+| [**Deployment**](docs/DEPLOYMENT.md) | Betrieb – Vercel, Env, Teams, Troubleshooting |
+| [**Security**](SECURITY.md) | Sicherheit – Audit, Auth-Hinweis, Härtung |
+| [**Dokumentations-Index**](docs/README.md) | Übersicht aller Docs |
 
-Die Beispieldatei `2026-07_FRM-Notengebung_THE.xlsx` im Repo-Root dient als Workflow-Referenz (Blätter Definitionen, Antritt, Punkte, Noteneintrag, Durchfaller).
+---
 
-## Build / Deploy
+## App-Passwort (Pflicht)
 
-```bash
-npm run build
-npm start
-```
-
-Deploy auf Vercel: Repository verbinden, Framework Next.js.
-
-### App-Passwort
-
-Die App ist client-seitig passwortgeschützt (sessionStorage, gilt pro Browser-Tab).
+Die Oberfläche ist mit einem **clientseitigen Zugangspasswort** geschützt (`sessionStorage`, pro Browser-Tab).
 
 | Variable | Bedeutung |
 |----------|-----------|
-| `NEXT_PUBLIC_APP_PASSWORD` | Zugangspasswort (Build-Zeit) |
+| `NEXT_PUBLIC_APP_PASSWORD` | Zugangspasswort (wird zur **Build-Zeit** ins Bundle eingebettet) |
 
-- **Pflicht:** Ohne gesetzte Variable schlägt der Production-Build fehl (kein Code-Default).
-- **Lokal:** `.env.local` anlegen (Vorlage: `.env.example`), dann `npm run dev` neu starten.
-- **Vercel:** Settings → Environment Variables → `NEXT_PUBLIC_APP_PASSWORD` setzen (Production + Preview), dann neu deployen.
+- **Pflicht:** Ohne gesetzte Variable schlägt der **Production-/Vercel-Build** fehl (kein Default im Code).  
+- **Lokal:** `.env.local` (Vorlage: [`.env.example`](.env.example)).  
+- **Vercel:** Project → Settings → Environment Variables → Production **und** Preview, dann Redeploy.  
 
-Hinweis: Das Passwort liegt im Client-Bundle und ist **kein** serverseitiger Geheimnisschutz.
+Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Details: [SECURITY.md](SECURITY.md), [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+---
+
+## Scripts
+
+| Befehl | Beschreibung |
+|--------|--------------|
+| `npm run dev` | Entwicklungsserver (Turbopack) |
+| `npm run build` | Production-Build |
+| `npm start` | Build lokal ausliefern |
+| `npm run lint` | ESLint |
+
+---
+
+## Tech-Stack
+
+- **Next.js 15** (App Router) + **React 19** + **TypeScript**  
+- **Tailwind CSS 4** + shadcn/ui (Base UI)  
+- **exceljs**, **jspdf** / jspdf-autotable, **Recharts**, **TanStack Table**  
+- **localforage** (IndexedDB), **Zod** (Import-Validierung)  
+
+---
+
+## Datenschutz (Kurz)
+
+- Keine Serverübertragung von Prüfungsdaten durch die App  
+- Persistenz nur im jeweiligen Browser  
+- JSON-Sicherungen wie vertrauliche Prüfungsunterlagen behandeln  
+- Auf geteilten Rechnern: Browserdaten und Session beachten  
+
+---
+
+## Lizenz & Kontakt
+
+Internes Hochschul-Tool.  
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.1.1
