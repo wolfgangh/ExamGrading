@@ -62,6 +62,12 @@ export function AddStudentForm({
                 (prev.criteria ?? []).map((c) => [c.id, null])
               )
             : undefined,
+        portfolioGrades:
+          prev.examType === "portfolio"
+            ? Object.fromEntries(
+                (prev.portfolioComponents ?? []).map((c) => [c.id, null])
+              )
+            : undefined,
       };
       return {
         ...prev,

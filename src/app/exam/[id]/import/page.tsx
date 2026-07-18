@@ -39,7 +39,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { exportPointsTemplate } from "@/lib/excel/export-points-template";
 import { Download, Trash2 } from "lucide-react";
-import { isStudienarbeitExam } from "@/lib/types";
+import { isHisManualAssessmentExam } from "@/lib/types";
 import { AddStudentForm } from "@/components/exam/add-student-form";
 
 type PreviewState = {
@@ -419,7 +419,7 @@ export default function ImportPage() {
 
   const hisSources = getHisSources(project);
   const isKlausur = project.examType === "written";
-  const isSta = isStudienarbeitExam(project.examType);
+  const isHisManual = isHisManualAssessmentExam(project.examType);
   const canExportTemplate = project.hisRows.length > 0;
 
   const downloadTemplate = async () => {
@@ -432,8 +432,8 @@ export default function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Importe</h1>
         <p className="text-muted-foreground">
-          {isSta
-            ? "Studienarbeit: HISinOne-Masterliste importieren, optional weitere Personen manuell hinzufügen."
+          {isHisManual
+            ? "HISinOne-Masterliste importieren, optional weitere Personen manuell hinzufügen (StA / Portfolio)."
             : isKlausur
               ? "Klausur: HIS-Masterliste, dann Punkte-Vorlage ausfüllen und importieren."
               : "HIS-Masterliste (ggf. mehrere Studiengänge), Antrittsliste und Punkte. Matching über Matrikelnummer / Anmeldename."}
@@ -442,7 +442,7 @@ export default function ImportPage() {
 
       <div
         className={
-          isSta || isKlausur
+          isHisManual || isKlausur
             ? "grid gap-4 md:grid-cols-2"
             : "grid gap-4 md:grid-cols-3"
         }
@@ -488,7 +488,7 @@ export default function ImportPage() {
           )}
         </div>
 
-        {isSta ? (
+        {isHisManual ? (
           <Card className="surface-panel">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">

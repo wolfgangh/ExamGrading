@@ -7,6 +7,10 @@ import {
 } from "@/lib/grades/next-grade";
 import { ensureScenarios, getActiveScenario } from "@/lib/grades/scenarios";
 import { countMissingCriteria } from "@/lib/grades/sta-criteria";
+import {
+  computePortfolioGrade,
+  countMissingPortfolioGrades,
+} from "@/lib/grades/portfolio";
 import { flattenHisRows, getHisSources } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { deriveStudentStatus } from "@/lib/matching/status";
@@ -19,8 +23,9 @@ import type {
   Student,
 } from "@/lib/types";
 import {
+  isHisManualAssessmentExam,
+  isPortfolioExam,
   isStaCriteriaExam,
-  isStudienarbeitExam,
 } from "@/lib/types";
 
 function emptyStudent(mat: string, last = "", first = ""): Student {
@@ -29,6 +34,25 @@ function emptyStudent(mat: string, last = "", first = ""): Student {
     lastName: last,
     firstName: first,
   };
+}
+
+/** Berechnete Note je Prüfungstyp (Portfolio = Teilnoten-Mittel, sonst Punkte) */
+function calculatedGradeForRecord(
+  project: ExamProject,
+  pointsRec: PointsRecord | undefined,
+  totalPoints: number | null,
+  gradeSchema: GradeSchema
+): number | null {
+  if (isPortfolioExam(project.examType)) {
+    return computePortfolioGrade(
+      pointsRec?.portfolioGrades,
+      project.portfolioComponents ?? []
+    );
+  }
+  if (totalPoints != null) {
+    return calculateGrade(totalPoints, gradeSchema);
+  }
+  return null;
 }
 
 function scenarioGradesForPoints(
@@ -184,30 +208,41 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
         ? computeEffectiveTotal(pointsRec, totalOpts)
         : null;
     const gradeOverride = pointsRec?.gradeOverride ?? null;
+    const calculatedGrade = calculatedGradeForRecord(
+      project,
+      pointsRec,
+      totalPoints,
+      gradeSchema
+    );
+    const finalGrade =
+      gradeOverride != null ? gradeOverride : calculatedGrade;
     const hasPoints =
       totalPoints != null ||
-      (isStudienarbeitExam(project.examType) && gradeOverride != null);
+      calculatedGrade != null ||
+      (isHisManualAssessmentExam(project.examType) && gradeOverride != null);
     const needsGradingCount = pointsRec?.needsGrading?.length ?? 0;
     const missingCriteria =
       isStaCriteriaExam(project.examType) && project.criteria?.length
         ? countMissingCriteria(pointsRec?.criterionValues, project.criteria)
         : 0;
-    const hasOpenGrading = needsGradingCount > 0 || missingCriteria > 0;
+    const missingPortfolio =
+      isPortfolioExam(project.examType) &&
+      (project.portfolioComponents?.length ?? 0) > 0
+        ? countMissingPortfolioGrades(
+            pointsRec?.portfolioGrades,
+            project.portfolioComponents ?? []
+          )
+        : 0;
+    const hasOpenGrading =
+      needsGradingCount > 0 || missingCriteria > 0 || missingPortfolio > 0;
     // Punkte retten Antritt (z. B. Moodle-Antritt fehlt, THE aber geschrieben)
     if (hasPoints && attended !== true) {
       attended = true;
     }
-    // Studienarbeit: kein No-Show über Antrittsliste
-    const effectiveAttended = isStudienarbeitExam(project.examType)
+    // StA / Portfolio: kein No-Show über Antrittsliste
+    const effectiveAttended = isHisManualAssessmentExam(project.examType)
       ? true
       : attended;
-
-    const calculatedGrade =
-      totalPoints != null
-        ? calculateGrade(totalPoints, gradeSchema)
-        : null;
-    const finalGrade =
-      gradeOverride != null ? gradeOverride : calculatedGrade;
 
     const status = deriveStudentStatus({
       inHis: true,
@@ -216,18 +251,26 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       finalGrade,
       hasGradeOverride: gradeOverride != null,
       hasOpenGrading,
-      skipNoShow: isStudienarbeitExam(project.examType),
+      skipNoShow: isHisManualAssessmentExam(project.examType),
     });
 
     const warnings: string[] = [];
-    if (totalPoints != null && totalPoints > gradeSchema.maxPoints) {
+    if (
+      !isPortfolioExam(project.examType) &&
+      totalPoints != null &&
+      totalPoints > gradeSchema.maxPoints
+    ) {
       warnings.push("Punkte über Maximum");
     }
     if (totalPoints != null && totalPoints < 0) {
       warnings.push("Negative Punkte");
     }
     if (effectiveAttended === true && !hasPoints) {
-      warnings.push("Angetreten, aber keine Punkte");
+      warnings.push(
+        isPortfolioExam(project.examType)
+          ? "Teilnoten unvollständig"
+          : "Angetreten, aber keine Punkte"
+      );
     }
     if (gradeOverride != null) {
       warnings.push("Note manuell überschrieben");
@@ -240,6 +283,11 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     if (missingCriteria > 0) {
       warnings.push(
         `${missingCriteria} Kriterium/Kriterien ohne Wert – Note noch nicht berechnet`
+      );
+    }
+    if (missingPortfolio > 0) {
+      warnings.push(
+        `${missingPortfolio} Teilleistung(en) ohne Note – Gesamtnote fehlt`
       );
     }
     const multiProgram = (matInSources.get(key) ?? 0) > 1;
@@ -305,11 +353,13 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       pointsRec != null
         ? computeEffectiveTotal(pointsRec, totalOpts)
         : null;
-    const calculatedGrade =
-      totalPoints != null
-        ? calculateGrade(totalPoints, gradeSchema)
-        : null;
     const gradeOverride = pointsRec?.gradeOverride ?? null;
+    const calculatedGrade = calculatedGradeForRecord(
+      project,
+      pointsRec,
+      totalPoints,
+      gradeSchema
+    );
     const finalGrade =
       gradeOverride != null ? gradeOverride : calculatedGrade;
 
@@ -318,7 +368,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       student,
       inHis: false,
       attended: true,
-      hasPoints: totalPoints != null,
+      hasPoints: totalPoints != null || calculatedGrade != null,
       totalPoints,
       percent:
         totalPoints != null && gradeSchema.maxPoints > 0
@@ -359,11 +409,13 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       subAreaPoints[sa.id] = pointsRec.bySubArea[sa.id] ?? null;
     }
     const totalPoints = computeEffectiveTotal(pointsRec, totalOpts);
-    const calculatedGrade =
-      totalPoints != null
-        ? calculateGrade(totalPoints, gradeSchema)
-        : null;
     const gradeOverride = pointsRec.gradeOverride ?? null;
+    const calculatedGrade = calculatedGradeForRecord(
+      project,
+      pointsRec,
+      totalPoints,
+      gradeSchema
+    );
     const finalGrade =
       gradeOverride != null ? gradeOverride : calculatedGrade;
 
@@ -372,7 +424,10 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       student,
       inHis: false,
       attended: true,
-      hasPoints: totalPoints != null || gradeOverride != null,
+      hasPoints:
+        totalPoints != null ||
+        calculatedGrade != null ||
+        gradeOverride != null,
       totalPoints,
       percent:
         totalPoints != null && gradeSchema.maxPoints > 0
@@ -414,19 +469,32 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
         ? computeEffectiveTotal(pointsRec, totalOpts)
         : null;
     const gradeOverride = pointsRec?.gradeOverride ?? null;
-    const calculatedGrade =
-      totalPoints != null
-        ? calculateGrade(totalPoints, gradeSchema)
-        : null;
+    const calculatedGrade = calculatedGradeForRecord(
+      project,
+      pointsRec,
+      totalPoints,
+      gradeSchema
+    );
     const finalGrade =
       gradeOverride != null ? gradeOverride : calculatedGrade;
     const missingCriteria =
       isStaCriteriaExam(project.examType) && project.criteria?.length
         ? countMissingCriteria(pointsRec?.criterionValues, project.criteria)
         : 0;
+    const missingPortfolio =
+      isPortfolioExam(project.examType) &&
+      (project.portfolioComponents?.length ?? 0) > 0
+        ? countMissingPortfolioGrades(
+            pointsRec?.portfolioGrades,
+            project.portfolioComponents ?? []
+          )
+        : 0;
     const warnings = ["Manuell hinzugefügt – nicht in HISinOne-Masterliste"];
     if (missingCriteria > 0) {
       warnings.push(`${missingCriteria} Kriterium/Kriterien ohne Wert`);
+    }
+    if (missingPortfolio > 0) {
+      warnings.push(`${missingPortfolio} Teilleistung(en) ohne Note`);
     }
 
     rows.push({
@@ -434,7 +502,10 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       student: stored,
       inHis: false,
       attended: true,
-      hasPoints: totalPoints != null || gradeOverride != null,
+      hasPoints:
+        totalPoints != null ||
+        calculatedGrade != null ||
+        gradeOverride != null,
       totalPoints,
       percent:
         totalPoints != null && gradeSchema.maxPoints > 0
@@ -445,10 +516,13 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       status: deriveStudentStatus({
         inHis: false,
         attended: true,
-        hasPoints: totalPoints != null || gradeOverride != null,
+        hasPoints:
+          totalPoints != null ||
+          calculatedGrade != null ||
+          gradeOverride != null,
         finalGrade,
         hasGradeOverride: gradeOverride != null,
-        hasOpenGrading: missingCriteria > 0,
+        hasOpenGrading: missingCriteria > 0 || missingPortfolio > 0,
         skipNoShow: true,
       }),
       warnings,

@@ -7,11 +7,12 @@ import {
   type CatalogSubArea,
 } from "@/lib/exam-catalog";
 import {
-  isStudienarbeitExam,
+  isHisManualAssessmentExam,
   type ExamProject,
   type ExamType,
   type SubArea,
 } from "@/lib/types";
+import { defaultPortfolioComponents } from "@/lib/grades/portfolio";
 
 export interface CreateExamInput {
   name: string;
@@ -38,10 +39,10 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
   const displayName = resolveExamDisplayName(input.name);
 
   const examType = input.examType ?? "the";
-  const isSta = isStudienarbeitExam(examType);
+  const isHisManual = isHisManualAssessmentExam(examType);
 
   let subAreas: SubArea[];
-  if (isSta) {
+  if (isHisManual) {
     subAreas = toSubAreas([
       { name: "Gesamt", code: "G", maxPoints: input.maxPoints ?? 100 },
     ]);
@@ -52,7 +53,7 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
   }
 
   const sumMax = subAreas.reduce((s, sa) => s + sa.maxPoints, 0);
-  const maxPoints = isSta
+  const maxPoints = isHisManual
     ? input.maxPoints ?? 100
     : sumMax || input.maxPoints || 90;
   const scenarios = createDefaultScenarios(maxPoints);
@@ -79,6 +80,8 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     identityDismissals: [],
     importLogs: [],
     criteria: examType === "sta_criteria" ? [] : undefined,
+    portfolioComponents:
+      examType === "portfolio" ? defaultPortfolioComponents(createId) : undefined,
   };
 }
 

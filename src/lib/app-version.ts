@@ -3,7 +3,7 @@
  * Wird im Footer und ggf. in Exporten angezeigt.
  */
 export const APP_NAME = "ExamGrade";
-export const APP_VERSION = "0.3.0";
+export const APP_VERSION = "0.3.1";
 export const APP_COPYRIGHT = "Prof. Dr. Wolfgang Hößl";
 
 export function appVersionLabel(): string {

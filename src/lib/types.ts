@@ -7,6 +7,7 @@ export type MatriculationKey = string;
  * (elektrP = Ablauf wie THE, Prüfung vor Ort an der Hochschule)
  * sta_criteria: Studienarbeit mit gewichteten Kriterien
  * sta_manual: Studienarbeit mit manueller Note
+ * portfolio: Portfolioprüfung – Teilnoten → gewichtete Gesamtnote
  */
 export type ExamType =
   | "the"
@@ -14,6 +15,7 @@ export type ExamType =
   | "written"
   | "sta_criteria"
   | "sta_manual"
+  | "portfolio"
   | "other";
 
 /** Skala eines Bewertungskriteriums (Studienarbeit) */
@@ -29,6 +31,15 @@ export interface AssessmentCriterion {
   scale: CriterionScale;
   /** Bei scale === "points" */
   maxPoints?: number;
+}
+
+/** Teilleistung einer Portfolioprüfung (immer Note) */
+export interface PortfolioComponent {
+  id: string;
+  name: string;
+  code: string;
+  /** Relatives Gewicht (z. B. 1 und 1 = je 50 %) */
+  weight: number;
 }
 
 export type StudentStatus =
@@ -137,6 +148,8 @@ export interface PointsRecord {
    * Einheit = scale des jeweiligen AssessmentCriterion.
    */
   criterionValues?: Record<string, number | null>;
+  /** Teilnoten je Portfolio-Teilleistung (1,0–5,0) */
+  portfolioGrades?: Record<string, number | null>;
 }
 
 export interface HISTemplateRow {
@@ -318,6 +331,8 @@ export interface ExamProject {
   subAreaMappingConfirmedAt?: string;
   /** Bewertungskriterien (Studienarbeit sta_criteria) */
   criteria?: AssessmentCriterion[];
+  /** Teilleistungen (Portfolioprüfung) */
+  portfolioComponents?: PortfolioComponent[];
 
   /**
    * Dokumentierte manuelle Matrikel-Zusammenführungen (THE/elektrP).
@@ -450,6 +465,7 @@ export const EXAM_TYPE_LABELS: Record<ExamType, string> = {
   written: "Klausur",
   sta_criteria: "Studienarbeit (StA) – Kriterien",
   sta_manual: "Studienarbeit (StA) – manuelle Note",
+  portfolio: "Portfolioprüfung",
   other: "Sonstige",
 };
 
@@ -476,11 +492,20 @@ export function isStaManualExam(examType: ExamType): boolean {
   return examType === "sta_manual";
 }
 
+export function isPortfolioExam(examType: ExamType): boolean {
+  return examType === "portfolio";
+}
+
+/** StA oder Portfolio: HIS + manuelle Personen, kein Antritt/Matching */
+export function isHisManualAssessmentExam(examType: ExamType): boolean {
+  return isStudienarbeitExam(examType) || isPortfolioExam(examType);
+}
+
 /** Kein Moodle-Antritt / keine Matrikel-Zuordnung */
 export function isHisOnlyImportExam(examType: ExamType): boolean {
   return (
     examType === "written" ||
-    isStudienarbeitExam(examType) ||
+    isHisManualAssessmentExam(examType) ||
     examType === "other"
   );
 }

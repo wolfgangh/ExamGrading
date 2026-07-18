@@ -25,14 +25,16 @@ import {
 } from "@/lib/grades/subarea-mapping";
 import {
   HISINONE_LABEL,
+  isHisManualAssessmentExam,
   isOnlineStyleExam,
+  isPortfolioExam,
   isStaCriteriaExam,
   isStaManualExam,
-  isStudienarbeitExam,
   type EnrichedStudentRow,
   type ExamProject,
   type ExamStatistics,
 } from "@/lib/types";
+
 export type WorkflowStep = {
   id: string;
   done: boolean;
@@ -82,8 +84,8 @@ export function buildWorkflowSteps(
   examId: string
 ): WorkflowStep[] {
   const isKlausur = project.examType === "written";
-  const isSta = isStudienarbeitExam(project.examType);
-  const skipAttendance = isKlausur || isSta;
+  const isHisManual = isHisManualAssessmentExam(project.examType);
+  const skipAttendance = isKlausur || isHisManual;
   const onlineStyle = isOnlineStyleExam(project.examType);
   const openGrading = hasOpenGrading(project);
   const openGradingCount = countOpenGradingTasks(project);
@@ -120,10 +122,17 @@ export function buildWorkflowSteps(
     hisInRows.every(
       (r) => r.finalGrade != null && (r.gradeOverride != null || r.hasPoints)
     );
-  const pointsDone = isSta
+  const portfolioReady =
+    isPortfolioExam(project.examType) &&
+    (project.portfolioComponents?.length ?? 0) > 0 &&
+    hisInRows.length > 0 &&
+    hisInRows.every((r) => r.finalGrade != null && r.status === "export_ready");
+  const pointsDone = isHisManual
     ? isStaCriteriaExam(project.examType)
       ? staCriteriaReady
-      : staManualReady
+      : isPortfolioExam(project.examType)
+        ? portfolioReady
+        : staManualReady
     : project.points.length > 0 &&
       !openGrading &&
       (!subMapNeeded || subMapOk);
@@ -188,7 +197,7 @@ export function buildWorkflowSteps(
       label: "Sicherung nach Import",
       href: `/exam/${examId}/export?stage=import#sicherung`,
       detail: !importsOk
-        ? isSta || isKlausur
+        ? isHisManual || isKlausur
           ? `Zuerst ${HISINONE_LABEL}-Masterliste importieren`
           : `Zuerst alle XLSX importieren (${HISINONE_LABEL}, Antritt, Punkte)`
         : importBackupDone
@@ -236,49 +245,76 @@ export function buildWorkflowSteps(
                   : "Bewerten",
             } satisfies WorkflowStep,
           ]
-        : [
-            {
-              id: "points",
-              done: pointsDone,
-              label: isKlausur ? "Punkte (Vorlage)" : "Punkte & Bewertung",
-              href:
-                openGrading || (subMapNeeded && !subMapOk)
-                  ? `/exam/${examId}/detail-points`
-                  : `/exam/${examId}/import?focus=points`,
-              detail:
-                project.points.length === 0
-                  ? isKlausur
-                    ? "Vorlage exportieren & importieren"
-                    : "Noch keine Punkte importiert"
-                  : openGrading
-                    ? openGradingSummary(project)
-                    : subMapNeeded && !subMapOk
-                      ? subAreaMappingSummary(project)
-                      : `${project.points.length} mit Punkten · alle Aufgaben bewertet`,
-              critical: openGrading || (subMapNeeded && !subMapOk),
-              actionLabel: openGrading
-                ? "Jetzt bewerten"
-                : subMapNeeded && !subMapOk
-                  ? "Teilgebiete zuordnen"
-                  : project.points.length > 0
-                    ? "Öffnen"
-                    : "Importieren",
-            } satisfies WorkflowStep,
-          ]),
+        : isPortfolioExam(project.examType)
+          ? [
+              {
+                id: "points",
+                done: pointsDone,
+                label: "Teilnoten (Portfolio)",
+                href:
+                  (project.portfolioComponents?.length ?? 0) === 0
+                    ? `/exam/${examId}/settings`
+                    : `/exam/${examId}/assessment`,
+                detail:
+                  (project.portfolioComponents?.length ?? 0) === 0
+                    ? "Zuerst Teilleistungen unter Einstellungen festlegen"
+                    : pointsDone
+                      ? "Alle Teilnoten vergeben"
+                      : `${project.portfolioComponents?.length ?? 0} Teilleistungen – Noten eintragen`,
+                critical: importsOk && !pointsDone,
+                actionLabel:
+                  (project.portfolioComponents?.length ?? 0) === 0
+                    ? "Teilleistungen"
+                    : "Teilnoten",
+              } satisfies WorkflowStep,
+            ]
+          : [
+              {
+                id: "points",
+                done: pointsDone,
+                label: isKlausur ? "Punkte (Vorlage)" : "Punkte & Bewertung",
+                href:
+                  openGrading || (subMapNeeded && !subMapOk)
+                    ? `/exam/${examId}/detail-points`
+                    : `/exam/${examId}/import?focus=points`,
+                detail:
+                  project.points.length === 0
+                    ? isKlausur
+                      ? "Vorlage exportieren & importieren"
+                      : "Noch keine Punkte importiert"
+                    : openGrading
+                      ? openGradingSummary(project)
+                      : subMapNeeded && !subMapOk
+                        ? subAreaMappingSummary(project)
+                        : `${project.points.length} mit Punkten · alle Aufgaben bewertet`,
+                critical: openGrading || (subMapNeeded && !subMapOk),
+                actionLabel: openGrading
+                  ? "Jetzt bewerten"
+                  : subMapNeeded && !subMapOk
+                    ? "Teilgebiete zuordnen"
+                    : project.points.length > 0
+                      ? "Öffnen"
+                      : "Importieren",
+              } satisfies WorkflowStep,
+            ]),
     {
       id: "grades",
-      done: gradesOk && (!subMapNeeded || subMapOk) && (!isSta || pointsDone),
+      done:
+        gradesOk &&
+        (!subMapNeeded || subMapOk) &&
+        (!isHisManual || pointsDone),
       label: isStaManualExam(project.examType)
         ? "Notenübersicht"
         : "Noten berechnet",
-      href: isStaCriteriaExam(project.examType)
-        ? `/exam/${examId}/assessment`
-        : isStaManualExam(project.examType)
-          ? `/exam/${examId}/grades`
-          : openGrading || (subMapNeeded && !subMapOk)
-            ? `/exam/${examId}/detail-points`
-            : `/exam/${examId}/grades`,
-      detail: isSta
+      href:
+        isStaCriteriaExam(project.examType) || isPortfolioExam(project.examType)
+          ? `/exam/${examId}/assessment`
+          : isStaManualExam(project.examType)
+            ? `/exam/${examId}/grades`
+            : openGrading || (subMapNeeded && !subMapOk)
+              ? `/exam/${examId}/detail-points`
+              : `/exam/${examId}/grades`,
+      detail: isHisManual
         ? pointsDone
           ? `${stats.graded} Noten vorhanden`
           : "Bewertung noch unvollständig"
@@ -290,9 +326,9 @@ export function buildWorkflowSteps(
               ? `${stats.graded} Noten vorhanden`
               : "Noch keine Noten",
       critical:
-        (!isSta && (openGrading || (subMapNeeded && !subMapOk))) ||
-        (isSta && importsOk && !pointsDone),
-      actionLabel: isSta
+        (!isHisManual && (openGrading || (subMapNeeded && !subMapOk))) ||
+        (isHisManual && importsOk && !pointsDone),
+      actionLabel: isHisManual
         ? pointsDone
           ? "Zur Notenübersicht"
           : "Bewertung fortsetzen"

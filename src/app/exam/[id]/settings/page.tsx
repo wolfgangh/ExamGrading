@@ -6,14 +6,17 @@ import type {
   AssessmentCriterion,
   CriterionScale,
   ExamType,
+  PortfolioComponent,
   SubArea,
 } from "@/lib/types";
 import {
   EXAM_TYPE_LABELS,
+  isHisManualAssessmentExam,
+  isPortfolioExam,
   isStaCriteriaExam,
   isStaManualExam,
-  isStudienarbeitExam,
 } from "@/lib/types";
+import { defaultPortfolioComponents } from "@/lib/grades/portfolio";
 import { formatGrade } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
@@ -59,8 +62,9 @@ export default function SettingsPage() {
   if (!project) return null;
 
   const gradingLocked = hasOpenGrading(project);
-  const isSta = isStudienarbeitExam(project.examType);
+  const isHisManual = isHisManualAssessmentExam(project.examType);
   const isStaCrit = isStaCriteriaExam(project.examType);
+  const isPortfolio = isPortfolioExam(project.examType);
 
   const updateMeta = <K extends keyof typeof project>(
     key: K,
@@ -71,8 +75,26 @@ export default function SettingsPage() {
       if (key === "examType" && value === "sta_criteria") {
         next.criteria = next.criteria ?? [];
       }
+      if (key === "examType" && value === "portfolio") {
+        next.portfolioComponents =
+          next.portfolioComponents?.length
+            ? next.portfolioComponents
+            : defaultPortfolioComponents(createId);
+      }
       return next;
     });
+  };
+
+  const updatePortfolioComponent = (
+    cid: string,
+    patch: Partial<PortfolioComponent>
+  ) => {
+    setProject((prev) => ({
+      ...prev,
+      portfolioComponents: (prev.portfolioComponents ?? []).map((c) =>
+        c.id === cid ? { ...c, ...patch } : c
+      ),
+    }));
   };
 
   const updateCriterion = (
@@ -335,7 +357,120 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {!isSta && (
+      {isPortfolio && (
+        <Card className="surface-panel">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">
+                Teilleistungen (Portfolio)
+              </CardTitle>
+              <CardDescription>
+                Standard: zwei Teilleistungen mit gleichem Gewicht. Namen und
+                Gewichte anpassen; Gesamtnote = gewichteter Mittelwert der
+                Teilnoten (nächste deutsche Note).
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setProject((prev) => ({
+                  ...prev,
+                  portfolioComponents: [
+                    ...(prev.portfolioComponents ??
+                      defaultPortfolioComponents(createId)),
+                    {
+                      id: createId("pc"),
+                      name: `Teilleistung ${(prev.portfolioComponents?.length ?? 0) + 1}`,
+                      code: `TL${(prev.portfolioComponents?.length ?? 0) + 1}`,
+                      weight: 1,
+                    },
+                  ],
+                }))
+              }
+            >
+              <Plus className="size-4" />
+              Teilleistung
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {(project.portfolioComponents ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine Teilleistungen – bitte hinzufügen.
+              </p>
+            ) : (
+              (project.portfolioComponents ?? []).map((c) => (
+                <div
+                  key={c.id}
+                  className="grid grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_5rem_5rem_auto]"
+                >
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Bezeichnung</Label>
+                    <Input
+                      value={c.name}
+                      onChange={(e) =>
+                        updatePortfolioComponent(c.id, {
+                          name: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Kürzel</Label>
+                    <Input
+                      value={c.code}
+                      onChange={(e) =>
+                        updatePortfolioComponent(c.id, {
+                          code: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Gewicht</Label>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      value={c.weight}
+                      onChange={(e) =>
+                        updatePortfolioComponent(c.id, {
+                          weight: Number(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="self-end"
+                    disabled={(project.portfolioComponents?.length ?? 0) <= 1}
+                    onClick={() =>
+                      setProject((prev) => ({
+                        ...prev,
+                        portfolioComponents: (
+                          prev.portfolioComponents ?? []
+                        ).filter((x) => x.id !== c.id),
+                      }))
+                    }
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))
+            )}
+            <Link
+              href={`/exam/${id}/assessment`}
+              className={cn(
+                buttonVariants({ variant: "secondary", size: "sm" })
+              )}
+            >
+              Zu den Teilnoten
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isHisManual && (
       <Card className="surface-panel">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -421,7 +556,7 @@ export default function SettingsPage() {
       </Card>
       )}
 
-      {!isStaManualExam(project.examType) && (
+      {!isStaManualExam(project.examType) && !isPortfolio && (
       <Card className="surface-panel">
         <CardHeader>
           <CardTitle className="text-base">Notenszenarien</CardTitle>

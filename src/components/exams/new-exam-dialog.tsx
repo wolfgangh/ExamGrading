@@ -251,6 +251,9 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
                   <SelectItem value="sta_manual">
                     {EXAM_TYPE_LABELS.sta_manual}
                   </SelectItem>
+                  <SelectItem value="portfolio">
+                    {EXAM_TYPE_LABELS.portfolio}
+                  </SelectItem>
                   <SelectItem value="other">
                     {EXAM_TYPE_LABELS.other}
                   </SelectItem>

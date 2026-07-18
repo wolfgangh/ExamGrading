@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   isOnlineStyleExam,
+  isPortfolioExam,
   isStaCriteriaExam,
   isStaManualExam,
   type ExamType,
@@ -53,6 +54,12 @@ function buildNav(examType?: ExamType): NavItem[] {
       label: "Kriterienbewertung",
       icon: ClipboardList,
     });
+  } else if (examType && isPortfolioExam(examType)) {
+    items.push({
+      href: "assessment",
+      label: "Teilnoten",
+      icon: ClipboardList,
+    });
   } else if (!(examType && isStaManualExam(examType))) {
     items.push({ href: "points", label: "Punkteerfassung", icon: PenLine });
     items.push({
@@ -64,7 +71,9 @@ function buildNav(examType?: ExamType): NavItem[] {
 
   items.push({ href: "grades", label: "Notenübersicht", icon: Table2 });
 
-  if (!(examType && isStaManualExam(examType))) {
+  if (
+    !(examType && (isStaManualExam(examType) || isPortfolioExam(examType)))
+  ) {
     items.push({ href: "scenarios", label: "Notenszenarien", icon: Layers });
   }
 

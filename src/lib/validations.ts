@@ -18,10 +18,12 @@ import {
   subAreaMappingIssues,
 } from "@/lib/grades/subarea-mapping";
 import {
+  isPortfolioExam,
   isStaCriteriaExam,
   isStaManualExam,
 } from "@/lib/types";
 import { countMissingCriteria } from "@/lib/grades/sta-criteria";
+import { countMissingPortfolioGrades } from "@/lib/grades/portfolio";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 
 export interface ValidationItem {
@@ -117,6 +119,36 @@ export function validateForExport(
         message: `Manuelle Note fehlt bei ${missingGrade.length} Person(en) in HISinOne.`,
         count: missingGrade.length,
       });
+    }
+  }
+
+  if (isPortfolioExam(project.examType)) {
+    if (!(project.portfolioComponents?.length)) {
+      items.push({
+        level: "error",
+        message:
+          "Keine Teilleistungen definiert – unter Einstellungen anlegen (Standard: 2).",
+      });
+    } else {
+      const incomplete = rows.filter((r) => {
+        if (!r.inHis) return false;
+        const rec = project.points.find(
+          (p) => normalizeMatriculation(p.matriculationNumber) === r.key
+        );
+        return (
+          countMissingPortfolioGrades(
+            rec?.portfolioGrades,
+            project.portfolioComponents ?? []
+          ) > 0
+        );
+      });
+      if (incomplete.length > 0) {
+        items.push({
+          level: "error",
+          message: `Teilnoten unvollständig bei ${incomplete.length} Person(en) in HISinOne.`,
+          count: incomplete.length,
+        });
+      }
     }
   }
 

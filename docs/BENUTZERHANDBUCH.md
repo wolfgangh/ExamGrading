@@ -33,9 +33,12 @@ Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (kein
 | **Klausur** | HISinOne → Punkte (Vorlage/Import) → Noten → Export (kein Moodle-Antritt) |
 | **Studienarbeit (StA) – Kriterien** | HISinOne → Kriterien definieren → Werte (%, Punkte oder Note) mit Gewichten → Note → Export |
 | **Studienarbeit (StA) – manuelle Note** | HISinOne → Note manuell je Person → Export |
+| **Portfolioprüfung** | HISinOne → Teilleistungen (Standard: 2) benennen/gewichten → Teilnoten → gewichtete Gesamtnote → Export |
 | **Sonstige** | flexibel, je nach konfiguriertem Ablauf |
 
-Bei beiden StA-Typen können weitere Personen **manuell** unter Importe hinzugefügt werden (ohne HISinOne nur über die manuelle Notenmeldung exportierbar).
+Bei StA und Portfolioprüfung können weitere Personen **manuell** unter Importe hinzugefügt werden (ohne HISinOne nur über die manuelle Notenmeldung exportierbar).
+
+**Portfolioprüfung:** Gesamtnote = gewichteter Mittelwert der Teilnoten, gerundet auf die nächste deutsche Note (1,0 / 1,3 / … / 5,0).
 
 ---
 
