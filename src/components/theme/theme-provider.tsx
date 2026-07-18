@@ -12,20 +12,24 @@ import {
 import {
   applyAppearanceToDocument,
   DEFAULT_APPEARANCE,
+  nextFontScale,
   readAppearance,
   writeAppearance,
   type AppearancePreferences,
   type ColorMode,
   type FontFamily,
+  type FontScale,
 } from "@/lib/preferences";
 
 interface ThemeContextValue extends AppearancePreferences {
   ready: boolean;
   setColorMode: (mode: ColorMode) => void;
   setFontFamily: (font: FontFamily) => void;
+  setFontScale: (scale: FontScale) => void;
   setHighContrast: (on: boolean) => void;
   toggleColorMode: () => void;
   toggleHighContrast: () => void;
+  cycleFontScale: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -54,6 +58,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       ready,
       setColorMode: (colorMode) => update({ ...prefs, colorMode }),
       setFontFamily: (fontFamily) => update({ ...prefs, fontFamily }),
+      setFontScale: (fontScale) => update({ ...prefs, fontScale }),
       setHighContrast: (highContrast) => update({ ...prefs, highContrast }),
       toggleColorMode: () =>
         update({
@@ -62,6 +67,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         }),
       toggleHighContrast: () =>
         update({ ...prefs, highContrast: !prefs.highContrast }),
+      cycleFontScale: () =>
+        update({ ...prefs, fontScale: nextFontScale(prefs.fontScale) }),
     }),
     [prefs, ready, update]
   );

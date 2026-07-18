@@ -30,7 +30,7 @@ Geeignet u. a. für:
 | **Export** | Formatgetreues HISinOne-XLSX, Notenliste/Änderungen/Manuell/Durchfaller (PDF), Notenspiegel PDF/Excel, JSON-Sicherung |
 | **Workflow** | Fortschrittsanzeige, Meilensteine „Sicherung nach Import/Noten“ |
 | **Teams** | Einbettung als Website-Tab; robuste Downloads (File-Picker / manueller Link) |
-| **Darstellung** | Hell/Dunkel, Schrift, hoher Kontrast |
+| **Darstellung** | Hell/Dunkel, Schriftgröße (3 Stufen), hoher Kontrast |
 
 ---
 
@@ -113,4 +113,4 @@ Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Deta
 ## Lizenz & Kontakt
 
 Internes Hochschul-Tool.  
-© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.3.7
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.3.8

@@ -165,7 +165,7 @@ Export ist gesperrt, solange Validierungsfehler bestehen (u. a. offene Bewertu
 ## 10. Einstellungen und Darstellung
 
 - **Einstellungen** der Prüfung: Metadaten, Typ, Teilgebiete (je nach Stand).  
-- **Darstellung** (Header): Hell/Dunkel, Schriftart, hoher Kontrast – lokal gespeichert.
+- **Darstellung** (Header): Hell/Dunkel, **Schriftgröße** (Standard / Groß / Sehr groß, Zyklus-Button „A“), hoher Kontrast – lokal im Browser gespeichert.
 
 ---
 

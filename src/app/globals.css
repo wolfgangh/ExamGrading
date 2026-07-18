@@ -50,7 +50,7 @@
 }
 
 :root {
-  /* Etwas größere Basis für akademische Lesbarkeit */
+  /* Etwas größere Basis für akademische Lesbarkeit (md); lg/xl via data-font-scale */
   --app-font-size: 17px;
   /* next/font setzt --font-source-* auf html; hier mit System-Fallbacks */
   --font-active-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
@@ -146,6 +146,19 @@ html.font-serif {
 
 html.font-sans {
   --font-active: var(--font-active-sans);
+}
+
+/* Schriftgröße: Standard (md) + 2 größere Stufen */
+html[data-font-scale="md"] {
+  --app-font-size: 17px;
+}
+
+html[data-font-scale="lg"] {
+  --app-font-size: 19px;
+}
+
+html[data-font-scale="xl"] {
+  --app-font-size: 22px;
 }
 
 @layer base {
