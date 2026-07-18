@@ -47,7 +47,9 @@ export default function ExportPage() {
   const backupStale = isBackupStale(project);
 
   const doProjectBackup = () => {
-    downloadAndMarkBackup(project, setProject);
+    downloadAndMarkBackup(project, setProject, {
+      gradedCount: stats.graded,
+    });
     setMessage(
       `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}). Bitte neben den Klausurdateien ablegen. Notenliste und ${HISINONE_LABEL}-Export sind freigeschaltet (sofern keine weiteren Sperren).`
     );

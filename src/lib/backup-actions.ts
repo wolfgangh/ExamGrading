@@ -14,7 +14,8 @@ export function downloadAndMarkBackup(
   project: ExamProject,
   setProject: (
     updater: ExamProject | ((prev: ExamProject) => ExamProject)
-  ) => void
+  ) => void,
+  options?: { gradedCount?: number }
 ): ExamProject {
   // Aktuellen Stand sichern (inkl. bisheriger Backup-Felder)
   // Download ist async (Teams-Fallback); Markierung sofort, damit Workflow weiterläuft
@@ -22,7 +23,9 @@ export function downloadAndMarkBackup(
     projectArchiveFilename(project),
     buildProjectArchive(project)
   );
-  const marked = markProjectBackedUp(project);
+  const marked = markProjectBackedUp(project, {
+    gradedCount: options?.gradedCount,
+  });
   setProject(() => marked);
   return marked;
 }

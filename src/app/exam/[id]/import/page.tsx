@@ -28,6 +28,7 @@ import {
   removeHisSource,
   upsertHisSource,
 } from "@/lib/his-sources";
+import { clearWorkflowMilestonesOnImport } from "@/lib/workflow-milestones";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import type {
   ImportLogEntry,
@@ -173,7 +174,7 @@ export default function ImportPage() {
               ...prev.importLogs,
             ].slice(0, 30),
           };
-          return next;
+          return clearWorkflowMilestonesOnImport(next);
         });
       },
     });
@@ -201,7 +202,7 @@ export default function ImportPage() {
           prev.lecturers.length > 0
             ? prev.lecturers
             : result.meta.lecturers ?? prev.lecturers;
-        return {
+        return clearWorkflowMilestonesOnImport({
           ...upsertHisSource(prev, source),
           lecturers,
           students,
@@ -215,7 +216,7 @@ export default function ImportPage() {
             }),
             ...prev.importLogs,
           ].slice(0, 30),
-        };
+        });
       });
     }
   };
@@ -255,20 +256,22 @@ export default function ImportPage() {
       warnings,
       errors: result.log.errors,
       apply: () => {
-        setProject((prev) => ({
-          ...prev,
-          attendance: result.records,
-          students: mergeStudents(prev.students, result.students),
-          importLogs: [
-            pushLog("attendance", file.name, {
-              ...result.log,
-              warnings,
-              matched,
-              unmatched: orphan,
-            }),
-            ...prev.importLogs,
-          ].slice(0, 30),
-        }));
+        setProject((prev) =>
+          clearWorkflowMilestonesOnImport({
+            ...prev,
+            attendance: result.records,
+            students: mergeStudents(prev.students, result.students),
+            importLogs: [
+              pushLog("attendance", file.name, {
+                ...result.log,
+                warnings,
+                matched,
+                unmatched: orphan,
+              }),
+              ...prev.importLogs,
+            ].slice(0, 30),
+          })
+        );
       },
     });
   };
@@ -388,7 +391,7 @@ export default function ImportPage() {
             nextPoints = [...byKey.values()];
           }
 
-          return {
+          return clearWorkflowMilestonesOnImport({
             ...prev,
             points: nextPoints,
             questionDefs:
@@ -403,7 +406,7 @@ export default function ImportPage() {
               }),
               ...prev.importLogs,
             ].slice(0, 30),
-          };
+          });
         });
       },
     });

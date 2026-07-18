@@ -272,7 +272,9 @@ export default function DocumentsPage() {
             size="sm"
             className="bg-amber-800 text-white hover:bg-amber-900"
             onClick={() => {
-              downloadAndMarkBackup(project, setProject);
+              downloadAndMarkBackup(project, setProject, {
+                gradedCount: stats?.graded,
+              });
               setMessage("Projektsicherung heruntergeladen – Exporte freigeschaltet.");
               setError(null);
             }}

@@ -15,20 +15,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  backupStatusLabel,
-  hasSubstantialData,
-  isBackupStale,
-} from "@/lib/backup-status";
 import { cn, formatGrade, formatPercent, formatStat } from "@/lib/utils";
 import { orphanCount } from "@/lib/matching/merge-candidates";
 import { listUnresolvedOrphans } from "@/lib/matching/orphan-resolution";
-import {
-  countOpenGradingTasks,
-  hasOpenGrading,
-  openGradingSummary,
-} from "@/lib/grades/open-grading";
 import { HISINONE_LABEL, isOnlineStyleExam } from "@/lib/types";
+import {
+  buildWorkflowSteps,
+  workflowProgress,
+} from "@/lib/workflow-steps";
 import {
   AlertCircle,
   CheckCircle2,
@@ -39,26 +33,11 @@ import {
   Download,
 } from "lucide-react";
 
-type WorkflowStep = {
-  id: string;
-  done: boolean;
-  label: string;
-  href: string;
-  detail: string;
-  /** Sicherung ausstehend / blockierend */
-  critical?: boolean;
-  actionLabel?: string;
-};
-
 export default function OverviewPage() {
   const { id } = useParams<{ id: string }>();
   const { project, stats, rows } = useExamContext();
   if (!project || !stats) return null;
 
-  const backupOk = hasSubstantialData(project) && !isBackupStale(project);
-  const backupStale = isBackupStale(project);
-
-  const isKlausur = project.examType === "written";
   const onlineStyle = isOnlineStyleExam(project.examType);
   const orphanN = onlineStyle ? orphanCount(project) : 0;
   const unresolvedN = onlineStyle
@@ -69,152 +48,9 @@ export default function OverviewPage() {
     (d) => d.active
   ).length;
 
-  const openGrading = hasOpenGrading(project);
-  const openGradingCount = countOpenGradingTasks(project);
-  /** Echte Noten exportbereit – No-Shows allein zählen nicht als „Export erledigt“ */
-  const gradedExportReady = rows.filter(
-    (r) => r.status === "export_ready"
-  ).length;
-
-  const steps: WorkflowStep[] = [
-    {
-      id: "his",
-      done: project.hisRows.length > 0,
-      label: `${HISINONE_LABEL}-Masterliste`,
-      href: `/exam/${id}/import`,
-      detail:
-        project.hisRows.length > 0
-          ? `${project.hisRows.length} Anmeldungen importiert`
-          : "Noch nicht importiert",
-      actionLabel: project.hisRows.length > 0 ? "Öffnen" : "Importieren",
-    },
-    ...(isKlausur
-      ? []
-      : [
-          {
-            id: "attendance",
-            done: project.attendance.length > 0,
-            label: "Antrittsliste",
-            href: `/exam/${id}/import`,
-            detail:
-              project.attendance.length > 0
-                ? `${project.attendance.length} Moodle · ${stats.attended} gematcht${
-                    stats.attendedOrphan > 0
-                      ? ` · ${stats.attendedOrphan} ohne ${HISINONE_LABEL}`
-                      : ""
-                  }`
-                : "Noch nicht importiert",
-            actionLabel:
-              project.attendance.length > 0 ? "Öffnen" : "Importieren",
-          } satisfies WorkflowStep,
-        ]),
-    {
-      id: "points",
-      // Erst erledigt, wenn importiert UND keine „Bewertung notwendig“ mehr
-      done: project.points.length > 0 && !openGrading,
-      label: isKlausur ? "Punkte (Vorlage)" : "Punkte & Bewertung",
-      href: openGrading
-        ? `/exam/${id}/detail-points`
-        : `/exam/${id}/import?focus=points`,
-      detail:
-        project.points.length === 0
-          ? isKlausur
-            ? "Vorlage exportieren & importieren"
-            : "Noch keine Punkte importiert"
-          : openGrading
-            ? openGradingSummary(project)
-            : `${project.points.length} mit Punkten · alle Aufgaben bewertet`,
-      critical: openGrading,
-      actionLabel: openGrading
-        ? "Jetzt bewerten"
-        : project.points.length > 0
-          ? "Öffnen"
-          : "Importieren",
-    },
-    {
-      id: "grades",
-      // Noten erst „fertig“, wenn Bewertung abgeschlossen und Noten existieren
-      done: !openGrading && stats.graded > 0,
-      label: "Noten berechnet",
-      href: openGrading ? `/exam/${id}/detail-points` : `/exam/${id}/grades`,
-      detail: openGrading
-        ? `Notenschlüssel gesperrt – ${openGradingCount.people} Person(en), ${openGradingCount.tasks} Aufgabe(n) offen`
-        : stats.graded > 0
-          ? `${stats.graded} Noten vorhanden`
-          : "Noch keine Noten",
-      critical: openGrading,
-      actionLabel: openGrading ? "Bewertung abschließen" : "Zur Notenübersicht",
-    },
-    ...(onlineStyle
-      ? [
-          {
-            id: "matching",
-            done: unresolvedN === 0,
-            label: "Matrikel-Zuordnung",
-            href: `/exam/${id}/matching`,
-            detail:
-              unresolvedN > 0
-                ? `${unresolvedN} ungeprüfte Orphan(s) – Export gesperrt`
-                : orphanN > 0 || mergeN + dismissN > 0
-                  ? `Geprüft${mergeN > 0 ? ` · ${mergeN} Merge(s)` : ""}${
-                      dismissN > 0 ? ` · ${dismissN} Ablehnung(en)` : ""
-                    }`
-                  : "Keine Sonderfälle",
-            critical: unresolvedN > 0,
-            actionLabel:
-              unresolvedN > 0 ? "Jetzt prüfen" : "Zur Zuordnung",
-          } satisfies WorkflowStep,
-        ]
-      : []),
-    {
-      id: "backup",
-      done: backupOk,
-      label: "Datensicherung (JSON)",
-      href: `/exam/${id}/export#sicherung`,
-      detail: backupStatusLabel(project),
-      critical: backupStale && hasSubstantialData(project),
-      actionLabel: backupOk ? "Öffnen" : "Jetzt sichern",
-    },
-    {
-      id: "documents",
-      done:
-        gradedExportReady > 0 &&
-        backupOk &&
-        !openGrading &&
-        (!onlineStyle || unresolvedN === 0),
-      label: "Dokumente / HISinOne-Export",
-      href: !backupOk
-        ? `/exam/${id}/export#sicherung`
-        : openGrading
-          ? `/exam/${id}/detail-points`
-          : onlineStyle && unresolvedN > 0
-            ? `/exam/${id}/matching`
-            : `/exam/${id}/documents`,
-      detail: openGrading
-        ? "Zuerst alle Aufgaben bewerten (Export gesperrt)"
-        : !backupOk
-          ? "Zuerst JSON-Sicherung"
-          : onlineStyle && unresolvedN > 0
-            ? "Zuerst Matrikel-Zuordnung abschließen"
-            : gradedExportReady > 0
-              ? `${gradedExportReady} mit Note exportbereit` +
-                (stats.noShow > 0 ? ` · ${stats.noShow} No-Show(s)` : "")
-              : "Noch nicht exportbereit",
-      critical: openGrading || (backupStale && hasSubstantialData(project)),
-      actionLabel: openGrading
-        ? "Bewertung abschließen"
-        : !backupOk
-          ? "Zuerst sichern"
-          : onlineStyle && unresolvedN > 0
-            ? "Zuordnung prüfen"
-            : "Zu Dokumente",
-    },
-  ];
-
-  const doneCount = steps.filter((s) => s.done).length;
-  const totalCount = steps.length;
-  const progressPct = totalCount > 0 ? (doneCount / totalCount) * 100 : 0;
-  const nextOpen = steps.find((s) => !s.done);
+  const steps = buildWorkflowSteps(project, rows, stats, id);
+  const { doneCount, totalCount, progressPct, nextOpen } =
+    workflowProgress(steps);
 
   const orphans = rows.filter((r) => r.attendanceWithoutHis);
   const noShows = rows.filter((r) => r.status === "no_show");
@@ -315,7 +151,8 @@ export default function OverviewPage() {
               <div>
                 <CardTitle>Workflow-Status</CardTitle>
                 <CardDescription>
-                  Schritte bis zum {HISINONE_LABEL}-Upload
+                  Schritte bis zum {HISINONE_LABEL}-Upload (inkl. zwei
+                  JSON-Sicherungen)
                 </CardDescription>
               </div>
               <Badge

@@ -293,6 +293,17 @@ export interface ExamProject {
   /** Orphans geprüft und abgelehnt (nicht zusammengeführt) */
   identityDismissals?: IdentityDismissal[];
 
+  /**
+   * Workflow-Meilensteine (JSON-Sicherung zu definierten Zeitpunkten).
+   * Unabhängig vom aktuellen isBackupStale-Gate.
+   */
+  workflowMilestones?: {
+    /** Sicherung nach vollständigem XLSX-Import */
+    backupAfterImportAt?: string;
+    /** Sicherung nach abgeschlossener Notenberechnung */
+    backupAfterGradesAt?: string;
+  };
+
   importLogs: ImportLogEntry[];
 
   /**

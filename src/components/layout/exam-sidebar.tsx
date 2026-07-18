@@ -12,6 +12,7 @@ import {
   Grid3x3,
   HardDrive,
   Layers,
+  ListChecks,
   PenLine,
   Settings,
   Table2,
@@ -19,6 +20,11 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isOnlineStyleExam, type ExamType } from "@/lib/types";
+import { useExamContext } from "@/components/exam/exam-context";
+import {
+  buildWorkflowSteps,
+  workflowProgress,
+} from "@/lib/workflow-steps";
 
 const NAV_BASE = [
   { href: "overview", label: "Übersicht", icon: BarChart3 },
@@ -41,6 +47,7 @@ export function ExamSidebar({
 }) {
   const pathname = usePathname();
   const base = `/exam/${examId}`;
+  const { project, rows, stats } = useExamContext();
 
   const nav = [
     ...NAV_BASE.slice(0, 2),
@@ -49,6 +56,12 @@ export function ExamSidebar({
       : []),
     ...NAV_BASE.slice(2),
   ];
+
+  const steps =
+    project && stats
+      ? buildWorkflowSteps(project, rows, stats, examId)
+      : [];
+  const progress = steps.length > 0 ? workflowProgress(steps) : null;
 
   return (
     <aside className="surface-panel flex w-56 shrink-0 flex-col border-r">
@@ -92,6 +105,56 @@ export function ExamSidebar({
           );
         })}
       </nav>
+
+      {progress && (
+        <div className="mt-auto border-t p-3">
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <ListChecks className="size-3.5" />
+            Workflow
+          </div>
+          <p className="text-xs tabular-nums text-foreground">
+            {progress.doneCount}/{progress.totalCount} erledigt
+          </p>
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all",
+                progress.doneCount === progress.totalCount
+                  ? "bg-emerald-600"
+                  : "bg-primary"
+              )}
+              style={{ width: `${progress.progressPct}%` }}
+            />
+          </div>
+          {progress.nextOpen ? (
+            <Link
+              href={progress.nextOpen.href}
+              className="mt-2 block text-xs leading-snug text-muted-foreground hover:text-foreground"
+            >
+              Als Nächstes:{" "}
+              <span className="font-medium text-foreground">
+                {progress.nextOpen.label}
+              </span>
+              {progress.nextOpen.critical ? (
+                <span className="text-amber-700 dark:text-amber-300">
+                  {" "}
+                  · erforderlich
+                </span>
+              ) : null}
+            </Link>
+          ) : (
+            <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+              Workflow abgeschlossen
+            </p>
+          )}
+          <Link
+            href={`${base}/overview`}
+            className="mt-2 inline-block text-xs font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Details in Übersicht
+          </Link>
+        </div>
+      )}
     </aside>
   );
 }

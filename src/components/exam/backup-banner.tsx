@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 export function BackupBanner() {
   const { id } = useParams<{ id: string }>();
-  const { project, setProject } = useExamContext();
+  const { project, setProject, stats } = useExamContext();
 
   if (!project || !isBackupStale(project)) return null;
 
@@ -48,7 +48,11 @@ export function BackupBanner() {
           <Button
             size="sm"
             className="bg-amber-800 text-white hover:bg-amber-900 dark:bg-amber-600 dark:hover:bg-amber-500"
-            onClick={() => downloadAndMarkBackup(project, setProject)}
+            onClick={() =>
+              downloadAndMarkBackup(project, setProject, {
+                gradedCount: stats?.graded,
+              })
+            }
           >
             <HardDrive className="size-4" />
             Jetzt sichern
