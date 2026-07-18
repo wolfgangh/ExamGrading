@@ -146,6 +146,13 @@ export function applyIdentityMerge(
     (p) => normalizeMatriculation(p.matriculationNumber) === targetMat
   );
 
+  const sourceAttRec = project.attendance.find(
+    (a) => normalizeMatriculation(a.matriculationNumber) === sourceMat
+  );
+  const targetAttRec = project.attendance.find(
+    (a) => normalizeMatriculation(a.matriculationNumber) === targetMat
+  );
+
   const merge: IdentityMerge = {
     id: createId("merge"),
     at: new Date().toISOString(),
@@ -164,6 +171,29 @@ export function applyIdentityMerge(
       firstName: targetRow.student.firstName || hisTarget.firstName,
       statusBefore: targetRow.status,
     },
+    // Undo-Snapshots (vollständige Daten vor dem Merge)
+    sourcePointsRecord: sourcePoints
+      ? structuredClone(sourcePoints)
+      : null,
+    sourceStudent: sourceStudent
+      ? structuredClone(sourceStudent)
+      : {
+          matriculationNumber: sourceMat,
+          lastName: orphanRow.student.lastName,
+          firstName: orphanRow.student.firstName,
+          email: orphanRow.student.email,
+        },
+    sourceAttended:
+      sourceAttRec?.attended === true || orphanRow.attended === true,
+    targetPointsBefore: targetPoints ? structuredClone(targetPoints) : null,
+    targetAttendedBefore:
+      targetAttRec != null
+        ? targetAttRec.attended
+        : targetRow.attended === true
+          ? true
+          : targetRow.attended === false
+            ? false
+            : null,
     reason,
     confirmedByNote,
     active: true,

@@ -209,11 +209,21 @@ export interface IdentityMerge {
     firstName: string;
     statusBefore: string;
   };
+  /** Für Undo: vollständige Datensätze vor dem Merge */
+  sourcePointsRecord?: PointsRecord | null;
+  sourceStudent?: Student | null;
+  sourceAttended?: boolean;
+  targetPointsBefore?: PointsRecord | null;
+  targetAttendedBefore?: boolean | null;
   /** Pflicht: Prüfer-Begründung */
   reason: string;
   /** z. B. „nach Abgleich HISinOne-Dokument und Antrittsdaten“ */
   confirmedByNote: string;
   active: boolean;
+  /** Undo-Dokumentation */
+  undoneAt?: string;
+  undoReason?: string;
+  undoConfirmedByNote?: string;
 }
 
 /**

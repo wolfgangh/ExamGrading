@@ -98,9 +98,12 @@ export function exportGradesListPdf(
   let finalY = getLastTableY(doc, 200);
 
   const merges = (project.identityMerges ?? []).filter((m) => m.active);
+  const undoneMerges = (project.identityMerges ?? []).filter(
+    (m) => !m.active && m.undoneAt
+  );
   const dismissals = (project.identityDismissals ?? []).filter((d) => d.active);
 
-  if (merges.length > 0 || dismissals.length > 0) {
+  if (merges.length > 0 || dismissals.length > 0 || undoneMerges.length > 0) {
     doc.addPage();
     let ay = PDF_MARGIN + 14;
 
@@ -210,6 +213,50 @@ export function exportGradesListPdf(
           1: { cellWidth: 28 },
           2: { cellWidth: 40 },
           3: { cellWidth: 76 },
+        },
+        margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+      });
+      ay = getLastTableY(doc, ay) + 8;
+    }
+
+    if (undoneMerges.length > 0) {
+      if (ay > 240) {
+        doc.addPage();
+        ay = PDF_MARGIN + 14;
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(pdfText("C) Zusammenfuehrungen aufgehoben"), PDF_MARGIN, ay);
+      ay += 2;
+
+      autoTable(doc, {
+        startY: ay,
+        head: [
+          [
+            "Merge am",
+            "Aufgehoben am",
+            "Matr. (war)",
+            "Begruendung Aufhebung",
+          ],
+        ],
+        body: undoneMerges.map((m) => [
+          pdfText(formatDeDateTime(m.at)),
+          pdfText(m.undoneAt ? formatDeDateTime(m.undoneAt) : "–"),
+          pdfText(`${m.sourceMatriculation} → ${m.targetMatriculation}`),
+          pdfText(m.undoReason ?? "–"),
+        ]),
+        styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.4 },
+        headStyles: {
+          fillColor: [100, 100, 100],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+          0: { cellWidth: 32 },
+          1: { cellWidth: 32 },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 68 },
         },
         margin: { left: PDF_MARGIN, right: PDF_MARGIN },
       });

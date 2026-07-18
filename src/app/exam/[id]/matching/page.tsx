@@ -8,21 +8,24 @@ import {
 } from "@/lib/matching/merge-candidates";
 import { applyIdentityMerge } from "@/lib/matching/apply-identity-merge";
 import { applyIdentityDismissal } from "@/lib/matching/apply-identity-dismissal";
+import { revertIdentityMerge } from "@/lib/matching/revert-identity-merge";
 import {
   listUnresolvedOrphans,
   unresolvedOrphanSummary,
 } from "@/lib/matching/orphan-resolution";
+import {
+  DISMISS_REASON_TEMPLATES,
+  MERGE_REASON_TEMPLATES,
+  UNDO_REASON_TEMPLATES,
+} from "@/lib/matching/reason-templates";
+import { ReasonField } from "@/components/matching/reason-field";
 import { flattenHisRows } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
-import {
-  HISINONE_LABEL,
-  isOnlineStyleExam,
-} from "@/lib/types";
+import { HISINONE_LABEL, isOnlineStyleExam } from "@/lib/types";
 import { formatGrade, formatPoints } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -54,9 +57,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Ban, GitMerge, ShieldAlert } from "lucide-react";
+import { Ban, GitMerge, ShieldAlert, Undo2 } from "lucide-react";
 
-type DialogMode = "merge" | "dismiss";
+type DialogMode = "merge" | "dismiss" | "undo";
 
 export default function MatchingPage() {
   const { project, setProject, rows } = useExamContext();
@@ -64,6 +67,7 @@ export default function MatchingPage() {
   const [dialogMode, setDialogMode] = useState<DialogMode>("merge");
   const [sourceMat, setSourceMat] = useState("");
   const [targetMat, setTargetMat] = useState("");
+  const [mergeId, setMergeId] = useState("");
   const [reason, setReason] = useState("");
   const [confirmedNote, setConfirmedNote] = useState(
     `Daten und ${HISINONE_LABEL}-Dokument gesichtet`
@@ -108,19 +112,25 @@ export default function MatchingPage() {
 
   const merges = project?.identityMerges ?? [];
   const dismissals = project?.identityDismissals ?? [];
+  const activeMerges = merges.filter((m) => m.active);
 
   if (!project) return null;
 
   const onlineStyle = isOnlineStyleExam(project.examType);
 
-  const openMerge = (source: string, target: string) => {
-    setDialogMode("merge");
-    setSourceMat(source);
-    setTargetMat(target);
+  const resetDialogMeta = () => {
     setReason("");
     setConfirmedNote(`Daten und ${HISINONE_LABEL}-Dokument gesichtet`);
     setReviewed(false);
     setError(null);
+  };
+
+  const openMerge = (source: string, target: string) => {
+    setDialogMode("merge");
+    setSourceMat(source);
+    setTargetMat(target);
+    setMergeId("");
+    resetDialogMeta();
     setDialogOpen(true);
   };
 
@@ -128,10 +138,17 @@ export default function MatchingPage() {
     setDialogMode("dismiss");
     setSourceMat(source);
     setTargetMat("");
-    setReason("");
-    setConfirmedNote(`Daten und ${HISINONE_LABEL}-Dokument gesichtet`);
-    setReviewed(false);
-    setError(null);
+    setMergeId("");
+    resetDialogMeta();
+    setDialogOpen(true);
+  };
+
+  const openUndo = (id: string, source: string, target: string) => {
+    setDialogMode("undo");
+    setMergeId(id);
+    setSourceMat(source);
+    setTargetMat(target);
+    resetDialogMeta();
     setDialogOpen(true);
   };
 
@@ -157,7 +174,7 @@ export default function MatchingPage() {
       setMessage(
         `Zusammengeführt: ${result.merge.sourceMatriculation} → ${result.merge.targetMatriculation}`
       );
-    } else {
+    } else if (dialogMode === "dismiss") {
       const result = applyIdentityDismissal(project, {
         sourceMatriculation: sourceMat,
         reason,
@@ -171,6 +188,19 @@ export default function MatchingPage() {
       setMessage(
         `Abgelehnt (kein Merge): ${result.dismissal.sourceMatriculation}`
       );
+    } else {
+      const result = revertIdentityMerge(project, mergeId, {
+        reason,
+        confirmedByNote: confirmedNote,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setProject(() => result.project);
+      setMessage(
+        `Zusammenführung aufgehoben: ${result.merge.sourceMatriculation} ↩︎ (war → ${result.merge.targetMatriculation})`
+      );
     }
     setDialogOpen(false);
     setError(null);
@@ -178,6 +208,13 @@ export default function MatchingPage() {
 
   const orphanRow = rows.find((r) => r.key === sourceMat);
   const hisRow = rows.find((r) => r.key === targetMat && r.inHis);
+
+  const reasonTemplates =
+    dialogMode === "merge"
+      ? MERGE_REASON_TEMPLATES
+      : dialogMode === "dismiss"
+        ? DISMISS_REASON_TEMPLATES
+        : UNDO_REASON_TEMPLATES;
 
   const auditRows = [
     ...merges.map((m) => ({
@@ -189,6 +226,10 @@ export default function MatchingPage() {
       reason: m.reason,
       note: m.confirmedByNote,
       active: m.active,
+      undoReason: m.undoReason,
+      source: m.sourceMatriculation,
+      target: m.targetMatriculation,
+      canUndo: m.active,
     })),
     ...dismissals.map((d) => ({
       id: d.id,
@@ -199,6 +240,10 @@ export default function MatchingPage() {
       reason: d.reason,
       note: d.confirmedByNote,
       active: d.active,
+      undoReason: undefined as string | undefined,
+      source: d.sourceMatriculation,
+      target: "",
+      canUndo: false,
     })),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
@@ -211,8 +256,8 @@ export default function MatchingPage() {
         <p className="text-muted-foreground">
           THE / elektronische Prüfung: manuelle Zusammenführung bei Tippfehlern
           in der selbst eingetragenen Matrikelnummer. Nie automatisch – nur nach
-          Sichtung von Antrittsdaten und {HISINONE_LABEL}-Dokument. Offene Fälle
-          blockieren Notenliste und {HISINONE_LABEL}-Export.
+          Sichtung. Offene Fälle blockieren Notenliste und {HISINONE_LABEL}
+          -Export. Merges können dokumentiert aufgehoben werden.
         </p>
       </div>
 
@@ -224,8 +269,7 @@ export default function MatchingPage() {
           <ShieldAlert className="mt-0.5 size-5 shrink-0" />
           <p>
             Diese Funktion ist für Take-Home-Exams und elektronische Prüfungen
-            gedacht. Bei Klausuren tritt das Matrikel-Tippfehler-Problem in der
-            Regel nicht auf.
+            gedacht.
           </p>
         </div>
       )}
@@ -257,98 +301,95 @@ export default function MatchingPage() {
         </p>
       )}
 
+      {/* Vorschläge – Karten, Buttons nie überlagert */}
       <Card className="surface-panel">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Vorschläge</CardTitle>
           <CardDescription>
-            Orphans (Antritt/Punkte ohne {HISINONE_LABEL}) vs. No-Shows mit
-            ähnlichem Namen oder 1-Ziffer-Differenz.{" "}
+            Orphans (Antritt/Punkte ohne {HISINONE_LABEL}) vs. No-Shows.{" "}
             {orphanCount(project) === 0
               ? "Keine Orphans vorhanden."
               : `${orphans.length} Orphan(s), ${unresolved.length} ungeprüft, ${candidates.length} Vorschlag/Vorschläge.`}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           {candidates.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Keine automatischen Vorschläge. Unten manuell zuordnen oder
               ablehnen.
             </p>
           ) : (
-            <div className="overflow-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Score</TableHead>
-                    <TableHead>Orphan (Antritt)</TableHead>
-                    <TableHead>{HISINONE_LABEL}-Ziel</TableHead>
-                    <TableHead>Gründe</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {candidates.map((c) => (
-                    <TableRow key={`${c.orphanKey}-${c.hisKey}`}>
-                      <TableCell className="tabular-nums font-medium">
-                        {c.score}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        <div className="font-medium">
-                          {c.orphan.student.lastName},{" "}
-                          {c.orphan.student.firstName}
-                        </div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {c.orphanKey}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {c.orphan.hasPoints
-                            ? `${formatPoints(c.orphan.totalPoints)} Pkt. · Note ${formatGrade(c.orphan.finalGrade)}`
-                            : "ohne Punkte"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        <div className="font-medium">
-                          {c.his.student.lastName}, {c.his.student.firstName}
-                        </div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {c.hisKey}
-                        </div>
-                        <Badge variant="secondary" className="mt-0.5 text-xs">
-                          {c.his.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[14rem] text-xs text-muted-foreground">
-                        {c.reasons.join(" · ")}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={!onlineStyle}
-                            onClick={() =>
-                              openMerge(c.orphanKey, c.hisKey)
-                            }
-                          >
-                            <GitMerge className="size-3.5" />
-                            Zusammenführen
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={!onlineStyle}
-                            onClick={() => openDismiss(c.orphanKey)}
-                          >
-                            <Ban className="size-3.5" />
-                            Ablehnen
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            candidates.map((c) => (
+              <div
+                key={`${c.orphanKey}-${c.hisKey}`}
+                className="flex flex-col gap-3 rounded-xl border bg-card p-3 sm:flex-row sm:items-stretch sm:justify-between"
+              >
+                <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[auto_1fr_1fr]">
+                  <div className="flex items-center sm:flex-col sm:items-start sm:justify-center">
+                    <Badge variant="secondary" className="tabular-nums">
+                      Score {c.score}
+                    </Badge>
+                  </div>
+                  <div className="min-w-0 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Orphan (Antritt)
+                    </p>
+                    <p className="font-medium">
+                      {c.orphan.student.lastName}, {c.orphan.student.firstName}
+                    </p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {c.orphanKey}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {c.orphan.hasPoints
+                        ? `${formatPoints(c.orphan.totalPoints)} Pkt. · Note ${formatGrade(c.orphan.finalGrade)}`
+                        : "ohne Punkte"}
+                    </p>
+                  </div>
+                  <div className="min-w-0 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {HISINONE_LABEL}-Ziel
+                    </p>
+                    <p className="font-medium">
+                      {c.his.student.lastName}, {c.his.student.firstName}
+                    </p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {c.hisKey}
+                    </p>
+                    <Badge variant="outline" className="mt-0.5 text-xs">
+                      {c.his.status}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col justify-center gap-2 border-t pt-3 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+                  <p className="text-xs text-muted-foreground sm:max-w-[12rem]">
+                    {c.reasons.join(" · ")}
+                  </p>
+                  <div className="flex flex-wrap gap-2 sm:flex-col">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      disabled={!onlineStyle}
+                      onClick={() => openMerge(c.orphanKey, c.hisKey)}
+                    >
+                      <GitMerge className="size-3.5" />
+                      Zusammenführen
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="w-full sm:w-auto"
+                      disabled={!onlineStyle}
+                      onClick={() => openDismiss(c.orphanKey)}
+                    >
+                      <Ban className="size-3.5" />
+                      Ablehnen
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
           )}
         </CardContent>
       </Card>
@@ -422,8 +463,7 @@ export default function MatchingPage() {
               Ungeprüfte Orphans ablehnen
             </CardTitle>
             <CardDescription>
-              Wenn kein Tippfehler vorliegt: Fall dokumentiert schließen, ohne
-              Merge.
+              Wenn kein Tippfehler vorliegt: Fall dokumentiert schließen.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -437,7 +477,7 @@ export default function MatchingPage() {
                   key={o.key}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-medium">
                       {o.student.lastName}, {o.student.firstName}
                     </span>
@@ -448,6 +488,7 @@ export default function MatchingPage() {
                   <Button
                     size="sm"
                     variant="outline"
+                    className="shrink-0"
                     disabled={!onlineStyle}
                     onClick={() => openDismiss(o.key)}
                   >
@@ -461,12 +502,59 @@ export default function MatchingPage() {
         </Card>
       </div>
 
+      {activeMerges.length > 0 && (
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              Aktive Zusammenführungen aufheben
+            </CardTitle>
+            <CardDescription>
+              Bei fälschlichem Merge: dokumentiert rückgängig machen (Orphan
+              wird wiederhergestellt).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {activeMerges.map((m) => (
+              <div
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <span className="font-mono text-xs">
+                    {m.sourceMatriculation} → {m.targetMatriculation}
+                  </span>
+                  <div className="text-muted-foreground">
+                    {m.sourceSnapshot.lastName}, {m.sourceSnapshot.firstName}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  disabled={!onlineStyle}
+                  onClick={() =>
+                    openUndo(
+                      m.id,
+                      m.sourceMatriculation,
+                      m.targetMatriculation
+                    )
+                  }
+                >
+                  <Undo2 className="size-3.5" />
+                  Aufheben
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="surface-panel">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Dokumentation (Audit)</CardTitle>
           <CardDescription>
-            Zusammenführungen und Ablehnungen – in der JSON-Sicherung und der
-            Notenliste-PDF.
+            Zusammenführungen, Ablehnungen und Aufhebungen – in der
+            JSON-Sicherung und der Notenliste-PDF.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -475,15 +563,16 @@ export default function MatchingPage() {
               Noch keine Einträge.
             </p>
           ) : (
-            <div className="overflow-auto rounded-lg border">
+            <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Datum</TableHead>
+                    <TableHead className="whitespace-nowrap">Datum</TableHead>
                     <TableHead>Art</TableHead>
                     <TableHead>Matrikel</TableHead>
-                    <TableHead>Begründung</TableHead>
+                    <TableHead className="min-w-[10rem]">Begründung</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="min-w-[7rem]">Aktion</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -509,14 +598,35 @@ export default function MatchingPage() {
                       </TableCell>
                       <TableCell className="max-w-xs text-sm">
                         {m.reason}
-                        <div className="text-xs text-muted-foreground">
-                          {m.note}
-                        </div>
+                        {m.undoReason && (
+                          <div className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                            Aufgehoben: {m.undoReason}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={m.active ? "outline" : "secondary"}>
-                          {m.active ? "aktiv" : "inaktiv"}
+                          {m.active
+                            ? "aktiv"
+                            : m.kind === "merge"
+                              ? "aufgehoben"
+                              : "inaktiv"}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {m.canUndo && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!onlineStyle}
+                            onClick={() =>
+                              openUndo(m.id, m.source, m.target)
+                            }
+                          >
+                            <Undo2 className="size-3.5" />
+                            Aufheben
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -533,16 +643,20 @@ export default function MatchingPage() {
             <DialogTitle>
               {dialogMode === "merge"
                 ? "Zusammenführung bestätigen"
-                : "Ablehnung bestätigen"}
+                : dialogMode === "dismiss"
+                  ? "Ablehnung bestätigen"
+                  : "Zusammenführung aufheben"}
             </DialogTitle>
             <DialogDescription>
               {dialogMode === "merge"
                 ? `Nur nach klarer Prüfung. Die ${HISINONE_LABEL}-Matrikel bleibt die Identität für Notenmeldung und Export.`
-                : "Dokumentiert, dass kein Merge erfolgen soll (z. B. andere Person, kein Tippfehler)."}
+                : dialogMode === "dismiss"
+                  ? "Dokumentiert, dass kein Merge erfolgen soll."
+                  : "Stellt Antritt/Punkte unter der ursprünglichen Matrikel wieder her. Export kann danach erneut gesperrt sein, bis der Fall geklärt ist."}
             </DialogDescription>
           </DialogHeader>
 
-          {dialogMode === "merge" ? (
+          {dialogMode === "merge" && (
             <div className="grid gap-3 text-sm sm:grid-cols-2">
               <div className="rounded-lg border bg-muted/30 p-3">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">
@@ -574,7 +688,9 @@ export default function MatchingPage() {
                 </p>
               </div>
             </div>
-          ) : (
+          )}
+
+          {dialogMode === "dismiss" && (
             <div className="rounded-lg border bg-muted/30 p-3 text-sm">
               <p className="font-medium">
                 {orphanRow
@@ -582,26 +698,28 @@ export default function MatchingPage() {
                   : "–"}
               </p>
               <p className="font-mono text-xs">{sourceMat}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Bleibt als Sonderfall ohne {HISINONE_LABEL}-Match (kein Merge).
+            </div>
+          )}
+
+          {dialogMode === "undo" && (
+            <div className="rounded-lg border border-amber-300/50 bg-amber-50/50 p-3 text-sm dark:bg-amber-950/20">
+              <p className="font-mono text-xs">
+                {sourceMat} → {targetMat}
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Nach dem Aufheben gilt die Antritts-Matrikel wieder als Orphan
+                (bis neu zugeordnet).
               </p>
             </div>
           )}
 
-          <div className="grid gap-2">
-            <Label htmlFor="merge-reason">Begründung (Pflicht)</Label>
-            <Textarea
-              id="merge-reason"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={
-                dialogMode === "merge"
-                  ? "z. B. Tippfehler in Antrittsliste, Name und Anmeldename stimmen mit HISinOne überein…"
-                  : "z. B. andere Person / Matrikel korrekt, kein Tippfehler…"
-              }
-            />
-          </div>
+          <ReasonField
+            id="match-reason"
+            templates={reasonTemplates}
+            value={reason}
+            onChange={setReason}
+          />
+
           <div className="grid gap-2">
             <Label htmlFor="merge-confirm">Sichtungsvermerk</Label>
             <Input
@@ -634,15 +752,22 @@ export default function MatchingPage() {
               Abbrechen
             </Button>
             <Button type="button" onClick={doConfirm} disabled={!onlineStyle}>
-              {dialogMode === "merge" ? (
+              {dialogMode === "merge" && (
                 <>
                   <GitMerge className="size-4" />
                   Zusammenführen
                 </>
-              ) : (
+              )}
+              {dialogMode === "dismiss" && (
                 <>
                   <Ban className="size-4" />
                   Ablehnung speichern
+                </>
+              )}
+              {dialogMode === "undo" && (
+                <>
+                  <Undo2 className="size-4" />
+                  Aufheben bestätigen
                 </>
               )}
             </Button>
