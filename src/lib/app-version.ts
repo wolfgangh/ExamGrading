@@ -11,5 +11,5 @@ export function appVersionLabel(): string {
 }
 
 export function appFooterText(): string {
-  return `© ${APP_COPYRIGHT} · ${appVersionLabel()}`;
+  return `© ${APP_COPYRIGHT} · ${appVersionLabel()} · OTH Regensburg · Client-seitig · Keine Serverübertragung`;
 }
