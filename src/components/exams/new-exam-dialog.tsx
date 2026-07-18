@@ -37,6 +37,7 @@ import {
 } from "@/lib/exam-catalog";
 import { createEmptyExamProject } from "@/lib/project-factory";
 import { saveExam } from "@/lib/storage";
+import { currentSemesterLabel } from "@/lib/semester";
 import { EXAM_TYPE_LABELS, type ExamType } from "@/lib/types";
 
 type ExamTypeValue = ExamType;
@@ -52,7 +53,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
 
   const [nameInput, setNameInput] = useState("");
   const [examNumber, setExamNumber] = useState("");
-  const [semester, setSemester] = useState("");
+  const [semester, setSemester] = useState(() => currentSemesterLabel());
   const [examType, setExamType] = useState<ExamTypeValue>("the");
   const [lecturers, setLecturers] = useState<string[]>([DEFAULT_LECTURER]);
   const [lecturerDraft, setLecturerDraft] = useState("");
@@ -69,7 +70,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
   const resetForm = () => {
     setNameInput("");
     setExamNumber("");
-    setSemester("");
+    setSemester(currentSemesterLabel());
     setExamType("the");
     setLecturers([DEFAULT_LECTURER]);
     setLecturerDraft("");
@@ -220,7 +221,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
                 id="semester"
                 value={semester}
                 onChange={setSemester}
-                placeholder="Sommer 2026"
+                placeholder={currentSemesterLabel()}
                 clearLabel="Semester löschen"
               />
             </div>

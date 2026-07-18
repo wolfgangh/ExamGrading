@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Archive,
   Copy,
   FileJson,
   HardDrive,
@@ -28,13 +29,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EXAM_TYPE_LABELS, type ExamProject } from "@/lib/types";
-import { downloadJson } from "@/lib/download";
+import { downloadBlob, downloadJson } from "@/lib/download";
 import {
   exportExamJson,
   parseExamJson,
   saveExam,
 } from "@/lib/storage";
 import {
+  buildProjectArchive,
   projectArchiveFilename,
   projectArchiveSummary,
 } from "@/lib/project-archive";
@@ -48,6 +50,11 @@ import {
   MAX_PROJECT_ARCHIVE_BYTES,
 } from "@/lib/import-limits";
 import { createId } from "@/lib/id";
+import {
+  currentSemesterLabel,
+  semesterSlug,
+} from "@/lib/semester";
+import { datedExportFilename } from "@/lib/utils";
 
 export function ExamList() {
   const { exams, loading, error, refresh, remove, duplicate } = useExams();
@@ -55,33 +62,59 @@ export function ExamList() {
   const router = useRouter();
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
 
-  const importJson = async (file: File) => {
+  const semesterNow = currentSemesterLabel();
+  const semesterExams = exams.filter(
+    (e) => (e.semester || "").trim() === semesterNow
+  );
+
+  const importJsonFiles = async (files: FileList | File[]) => {
     setImportMsg(null);
     setImportErr(null);
-    try {
-      assertFileSizeLimit(
-        file,
-        MAX_PROJECT_ARCHIVE_BYTES,
-        "JSON-Sicherung"
-      );
-      const text = await file.text();
-      let project = parseExamJson(text);
-      project.id = createId("exam");
-      project.createdAt = new Date().toISOString();
-      project = markProjectRestoredFromBackup(project);
-      await saveExam(project);
-      await refresh();
+    setExportMsg(null);
+    const list = Array.from(files);
+    if (list.length === 0) return;
+
+    const ok: string[] = [];
+    const fail: string[] = [];
+    let lastId: string | null = null;
+
+    for (const file of list) {
+      try {
+        assertFileSizeLimit(file, MAX_PROJECT_ARCHIVE_BYTES, "JSON-Sicherung");
+        const text = await file.text();
+        let project = parseExamJson(text);
+        project.id = createId("exam");
+        project.createdAt = new Date().toISOString();
+        project = markProjectRestoredFromBackup(project);
+        await saveExam(project);
+        ok.push(projectArchiveSummary(project));
+        lastId = project.id;
+      } catch (e) {
+        fail.push(
+          `${file.name}: ${
+            e instanceof Error ? e.message : "Import fehlgeschlagen"
+          }`
+        );
+      }
+    }
+
+    await refresh();
+
+    if (ok.length > 0) {
       setImportMsg(
-        `Sicherung importiert: ${projectArchiveSummary(project)}. Daten liegen wieder nur in diesem Browser – bei Änderungen erneut sichern. Original-Excel-Pfade werden nicht benötigt (Daten stecken in der JSON-Datei).`
+        ok.length === 1
+          ? `Sicherung importiert: ${ok[0]}. Daten liegen wieder nur in diesem Browser.`
+          : `${ok.length} Sicherungen importiert: ${ok.join(" · ")}`
       );
-      router.push(`/exam/${project.id}/overview`);
-    } catch (e) {
-      setImportErr(
-        e instanceof Error
-          ? e.message
-          : "Sicherung konnte nicht importiert werden."
-      );
+    }
+    if (fail.length > 0) {
+      setImportErr(fail.join(" | "));
+    }
+    // Nur bei genau einer erfolgreichen Datei zur Prüfung springen
+    if (ok.length === 1 && fail.length === 0 && lastId) {
+      router.push(`/exam/${lastId}/overview`);
     }
   };
 
@@ -89,6 +122,45 @@ export function ExamList() {
     void downloadJson(projectArchiveFilename(exam), exportExamJson(exam));
     await saveExam(markProjectBackedUp(exam));
     await refresh();
+  };
+
+  const exportSemesterZip = async () => {
+    setExportMsg(null);
+    setImportErr(null);
+    if (semesterExams.length === 0) {
+      setExportMsg(
+        `Keine Prüfung mit Semester „${semesterNow}“. Bitte Semester in den Prüfungseinstellungen setzen.`
+      );
+      return;
+    }
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      for (const exam of semesterExams) {
+        const name = projectArchiveFilename(exam, "general");
+        zip.file(name, buildProjectArchive(exam));
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      const zipName = datedExportFilename(
+        `ExamGrade_${semesterSlug(semesterNow)}_Semester`,
+        "zip"
+      );
+      await downloadBlob(zipName, blob);
+
+      for (const exam of semesterExams) {
+        await saveExam(markProjectBackedUp(exam));
+      }
+      await refresh();
+      setExportMsg(
+        `${semesterExams.length} Prüfung(en) „${semesterNow}“ als ZIP heruntergeladen und als gesichert markiert.`
+      );
+    } catch (e) {
+      setImportErr(
+        e instanceof Error
+          ? e.message
+          : "Semester-Export fehlgeschlagen."
+      );
+    }
   };
 
   return (
@@ -100,20 +172,30 @@ export function ExamList() {
               ref={fileRef}
               type="file"
               accept="application/json,.json"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void importJson(f);
+                const files = e.target.files;
+                if (files?.length) void importJsonFiles(files);
                 e.target.value = "";
               }}
             />
             <Button
               variant="outline"
               onClick={() => fileRef.current?.click()}
-              title="Vollständige Projektsicherung (.json) wiederherstellen"
+              title="Eine oder mehrere Projektsicherungen (.json) wiederherstellen"
             >
               <HardDrive className="size-4" />
               Sicherung importieren
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void exportSemesterZip()}
+              title={`Alle Prüfungen des Semesters „${semesterNow}“ als ZIP`}
+              disabled={loading}
+            >
+              <Archive className="size-4" />
+              Semester sichern
             </Button>
             <NewExamDialog onCreated={() => void refresh()} />
           </>
@@ -128,6 +210,10 @@ export function ExamList() {
             </h1>
             <p className="mt-1 text-muted-foreground">
               Notenvergabe und HISinOne-Export – ersetzt den Excel-Workflow.
+              Aktuelles Semester: <strong>{semesterNow}</strong>
+              {semesterExams.length > 0 && (
+                <> · {semesterExams.length} Prüfung(en) in diesem Semester</>
+              )}
             </p>
           </div>
 
@@ -136,15 +222,20 @@ export function ExamList() {
             <p className="mt-1 opacity-90">
               Prüfungsprojekte werden lokal gespeichert (IndexedDB), nicht auf
               dem Server. Nach Importen und vor dem HISinOne-/PDF-Export:{" "}
-              <strong>JSON-Sicherung</strong> herunterladen und neben den
-              Klausurdateien ablegen. Wechsel des PCs nur über
-              Sicherungs-Import.
+              <strong>JSON-Sicherung</strong> herunterladen. Mehrere Dateien
+              können auf einmal importiert werden. „Semester sichern“ packt
+              alle Prüfungen mit Semester „{semesterNow}“ in eine ZIP-Datei.
             </p>
           </div>
 
           {importMsg && (
             <p className="text-sm text-emerald-700 dark:text-emerald-300">
               {importMsg}
+            </p>
+          )}
+          {exportMsg && (
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">
+              {exportMsg}
             </p>
           )}
           {importErr && (
@@ -162,8 +253,8 @@ export function ExamList() {
             <CardHeader>
               <CardTitle>Noch keine Prüfung</CardTitle>
               <CardDescription>
-                Legen Sie eine neue Prüfung an oder importieren Sie eine
-                Projektsicherung (.json).
+                Legen Sie eine neue Prüfung an oder importieren Sie eine oder
+                mehrere Projektsicherungen (.json).
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
