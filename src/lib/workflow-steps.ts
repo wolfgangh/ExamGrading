@@ -187,28 +187,24 @@ export function buildWorkflowSteps(
           } satisfies WorkflowStep,
         ]
       : []),
-    // THE/elektrP: nur „Sicherung nach Noten“ – Import-/Zuordnungs-Sicherung weglassen
-    ...(!onlineStyle
-      ? [
-          {
-            id: "backup-import",
-            done: importBackupDone,
-            label: "Sicherung nach Import",
-            href: `/exam/${examId}/export?stage=import#sicherung`,
-            detail: !importsOk
-              ? isHisManual || isKlausur
-                ? `Zuerst ${HISINONE_LABEL}-Masterliste importieren`
-                : `Zuerst alle XLSX importieren (${HISINONE_LABEL}, Antritt, Punkte)`
-              : importBackupDone
-                ? `Erledigt${formatMilestoneAt(
-                    project.workflowMilestones?.backupAfterImportAt
-                  )}`
-                : "JSON-Sicherung …_nach-Import",
-            critical: importsOk && !importBackupDone,
-            actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
-          } satisfies WorkflowStep,
-        ]
-      : []),
+    // Nach Matching/Import, vor Bewertung – nicht direkt vor „Sicherung nach Noten“
+    {
+      id: "backup-import",
+      done: importBackupDone,
+      label: "Sicherung nach Import",
+      href: `/exam/${examId}/export?stage=import#sicherung`,
+      detail: !importsOk
+        ? isHisManual || isKlausur
+          ? `Zuerst ${HISINONE_LABEL}-Masterliste importieren`
+          : `Zuerst alle XLSX importieren (${HISINONE_LABEL}, Antritt, Punkte)`
+        : importBackupDone
+          ? `Erledigt${formatMilestoneAt(
+              project.workflowMilestones?.backupAfterImportAt
+            )}`
+          : "JSON-Sicherung …_nach-Import",
+      critical: importsOk && !importBackupDone,
+      actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
+    },
     ...(isStaManualExam(project.examType)
       ? [
           {
