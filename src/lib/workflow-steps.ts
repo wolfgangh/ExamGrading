@@ -162,6 +162,23 @@ export function buildWorkflowSteps(
         ]
       : []),
     {
+      id: "backup-import",
+      done: importBackupDone,
+      label: "Sicherung nach Import",
+      href: `/exam/${examId}/export?stage=import#sicherung`,
+      detail: !importsOk
+        ? `Zuerst alle XLSX importieren (${HISINONE_LABEL}${
+            isKlausur ? ", Punkte" : ", Antritt, Punkte"
+          })`
+        : importBackupDone
+          ? `Erledigt${formatMilestoneAt(
+              project.workflowMilestones?.backupAfterImportAt
+            )}`
+          : "JSON-Sicherung …_nach-Import",
+      critical: importsOk && !importBackupDone,
+      actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
+    },
+    {
       id: "points",
       done: pointsDone,
       label: isKlausur ? "Punkte (Vorlage)" : "Punkte & Bewertung",
@@ -209,23 +226,6 @@ export function buildWorkflowSteps(
         : subMapNeeded && !subMapOk
           ? "Teilgebiete zuordnen"
           : "Zur Notenübersicht",
-    },
-    {
-      id: "backup-import",
-      done: importBackupDone,
-      label: "Sicherung nach Import",
-      href: `/exam/${examId}/export?stage=import#sicherung`,
-      detail: !importsOk
-        ? `Zuerst alle XLSX importieren (${HISINONE_LABEL}${
-            isKlausur ? ", Punkte" : ", Antritt, Punkte"
-          })`
-        : importBackupDone
-          ? `Erledigt${formatMilestoneAt(
-              project.workflowMilestones?.backupAfterImportAt
-            )}`
-          : "JSON-Sicherung …_nach-Import",
-      critical: importsOk && !importBackupDone,
-      actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
     },
     ...(onlineStyle
       ? [
