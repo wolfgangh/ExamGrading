@@ -44,13 +44,17 @@ export function exportGradesListPdf(
 
   const data = sortRows(rows).map((r) => {
     const isNoShow = r.status === "no_show" || r.attended === false;
+    let status = shortStatus(r);
+    if (r.mergedFromMatriculation) {
+      status = `${status} (ZF ${r.mergedFromMatriculation})`;
+    }
     return [
       pdfText(r.student.lastName),
       pdfText(r.student.firstName),
       pdfText(r.key),
       isNoShow ? "–" : pdfPoints(r.totalPoints),
       isNoShow ? "–" : pdfGrade(r.finalGrade),
-      pdfText(shortStatus(r)),
+      pdfText(status),
     ];
   });
 
@@ -76,7 +80,35 @@ export function exportGradesListPdf(
     margin: { left: PDF_MARGIN, right: PDF_MARGIN },
   });
 
-  const finalY = getLastTableY(doc, 200);
+  let finalY = getLastTableY(doc, 200);
+
+  const merges = (project.identityMerges ?? []).filter((m) => m.active);
+  if (merges.length > 0) {
+    let y = finalY + 8;
+    if (y > 250) {
+      doc.addPage();
+      y = PDF_MARGIN + 12;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(pdfText("Matrikel-Zusammenführungen (THE)"), PDF_MARGIN, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    for (const m of merges) {
+      if (y > 275) {
+        doc.addPage();
+        y = PDF_MARGIN + 12;
+      }
+      const line = `${m.sourceMatriculation} → ${m.targetMatriculation}: ${m.sourceSnapshot.lastName}, ${m.sourceSnapshot.firstName} · ${m.reason}`;
+      doc.text(pdfText(line), PDF_MARGIN, y, {
+        maxWidth: 180,
+      });
+      y += 5;
+    }
+    finalY = y;
+  }
+
   let sigY = finalY + 8;
   if (sigY > 240) {
     doc.addPage();

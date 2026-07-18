@@ -180,6 +180,38 @@ export interface ImportLogEntry {
   errors: string[];
 }
 
+/**
+ * Manuelle Zusammenführung einer fehlerhaften Antritts-/Punkte-Matrikel
+ * mit der korrekten HIS-Matrikel (typisch THE: Tippfehler in der Antrittsliste).
+ * Nie automatisch – nur nach Prüfer-Freigabe.
+ */
+export interface IdentityMerge {
+  id: string;
+  at: string;
+  examType: ExamType;
+  /** Falsche Matr. (Antritt/Punkte) */
+  sourceMatriculation: string;
+  /** Korrekte HIS-Matr. */
+  targetMatriculation: string;
+  sourceSnapshot: {
+    lastName: string;
+    firstName: string;
+    email?: string;
+    totalPoints?: number | null;
+    finalGrade?: number | null;
+  };
+  targetSnapshot: {
+    lastName: string;
+    firstName: string;
+    statusBefore: string;
+  };
+  /** Pflicht: Prüfer-Begründung */
+  reason: string;
+  /** z. B. „nach Abgleich HIS-Dokument und Antrittsdaten“ */
+  confirmedByNote: string;
+  active: boolean;
+}
+
 export interface ExamProject {
   id: string;
   createdAt: string;
@@ -210,6 +242,13 @@ export interface ExamProject {
   students: Record<MatriculationKey, Student>;
   /** Aufgaben aus THE-Import */
   questionDefs?: QuestionDef[];
+
+  /**
+   * Dokumentierte manuelle Matrikel-Zusammenführungen (THE).
+   * Wirksam bereits durch physisches Verschieben von Antritt/Punkten;
+   * Einträge dienen Audit und Hinweisen.
+   */
+  identityMerges?: IdentityMerge[];
 
   importLogs: ImportLogEntry[];
 
@@ -262,6 +301,8 @@ export interface EnrichedStudentRow {
   attendanceWithoutHis?: boolean;
   /** Offene Aufgabenbewertungen */
   needsGradingCount?: number;
+  /** Aktive Zusammenführung: falsche Quell-Matr. */
+  mergedFromMatriculation?: string;
 }
 
 export interface ExamStatistics {

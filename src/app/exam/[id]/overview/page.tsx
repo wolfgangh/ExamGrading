@@ -20,10 +20,12 @@ import {
   isBackupStale,
 } from "@/lib/backup-status";
 import { cn, formatGrade, formatPercent, formatStat } from "@/lib/utils";
+import { orphanCount } from "@/lib/matching/merge-candidates";
 import {
   CheckCircle2,
   Circle,
   FileSpreadsheet,
+  GitMerge,
   HardDrive,
   PenLine,
   Table2,
@@ -39,6 +41,9 @@ export default function OverviewPage() {
   const backupStale = isBackupStale(project);
 
   const isKlausur = project.examType === "written";
+  const isThe = project.examType === "the";
+  const orphanN = isThe ? orphanCount(project) : 0;
+  const mergeN = (project.identityMerges ?? []).filter((m) => m.active).length;
 
   const steps = [
     {
@@ -117,15 +122,42 @@ export default function OverviewPage() {
         <div className="rounded-xl border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
           <p className="font-medium">
             {stats.attendedOrphan} Antritt/Antritte ohne HIS-Anmeldung
+            {isThe && orphanN > 0 && (
+              <span className="font-normal">
+                {" "}
+                · {orphanN} mögliche Matrikel-Konflikte
+              </span>
+            )}
           </p>
           <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
             Diese Personen sind in der Moodle-Antrittsliste, aber nicht in den
-            HIS-Dateien. Bitte in der{" "}
-            <Link href={`/exam/${id}/grades`} className="underline font-medium">
+            HIS-Dateien
+            {isThe
+              ? " – oft Tippfehler in der selbst eingetragenen Matrikelnummer."
+              : "."}{" "}
+            Bitte in der{" "}
+            <Link href={`/exam/${id}/grades`} className="font-medium underline">
               Notenübersicht
-            </Link>{" "}
-            prüfen (Filter „Antritt ohne HIS“). Automatische Zuordnung erfolgt
-            nicht – nur nach expliziter Prüfer-Freigabe (später).
+            </Link>
+            {isThe ? (
+              <>
+                {" "}
+                oder unter{" "}
+                <Link
+                  href={`/exam/${id}/matching`}
+                  className="inline-flex items-center gap-1 font-medium underline"
+                >
+                  <GitMerge className="size-3.5" />
+                  Zuordnung
+                </Link>{" "}
+                manuell zusammenführen (nie automatisch).
+              </>
+            ) : (
+              <> prüfen (Filter „Antritt ohne HIS“).</>
+            )}
+            {mergeN > 0 && (
+              <> · {mergeN} Zusammenführung(en) dokumentiert.</>
+            )}
           </p>
           {orphans.length > 0 && orphans.length <= 8 && (
             <ul className="mt-2 list-inside list-disc">

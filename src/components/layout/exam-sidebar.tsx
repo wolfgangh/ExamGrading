@@ -9,6 +9,7 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  GitMerge,
   Grid3x3,
   Layers,
   PenLine,
@@ -17,8 +18,9 @@ import {
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { ExamType } from "@/lib/types";
 
-const NAV = [
+const NAV_BASE = [
   { href: "overview", label: "Übersicht", icon: BarChart3 },
   { href: "import", label: "Importe", icon: FileSpreadsheet },
   { href: "points", label: "Punkteerfassung", icon: PenLine },
@@ -30,9 +32,23 @@ const NAV = [
   { href: "settings", label: "Einstellungen", icon: Settings },
 ] as const;
 
-export function ExamSidebar({ examId }: { examId: string }) {
+export function ExamSidebar({
+  examId,
+  examType,
+}: {
+  examId: string;
+  examType?: ExamType;
+}) {
   const pathname = usePathname();
   const base = `/exam/${examId}`;
+
+  const nav = [
+    ...NAV_BASE.slice(0, 2),
+    ...(examType === "the"
+      ? ([{ href: "matching", label: "Zuordnung", icon: GitMerge }] as const)
+      : []),
+    ...NAV_BASE.slice(2),
+  ];
 
   return (
     <aside className="surface-panel flex w-56 shrink-0 flex-col border-r">
@@ -56,7 +72,7 @@ export function ExamSidebar({ examId }: { examId: string }) {
         </p>
       </div>
       <nav className="flex flex-col gap-0.5 p-2">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {nav.map(({ href, label, icon: Icon }) => {
           const path = `${base}/${href}`;
           const active = pathname === path || pathname.startsWith(path + "/");
           return (

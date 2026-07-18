@@ -77,7 +77,7 @@ function ExamShell({
       />
       <BackupBanner />
       <div className="flex min-h-0 flex-1">
-        <ExamSidebar examId={examId} />
+        <ExamSidebar examId={examId} examType={project.examType} />
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="border-b bg-card/50 px-4 py-2">
             <SummaryPanel stats={stats} compact />

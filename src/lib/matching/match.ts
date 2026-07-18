@@ -124,6 +124,17 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     return a.orderIndex - b.orderIndex;
   });
 
+  const mergesByTarget = new Map<string, string[]>();
+  for (const m of project.identityMerges ?? []) {
+    if (!m.active) continue;
+    const t = normalizeMatriculation(m.targetMatriculation);
+    const s = normalizeMatriculation(m.sourceMatriculation);
+    if (!t || !s) continue;
+    const list = mergesByTarget.get(t) ?? [];
+    list.push(s);
+    mergesByTarget.set(t, list);
+  }
+
   for (const his of hisSorted) {
     const key = normalizeMatriculation(his.matriculationNumber);
     if (!key) continue;
@@ -207,6 +218,12 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     if (multiProgram) {
       warnings.push("Matrikelnummer in mehreren HIS-/Studiengangsdateien");
     }
+    const mergedFrom = mergesByTarget.get(key);
+    if (mergedFrom?.length) {
+      warnings.push(
+        `Manuell zusammengeführt aus Matr. ${mergedFrom.join(", ")} (THE-Zuordnung)`
+      );
+    }
 
     rows.push({
       key,
@@ -231,6 +248,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       hisSourceId: his.sourceId,
       programCode: src?.programCode,
       examNumber: his.examNumber || src?.examNumber,
+      mergedFromMatriculation: mergedFrom?.[0],
       multiProgram,
       attendanceWithoutHis: false,
       needsGradingCount,
