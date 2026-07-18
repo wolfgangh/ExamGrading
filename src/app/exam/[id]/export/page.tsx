@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -24,16 +24,29 @@ import {
 } from "@/lib/backup-status";
 import { cn } from "@/lib/utils";
 import {
-  Download,
   FileJson,
   FileText,
   HardDrive,
   ShieldAlert,
 } from "lucide-react";
 import { HISINONE_LABEL } from "@/lib/types";
+import {
+  type BackupStage,
+  inferBackupStage,
+} from "@/lib/workflow-milestones";
+import { listUnresolvedOrphans } from "@/lib/matching/orphan-resolution";
+import { isOnlineStyleExam } from "@/lib/types";
+
+function parseStage(raw: string | null): BackupStage | undefined {
+  if (raw === "import" || raw === "matching" || raw === "grades" || raw === "general") {
+    return raw;
+  }
+  return undefined;
+}
 
 export default function ExportPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const { project, setProject, rows, stats } = useExamContext();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -45,23 +58,47 @@ export default function ExportPage() {
   if (!project || !stats) return null;
 
   const backupStale = isBackupStale(project);
+  const unresolvedN = isOnlineStyleExam(project.examType)
+    ? listUnresolvedOrphans(project, rows).length
+    : 0;
+  const stageFromQuery = parseStage(searchParams.get("stage"));
+  const stage =
+    stageFromQuery ??
+    inferBackupStage(project, {
+      gradedCount: stats.graded,
+      unresolvedOrphanCount: unresolvedN,
+    });
+  const filenamePreview = projectArchiveFilename(project, stage);
 
   const doProjectBackup = () => {
     downloadAndMarkBackup(project, setProject, {
       gradedCount: stats.graded,
+      unresolvedOrphanCount: unresolvedN,
+      stage,
     });
     setMessage(
-      `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}). Bitte neben den Klausurdateien ablegen. Notenliste und ${HISINONE_LABEL}-Export sind freigeschaltet (sofern keine weiteren Sperren).`
+      `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}, Datei: ${filenamePreview}). Bitte neben den Klausurdateien ablegen. Notenliste und ${HISINONE_LABEL}-Export sind freigeschaltet (sofern keine weiteren Sperren).`
     );
   };
+
+  const stageLabel =
+    stage === "import"
+      ? "nach Import"
+      : stage === "matching"
+        ? "nach Zuordnung"
+        : stage === "grades"
+          ? "nach Noten"
+          : "allgemein";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Sicherung</h1>
         <p className="text-muted-foreground">
-          JSON-Projektsicherung – jederzeit und bei Änderungen. Notenliste und{" "}
-          {HISINONE_LABEL}-Dateien exportieren Sie unter{" "}
+          JSON-Projektsicherung – jederzeit und bei Änderungen. Dateinamen
+          unterscheiden die Workflow-Schritte (…_nach-Import / …_nach-Zuordnung
+          / …_nach-Noten). Notenliste und {HISINONE_LABEL}-Dateien exportieren
+          Sie unter{" "}
           <Link
             href={`/exam/${id}/documents`}
             className="font-medium text-foreground underline"
@@ -88,6 +125,8 @@ export default function ExportPage() {
           <CardDescription>
             Vollständiges JSON-Archiv – enthält alle Daten inkl. Matrikel-Audits.
             Status: <strong>{backupStatusLabel(project)}</strong>
+            {" · "}
+            Schritt: <strong>{stageLabel}</strong>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -117,7 +156,7 @@ export default function ExportPage() {
             )}
           </div>
           <p className="break-all font-mono text-xs text-muted-foreground">
-            {projectArchiveFilename(project)}
+            Dateiname: {filenamePreview}
           </p>
         </CardContent>
       </Card>
@@ -126,55 +165,52 @@ export default function ExportPage() {
         <CardHeader>
           <CardTitle className="text-base">Validierung (Export-Status)</CardTitle>
           <CardDescription>
-            Prüft u. a. offene Bewertungen, ungeprüfte Matrikel-Sonderfälle und{" "}
-            {HISINONE_LABEL}-Vorlagen.
+            Prüft u. a. offene Bewertungen, ungeprüfte Matrikel-Sonderfälle,
+            Teilgebiet-Zuordnung und {HISINONE_LABEL}-Vorlagen.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {items.map((item, i) => (
-            <div
-              key={i}
-              className={cn(
-                "flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-sm",
-                item.level === "error" &&
-                  "border-destructive/40 bg-destructive/5 text-destructive",
-                item.level === "warning" &&
-                  "border-amber-300 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100",
-                item.level === "info" && "bg-muted/40"
-              )}
-            >
-              <span>{item.message}</span>
-              {item.count != null && (
-                <span className="shrink-0 font-semibold tabular-nums">
-                  {item.count}
-                </span>
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card className="surface-panel">
-        <CardContent className="flex flex-wrap items-center gap-3 pt-4">
-          <FileText className="size-4 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Notenliste → {HISINONE_LABEL} → manuelle Notenmeldung:
-          </p>
+          {items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Keine Hinweise.</p>
+          ) : (
+            <ul className="space-y-1.5 text-sm">
+              {items.map((item, i) => (
+                <li
+                  key={`${item.level}-${i}`}
+                  className={cn(
+                    "rounded-lg border px-3 py-2",
+                    item.level === "error" &&
+                      "border-destructive/40 bg-destructive/5 text-destructive",
+                    item.level === "warning" &&
+                      "border-amber-400/50 bg-amber-50 dark:bg-amber-950/30",
+                    item.level === "info" && "border-border bg-muted/30"
+                  )}
+                >
+                  {item.message}
+                  {item.count != null && (
+                    <span className="ml-1 tabular-nums opacity-80">
+                      ({item.count})
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
           <Link
             href={`/exam/${id}/documents`}
             className={cn(
               buttonVariants({ variant: "outline", size: "sm" }),
-              "gap-1.5"
+              "mt-2 gap-1.5"
             )}
           >
-            Zu Dokumente
+            <FileText className="size-4" />
+            Zu Dokumenten
           </Link>
         </CardContent>
       </Card>
 
       {message && (
-        <p className="flex items-start gap-2 text-sm text-muted-foreground">
-          <Download className="mt-0.5 size-4 shrink-0" />
+        <p className="text-sm text-emerald-700 dark:text-emerald-300">
           {message}
         </p>
       )}

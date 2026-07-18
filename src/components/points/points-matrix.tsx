@@ -59,8 +59,11 @@ export function PointsMatrix({
   }));
 
   return (
-    <div className="overflow-auto rounded-xl border max-h-[min(70vh,720px)]">
-      <Table>
+    // Fester Viewport: X- und Y-Scrollbar am Rahmen (nicht erst am Tabellenende)
+    <div
+      className="w-full max-h-[min(70vh,720px)] overflow-x-auto overflow-y-auto overscroll-contain rounded-xl border [scrollbar-gutter:stable]"
+    >
+      <Table className="min-w-max w-full">
         <TableHeader className="sticky top-0 z-20 bg-card shadow-sm">
           <TableRow>
             <TableHead className="sticky left-0 z-30 bg-card min-w-[140px]">

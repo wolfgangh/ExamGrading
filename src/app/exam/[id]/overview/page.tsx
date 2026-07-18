@@ -55,8 +55,60 @@ export default function OverviewPage() {
   const orphans = rows.filter((r) => r.attendanceWithoutHis);
   const noShows = rows.filter((r) => r.status === "no_show");
 
+  const quickLinks = (
+    <div className="flex flex-wrap gap-2">
+      <Link
+        href={`/exam/${id}/export#sicherung`}
+        className={cn(
+          buttonVariants({ variant: "outline", size: "sm" }),
+          "gap-1.5"
+        )}
+      >
+        <Download className="size-3.5" />
+        Sichern
+      </Link>
+      <Link
+        href={`/exam/${id}/import`}
+        className={cn(
+          buttonVariants({ variant: "outline", size: "sm" }),
+          "gap-1.5"
+        )}
+      >
+        <FileSpreadsheet className="size-3.5" />
+        Importe
+      </Link>
+      <Link
+        href={`/exam/${id}/points`}
+        className={cn(
+          buttonVariants({ variant: "outline", size: "sm" }),
+          "gap-1.5"
+        )}
+      >
+        <PenLine className="size-3.5" />
+        Punkte
+      </Link>
+      <Link
+        href={`/exam/${id}/grades`}
+        className={cn(
+          buttonVariants({ variant: "outline", size: "sm" }),
+          "gap-1.5"
+        )}
+      >
+        <Table2 className="size-3.5" />
+        Noten
+      </Link>
+      <Link
+        href={`/exam/${id}/documents`}
+        className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}
+      >
+        <Download className="size-3.5" />
+        Dokumente
+      </Link>
+    </div>
+  );
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Übersicht</h1>
         <p className="text-muted-foreground">
@@ -144,14 +196,14 @@ export default function OverviewPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="surface-panel lg:col-span-2">
+      <div className="grid items-start gap-4 lg:grid-cols-12">
+        <Card className="surface-panel lg:col-span-7">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <CardTitle>Workflow-Status</CardTitle>
                 <CardDescription>
-                  Schritte bis zum {HISINONE_LABEL}-Upload (inkl. zwei
+                  Schritte bis zum {HISINONE_LABEL}-Upload (inkl.
                   JSON-Sicherungen)
                 </CardDescription>
               </div>
@@ -253,7 +305,10 @@ export default function OverviewPage() {
                             Erforderlich
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-muted-foreground">
+                          <Badge
+                            variant="outline"
+                            className="text-muted-foreground"
+                          >
                             Ausstehend
                           </Badge>
                         )}
@@ -284,74 +339,45 @@ export default function OverviewPage() {
             })}
           </CardContent>
         </Card>
-        <SummaryPanel stats={stats} />
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="surface-panel">
-          <CardHeader>
-            <CardTitle className="text-base">Notenverteilung</CardTitle>
-            <CardDescription>
-              Ø {formatGrade(stats.averageGrade)} · Med{" "}
-              {formatGrade(stats.medianGrade)} · s{" "}
-              {formatStat(stats.stdDevGrade, 2)} · Bestehen{" "}
-              {formatPercent(stats.passRate)}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <GradeDistributionChart stats={stats} />
-          </CardContent>
-        </Card>
-        <Card className="surface-panel">
-          <CardHeader>
-            <CardTitle className="text-base">Punkteverteilung</CardTitle>
-            <CardDescription>
-              Max. {project.gradeSchema.maxPoints} Punkte · Bestehensgrenze{" "}
-              {project.gradeSchema.passThreshold}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PointsHistogramChart stats={stats} />
-          </CardContent>
-        </Card>
-      </div>
+        <div className="flex flex-col gap-4 lg:col-span-5 lg:sticky lg:top-4 lg:self-start">
+          <SummaryPanel stats={stats} />
 
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/exam/${id}/export#sicherung`}
-          className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
-        >
-          <Download className="size-4" />
-          Projekt sichern
-        </Link>
-        <Link
-          href={`/exam/${id}/import`}
-          className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
-        >
-          <FileSpreadsheet className="size-4" />
-          Importe
-        </Link>
-        <Link
-          href={`/exam/${id}/points`}
-          className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
-        >
-          <PenLine className="size-4" />
-          Punkte
-        </Link>
-        <Link
-          href={`/exam/${id}/grades`}
-          className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
-        >
-          <Table2 className="size-4" />
-          Noten
-        </Link>
-        <Link
-          href={`/exam/${id}/documents`}
-          className={cn(buttonVariants(), "gap-1.5")}
-        >
-          <Download className="size-4" />
-          Dokumente
-        </Link>
+          <Card className="surface-panel">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Schnellaktionen</CardTitle>
+            </CardHeader>
+            <CardContent>{quickLinks}</CardContent>
+          </Card>
+
+          <Card className="surface-panel">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Notenverteilung</CardTitle>
+              <CardDescription>
+                Ø {formatGrade(stats.averageGrade)} · Med{" "}
+                {formatGrade(stats.medianGrade)} · s{" "}
+                {formatStat(stats.stdDevGrade, 2)} · Bestehen{" "}
+                {formatPercent(stats.passRate)}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <GradeDistributionChart stats={stats} className="h-52 w-full" />
+            </CardContent>
+          </Card>
+
+          <Card className="surface-panel">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Punkteverteilung</CardTitle>
+              <CardDescription>
+                Max. {project.gradeSchema.maxPoints} Punkte · Bestehensgrenze{" "}
+                {project.gradeSchema.passThreshold}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <PointsHistogramChart stats={stats} className="h-52 w-full" />
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

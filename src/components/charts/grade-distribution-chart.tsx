@@ -59,9 +59,12 @@ export function shortScenarioLabel(name: string, passThreshold: number): string 
 export function GradeDistributionChart({
   stats,
   mode = "count",
+  className,
 }: {
   stats: ExamStatistics;
   mode?: "count" | "share";
+  /** Tailwind height, default h-72 */
+  className?: string;
 }) {
   const total = stats.gradeDistribution.reduce((s, g) => s + g.count, 0) || 1;
   const data = stats.gradeDistribution.map((g) => {
@@ -75,7 +78,7 @@ export function GradeDistributionChart({
   });
 
   return (
-    <div className="h-72 w-full">
+    <div className={className ?? "h-72 w-full"}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}

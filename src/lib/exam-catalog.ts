@@ -91,6 +91,21 @@ export const LECTURER_OPTIONS = [
 ] as const;
 
 export const DEFAULT_LECTURER = "Prof. Dr. Wolfgang Hößl";
+export const CO_LECTURER_SCHOENTAG = "Prof. Dr. Jürgen Schöntag";
+
+/**
+ * Standard-Dozenten je Prüfung:
+ * FI und MAP → Hößl + Schöntag, sonst nur Hößl.
+ */
+export function defaultLecturersForExam(
+  examNameOrLabel: string
+): string[] {
+  const entry = findCatalogEntry(examNameOrLabel);
+  if (entry?.code === "FI" || entry?.code === "MAP") {
+    return [DEFAULT_LECTURER, CO_LECTURER_SCHOENTAG];
+  }
+  return [DEFAULT_LECTURER];
+}
 
 /** Match Label, Name oder „Name (CODE)“ */
 export function findCatalogEntry(

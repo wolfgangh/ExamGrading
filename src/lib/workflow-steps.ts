@@ -13,9 +13,16 @@ import {
 import {
   backupAfterGradesDone,
   backupAfterImportDone,
+  backupAfterMatchingDone,
   gradesDataComplete,
   importsComplete,
+  matchingReadyForBackup,
 } from "@/lib/workflow-milestones";
+import {
+  isSubAreaMappingComplete,
+  needsSubAreaMapping,
+  subAreaMappingSummary,
+} from "@/lib/grades/subarea-mapping";
 import {
   HISINONE_LABEL,
   isOnlineStyleExam,
@@ -38,6 +45,7 @@ export {
   importsComplete,
   backupAfterImportDone,
   backupAfterGradesDone,
+  backupAfterMatchingDone,
 } from "@/lib/workflow-milestones";
 
 export function gradesComplete(
@@ -46,6 +54,20 @@ export function gradesComplete(
   stats: ExamStatistics
 ): boolean {
   return gradesDataComplete(project, stats.graded);
+}
+
+function formatMilestoneAt(iso?: string): string {
+  if (!iso) return "";
+  try {
+    return ` · ${new Date(iso).toLocaleString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -77,7 +99,13 @@ export function buildWorkflowSteps(
     (r) => r.status === "export_ready"
   ).length;
   const importBackupDone = backupAfterImportDone(project);
+  const matchingReady = matchingReadyForBackup(project, unresolvedN);
+  const matchingBackupDone = backupAfterMatchingDone(project, unresolvedN);
   const gradesBackupDone = backupAfterGradesDone(project) && gradesOk;
+  const subMapNeeded = needsSubAreaMapping(project);
+  const subMapOk = isSubAreaMappingComplete(project);
+  const pointsDone =
+    project.points.length > 0 && !openGrading && (!subMapNeeded || subMapOk);
 
   const steps: WorkflowStep[] = [
     {
@@ -135,11 +163,12 @@ export function buildWorkflowSteps(
       : []),
     {
       id: "points",
-      done: project.points.length > 0 && !openGrading,
+      done: pointsDone,
       label: isKlausur ? "Punkte (Vorlage)" : "Punkte & Bewertung",
-      href: openGrading
-        ? `/exam/${examId}/detail-points`
-        : `/exam/${examId}/import?focus=points`,
+      href:
+        openGrading || (subMapNeeded && !subMapOk)
+          ? `/exam/${examId}/detail-points`
+          : `/exam/${examId}/import?focus=points`,
       detail:
         project.points.length === 0
           ? isKlausur
@@ -147,76 +176,90 @@ export function buildWorkflowSteps(
             : "Noch keine Punkte importiert"
           : openGrading
             ? openGradingSummary(project)
-            : `${project.points.length} mit Punkten · alle Aufgaben bewertet`,
-      critical: openGrading,
+            : subMapNeeded && !subMapOk
+              ? subAreaMappingSummary(project)
+              : `${project.points.length} mit Punkten · alle Aufgaben bewertet`,
+      critical: openGrading || (subMapNeeded && !subMapOk),
       actionLabel: openGrading
         ? "Jetzt bewerten"
-        : project.points.length > 0
-          ? "Öffnen"
-          : "Importieren",
+        : subMapNeeded && !subMapOk
+          ? "Teilgebiete zuordnen"
+          : project.points.length > 0
+            ? "Öffnen"
+            : "Importieren",
     },
     {
       id: "grades",
-      done: gradesOk,
+      done: gradesOk && (!subMapNeeded || subMapOk),
       label: "Noten berechnet",
-      href: openGrading
-        ? `/exam/${examId}/detail-points`
-        : `/exam/${examId}/grades`,
+      href:
+        openGrading || (subMapNeeded && !subMapOk)
+          ? `/exam/${examId}/detail-points`
+          : `/exam/${examId}/grades`,
       detail: openGrading
         ? `Notenschlüssel gesperrt – ${openGradingCount.people} Person(en), ${openGradingCount.tasks} Aufgabe(n) offen`
-        : stats.graded > 0
-          ? `${stats.graded} Noten vorhanden`
-          : "Noch keine Noten",
-      critical: openGrading,
-      actionLabel: openGrading ? "Bewertung abschließen" : "Zur Notenübersicht",
+        : subMapNeeded && !subMapOk
+          ? "Zuerst Teilgebiet-Zuordnung bestätigen"
+          : stats.graded > 0
+            ? `${stats.graded} Noten vorhanden`
+            : "Noch keine Noten",
+      critical: openGrading || (subMapNeeded && !subMapOk),
+      actionLabel: openGrading
+        ? "Bewertung abschließen"
+        : subMapNeeded && !subMapOk
+          ? "Teilgebiete zuordnen"
+          : "Zur Notenübersicht",
     },
     {
       id: "backup-import",
       done: importBackupDone,
       label: "Sicherung nach Import",
-      href: `/exam/${examId}/export#sicherung`,
+      href: `/exam/${examId}/export?stage=import#sicherung`,
       detail: !importsOk
         ? `Zuerst alle XLSX importieren (${HISINONE_LABEL}${
             isKlausur ? ", Punkte" : ", Antritt, Punkte"
           })`
         : importBackupDone
-          ? `Erledigt${
+          ? `Erledigt${formatMilestoneAt(
               project.workflowMilestones?.backupAfterImportAt
-                ? ` · ${new Date(
-                    project.workflowMilestones.backupAfterImportAt
-                  ).toLocaleString("de-DE", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}`
-                : ""
-            }`
-          : "JSON-Sicherung nach vollständigem Import",
+            )}`
+          : "JSON-Sicherung …_nach-Import",
       critical: importsOk && !importBackupDone,
       actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
     },
+    ...(onlineStyle
+      ? [
+          {
+            id: "backup-matching",
+            done: matchingBackupDone,
+            label: "Sicherung nach Zuordnung",
+            href: `/exam/${examId}/export?stage=matching#sicherung`,
+            detail: !matchingReady
+              ? unresolvedN > 0
+                ? "Zuerst alle Orphans prüfen"
+                : "Zuerst Antritt und HISinOne"
+              : matchingBackupDone
+                ? `Erledigt${formatMilestoneAt(
+                    project.workflowMilestones?.backupAfterMatchingAt
+                  )}`
+                : "JSON-Sicherung …_nach-Zuordnung",
+            critical: matchingReady && !matchingBackupDone,
+            actionLabel: matchingBackupDone ? "Öffnen" : "Jetzt sichern",
+          } satisfies WorkflowStep,
+        ]
+      : []),
     {
       id: "backup-grades",
       done: gradesBackupDone,
       label: "Sicherung nach Noten",
-      href: `/exam/${examId}/export#sicherung`,
+      href: `/exam/${examId}/export?stage=grades#sicherung`,
       detail: !gradesOk
         ? "Zuerst Bewertung abschließen und Noten berechnen"
         : gradesBackupDone
-          ? `Erledigt${
+          ? `Erledigt${formatMilestoneAt(
               project.workflowMilestones?.backupAfterGradesAt
-                ? ` · ${new Date(
-                    project.workflowMilestones.backupAfterGradesAt
-                  ).toLocaleString("de-DE", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}`
-                : ""
-            }`
-          : "JSON-Sicherung nach Notenberechnung – vor dem Export",
+            )}`
+          : "JSON-Sicherung …_nach-Noten – vor dem Export",
       critical: gradesOk && !gradesBackupDone,
       actionLabel: gradesBackupDone ? "Öffnen" : "Jetzt sichern",
     },
@@ -226,36 +269,42 @@ export function buildWorkflowSteps(
         gradedExportReady > 0 &&
         backupOk &&
         !openGrading &&
-        (!onlineStyle || unresolvedN === 0),
+        (!onlineStyle || unresolvedN === 0) &&
+        (!subMapNeeded || subMapOk),
       label: "Dokumente / HISinOne-Export",
       href: !backupOk
         ? `/exam/${examId}/export#sicherung`
-        : openGrading
+        : openGrading || (subMapNeeded && !subMapOk)
           ? `/exam/${examId}/detail-points`
           : onlineStyle && unresolvedN > 0
             ? `/exam/${examId}/matching`
             : `/exam/${examId}/documents`,
       detail: openGrading
         ? "Zuerst alle Aufgaben bewerten (Export gesperrt)"
-        : !backupOk
-          ? `Aktuelle Sicherung erforderlich (${backupStatusLabel(project)})`
-          : onlineStyle && unresolvedN > 0
-            ? "Zuerst Matrikel-Zuordnung abschließen"
-            : gradedExportReady > 0
-              ? `${gradedExportReady} mit Note exportbereit` +
-                (stats.noShow > 0 ? ` · ${stats.noShow} No-Show(s)` : "")
-              : "Noch nicht exportbereit",
+        : subMapNeeded && !subMapOk
+          ? "Zuerst Teilgebiet-Zuordnung"
+          : !backupOk
+            ? `Aktuelle Sicherung erforderlich (${backupStatusLabel(project)})`
+            : onlineStyle && unresolvedN > 0
+              ? "Zuerst Matrikel-Zuordnung abschließen"
+              : gradedExportReady > 0
+                ? `${gradedExportReady} mit Note exportbereit` +
+                  (stats.noShow > 0 ? ` · ${stats.noShow} No-Show(s)` : "")
+                : "Noch nicht exportbereit",
       critical:
         openGrading ||
+        (subMapNeeded && !subMapOk) ||
         (backupStale && hasSubstantialData(project)) ||
         (onlineStyle && unresolvedN > 0),
       actionLabel: openGrading
         ? "Bewertung abschließen"
-        : !backupOk
-          ? "Zuerst sichern"
-          : onlineStyle && unresolvedN > 0
-            ? "Zuordnung prüfen"
-            : "Zu Dokumente",
+        : subMapNeeded && !subMapOk
+          ? "Teilgebiete zuordnen"
+          : !backupOk
+            ? "Zuerst sichern"
+            : onlineStyle && unresolvedN > 0
+              ? "Zuordnung prüfen"
+              : "Zu Dokumente",
     },
   ];
 

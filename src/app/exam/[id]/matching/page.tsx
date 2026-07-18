@@ -583,180 +583,181 @@ export default function MatchingPage() {
         </Card>
       </div>
 
-      {(activeMerges.length > 0 || activeDismissals.length > 0) && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {activeMerges.length > 0 && (
-            <Card className="surface-panel">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">
-                  Aktive Zusammenführungen
-                </CardTitle>
-                <CardDescription>
-                  Bei fälschlichem Merge dokumentiert aufheben.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {activeMerges.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <span className="font-mono text-xs">
-                        {m.sourceMatriculation} → {m.targetMatriculation}
-                      </span>
-                      <div className="text-muted-foreground">
-                        {m.sourceSnapshot.lastName},{" "}
-                        {m.sourceSnapshot.firstName}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0"
-                      disabled={!onlineStyle}
-                      onClick={() =>
-                        openUndoMerge(
-                          m.id,
-                          m.sourceMatriculation,
-                          m.targetMatriculation
-                        )
-                      }
-                    >
-                      <Undo2 className="size-3.5" />
-                      Aufheben
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {activeDismissals.length > 0 && (
-            <Card className="surface-panel">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Aktive Ablehnungen</CardTitle>
-                <CardDescription>
-                  Ablehnung aufheben → Orphan wieder ungeprüft (Sicherung
-                  nötig).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {activeDismissals.map((d) => (
-                  <div
-                    key={d.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <span className="font-mono text-xs">
-                        {d.sourceMatriculation}
-                        {d.bulk ? " · Sammel" : ""}
-                      </span>
-                      <div className="text-muted-foreground">
-                        {d.sourceSnapshot.lastName},{" "}
-                        {d.sourceSnapshot.firstName}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0"
-                      disabled={!onlineStyle}
-                      onClick={() =>
-                        openUndoDismiss(d.id, d.sourceMatriculation)
-                      }
-                    >
-                      <Undo2 className="size-3.5" />
-                      Aufheben
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* Audit – Karten, nichts überdeckt */}
-      <Card className="surface-panel">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Dokumentation (Audit)</CardTitle>
-          <CardDescription>
-            Zusammenführungen und Ablehnungen – in JSON-Sicherung und
-            Notenliste-PDF.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {auditRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Noch keine Einträge.
-            </p>
-          ) : (
-            auditRows.map((m) => (
-              <div
-                key={m.id}
-                className="rounded-xl border bg-card p-3 text-sm"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <Badge
-                      variant={m.kind === "merge" ? "default" : "secondary"}
-                    >
-                      {m.kind === "merge" ? "Merge" : "Abgelehnt"}
-                    </Badge>
-                    <Badge variant={m.active ? "outline" : "secondary"}>
-                      {m.active
-                        ? "aktiv"
-                        : m.kind === "merge"
-                          ? "aufgehoben"
-                          : "aufgehoben"}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(m.at).toLocaleString("de-DE")}
+      {/* Aktive Listen + Audit nebeneinander (freier Platz nutzen) */}
+      <div
+        className={
+          activeMerges.length > 0 && activeDismissals.length > 0
+            ? "grid gap-4 lg:grid-cols-3"
+            : activeMerges.length > 0 || activeDismissals.length > 0
+              ? "grid gap-4 lg:grid-cols-2"
+              : "grid gap-4"
+        }
+      >
+        {activeMerges.length > 0 && (
+          <Card className="surface-panel flex min-h-0 flex-col">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Aktive Zusammenführungen
+              </CardTitle>
+              <CardDescription>
+                Bei fälschlichem Merge dokumentiert aufheben.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="max-h-[min(50vh,420px)] space-y-2 overflow-y-auto">
+              {activeMerges.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <span className="font-mono text-xs">
+                      {m.sourceMatriculation} → {m.targetMatriculation}
                     </span>
+                    <div className="text-muted-foreground">
+                      {m.sourceSnapshot.lastName},{" "}
+                      {m.sourceSnapshot.firstName}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    {m.canUndoMerge && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={!onlineStyle}
-                        onClick={() =>
-                          openUndoMerge(m.id, m.source, m.target)
-                        }
-                      >
-                        <Undo2 className="size-3.5" />
-                        Aufheben
-                      </Button>
-                    )}
-                    {m.canUndoDismiss && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={!onlineStyle}
-                        onClick={() => openUndoDismiss(m.id, m.source)}
-                      >
-                        <Undo2 className="size-3.5" />
-                        Aufheben
-                      </Button>
-                    )}
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={!onlineStyle}
+                    onClick={() =>
+                      openUndoMerge(
+                        m.id,
+                        m.sourceMatriculation,
+                        m.targetMatriculation
+                      )
+                    }
+                  >
+                    <Undo2 className="size-3.5" />
+                    Aufheben
+                  </Button>
                 </div>
-                <p className="mt-2 font-mono text-xs break-all">{m.detail}</p>
-                <p className="text-muted-foreground">{m.name}</p>
-                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-snug">
-                  {m.reason}
-                </p>
-                {m.undoReason && (
-                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
-                    Aufgehoben: {m.undoReason}
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {activeDismissals.length > 0 && (
+          <Card className="surface-panel flex min-h-0 flex-col">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Aktive Ablehnungen</CardTitle>
+              <CardDescription>
+                Ablehnung aufheben → Orphan wieder ungeprüft (Sicherung nötig).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="max-h-[min(50vh,420px)] space-y-2 overflow-y-auto">
+              {activeDismissals.map((d) => (
+                <div
+                  key={d.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <span className="font-mono text-xs">
+                      {d.sourceMatriculation}
+                      {d.bulk ? " · Sammel" : ""}
+                    </span>
+                    <div className="text-muted-foreground">
+                      {d.sourceSnapshot.lastName},{" "}
+                      {d.sourceSnapshot.firstName}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={!onlineStyle}
+                    onClick={() =>
+                      openUndoDismiss(d.id, d.sourceMatriculation)
+                    }
+                  >
+                    <Undo2 className="size-3.5" />
+                    Aufheben
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="surface-panel flex min-h-0 flex-col lg:min-h-[280px]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Dokumentation (Audit)</CardTitle>
+            <CardDescription>
+              Zusammenführungen und Ablehnungen – in JSON-Sicherung und
+              Notenliste-PDF.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="max-h-[min(70vh,560px)] space-y-3 overflow-y-auto">
+            {auditRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Noch keine Einträge.
+              </p>
+            ) : (
+              auditRows.map((m) => (
+                <div
+                  key={m.id}
+                  className="rounded-xl border bg-card p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <Badge
+                        variant={m.kind === "merge" ? "default" : "secondary"}
+                      >
+                        {m.kind === "merge" ? "Merge" : "Abgelehnt"}
+                      </Badge>
+                      <Badge variant={m.active ? "outline" : "secondary"}>
+                        {m.active ? "aktiv" : "aufgehoben"}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(m.at).toLocaleString("de-DE")}
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      {m.canUndoMerge && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={!onlineStyle}
+                          onClick={() =>
+                            openUndoMerge(m.id, m.source, m.target)
+                          }
+                        >
+                          <Undo2 className="size-3.5" />
+                          Aufheben
+                        </Button>
+                      )}
+                      {m.canUndoDismiss && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={!onlineStyle}
+                          onClick={() => openUndoDismiss(m.id, m.source)}
+                        >
+                          <Undo2 className="size-3.5" />
+                          Aufheben
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="mt-2 font-mono text-xs break-all">{m.detail}</p>
+                  <p className="text-muted-foreground">{m.name}</p>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-snug">
+                    {m.reason}
                   </p>
-                )}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+                  {m.undoReason && (
+                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                      Aufgehoben: {m.undoReason}
+                    </p>
+                  )}
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">

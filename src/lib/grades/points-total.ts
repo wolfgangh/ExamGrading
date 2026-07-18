@@ -50,14 +50,12 @@ export function recomputeSubAreasFromQuestions(
   const bySub: Record<string, number | null> = {};
   for (const sa of subAreas) bySub[sa.id] = null;
 
+  const validIds = new Set(subAreas.map((s) => s.id));
   for (const q of questionDefs) {
     const pts = byQuestion[q.id];
     if (pts == null || !Number.isFinite(pts)) continue;
-    const saId =
-      q.subAreaId ??
-      subAreas.find((s) => /^f$/i.test(s.code) || /frm|finanz/i.test(s.name))
-        ?.id ??
-      subAreas[0]?.id;
+    // Nur explizite Zuordnung – kein stilles Default auf Finanzierung/erstes Gebiet
+    const saId = q.subAreaId && validIds.has(q.subAreaId) ? q.subAreaId : null;
     if (!saId) continue;
     bySub[saId] = (bySub[saId] ?? 0) + pts;
   }

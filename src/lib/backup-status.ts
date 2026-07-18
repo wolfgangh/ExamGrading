@@ -1,6 +1,9 @@
 import type { ExamProject } from "@/lib/types";
 import { hasOpenGrading } from "@/lib/grades/open-grading";
-import { withWorkflowMilestonesOnBackup } from "@/lib/workflow-milestones";
+import {
+  type BackupStage,
+  withWorkflowMilestonesOnBackup,
+} from "@/lib/workflow-milestones";
 
 /** Mindestens ein Import / Datenbestand vorhanden */
 export function hasSubstantialData(project: ExamProject): boolean {
@@ -54,17 +57,26 @@ export function backupStatusLabel(project: ExamProject): string {
  * Markiert das aktuelle Projekt als soeben gesichert.
  * Setzt updatedAt und Sync-Felder auf denselben Zeitstempel,
  * damit Auto-Save das Backup nicht sofort wieder „stale“ macht.
- * Setzt Workflow-Meilensteine (Sicherung nach Import / nach Noten), wenn fällig.
+ * Setzt Workflow-Meilensteine (Import / Zuordnung / Noten), wenn fällig.
  */
 export function markProjectBackedUp(
   project: ExamProject,
-  options?: { gradedCount?: number }
+  options?: {
+    gradedCount?: number;
+    unresolvedOrphanCount?: number;
+    stage?: BackupStage;
+  }
 ): ExamProject {
   const now = new Date().toISOString();
   const gradesComplete =
     !hasOpenGrading(project) && (options?.gradedCount ?? 0) > 0;
+  const matchingComplete =
+    (options?.unresolvedOrphanCount ?? 0) === 0 &&
+    (project.attendance?.length ?? 0) > 0;
   const withMilestones = withWorkflowMilestonesOnBackup(project, {
     gradesComplete,
+    matchingComplete,
+    stage: options?.stage,
   });
   return {
     ...withMilestones,
@@ -84,11 +96,14 @@ export function markProjectRestoredFromBackup(
   const now = new Date().toISOString();
   const gradesComplete =
     !hasOpenGrading(project) &&
-    (project.points?.some((p) => p.gradeOverride != null || p.totalPoints != null) ??
+    (project.points?.some(
+      (p) => p.gradeOverride != null || p.totalPoints != null
+    ) ??
       false);
-  // Nach Restore: Meilensteine wie frische Sicherung setzen, wenn Daten passen
   const withMilestones = withWorkflowMilestonesOnBackup(project, {
     gradesComplete: !hasOpenGrading(project) && gradesComplete,
+    matchingComplete: true,
+    stage: "general",
   });
   return {
     ...withMilestones,

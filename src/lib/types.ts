@@ -283,6 +283,11 @@ export interface ExamProject {
   students: Record<MatriculationKey, Student>;
   /** Aufgaben aus THE-Import */
   questionDefs?: QuestionDef[];
+  /**
+   * Zeitpunkt der bestätigten Aufgaben→Teilgebiet-Zuordnung
+   * (nur relevant bei mehreren Teilgebieten).
+   */
+  subAreaMappingConfirmedAt?: string;
 
   /**
    * Dokumentierte manuelle Matrikel-Zusammenführungen (THE/elektrP).
@@ -300,6 +305,8 @@ export interface ExamProject {
   workflowMilestones?: {
     /** Sicherung nach vollständigem XLSX-Import */
     backupAfterImportAt?: string;
+    /** Sicherung nach Matrikel-Zuordnung (THE/elektrP) */
+    backupAfterMatchingAt?: string;
     /** Sicherung nach abgeschlossener Notenberechnung */
     backupAfterGradesAt?: string;
   };

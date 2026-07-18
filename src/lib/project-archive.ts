@@ -92,8 +92,24 @@ export function parseProjectArchive(json: string): ExamProject {
   return normalizeProject(data as ExamProject);
 }
 
-export function projectArchiveFilename(project: ExamProject): string {
-  const base = `ExamGrade_${project.name || "Pruefung"}_Sicherung`;
+export type { BackupStage } from "@/lib/workflow-milestones";
+
+const STAGE_SUFFIX: Record<
+  import("@/lib/workflow-milestones").BackupStage,
+  string
+> = {
+  import: "nach-Import",
+  matching: "nach-Zuordnung",
+  grades: "nach-Noten",
+  general: "Sicherung",
+};
+
+export function projectArchiveFilename(
+  project: ExamProject,
+  stage: import("@/lib/workflow-milestones").BackupStage = "general"
+): string {
+  const suffix = STAGE_SUFFIX[stage] ?? "Sicherung";
+  const base = `ExamGrade_${project.name || "Pruefung"}_${suffix}`;
   return datedExportFilename(base, "json");
 }
 

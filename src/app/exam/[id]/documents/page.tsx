@@ -365,56 +365,6 @@ export default function DocumentsPage() {
           </CardContent>
         </Card>
 
-        {/* Notenspiegel */}
-        <Card className="surface-panel md:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Notenspiegel</CardTitle>
-            <CardDescription>
-              Aggregierte Notenverteilung und Kennzahlen zum aktiven
-              Szenario – ohne personenbezogene Daten. PDF oder Excel.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy != null || !notenspiegelReady}
-              onClick={() => {
-                if (!stats) return;
-                run(
-                  "spiegel-pdf",
-                  () => exportNotenspiegelPdf(project, rows, stats),
-                  "Notenspiegel (PDF) heruntergeladen."
-                );
-              }}
-            >
-              <FileText className="size-4" />
-              {busy === "spiegel-pdf" ? "…" : "PDF"}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy != null || !notenspiegelReady}
-              onClick={() => {
-                if (!stats) return;
-                run(
-                  "spiegel-xlsx",
-                  () => exportNotenspiegelExcel(project, rows, stats),
-                  "Notenspiegel (Excel) heruntergeladen."
-                );
-              }}
-            >
-              <FileSpreadsheet className="size-4" />
-              {busy === "spiegel-xlsx" ? "…" : "Excel"}
-            </Button>
-            {stats && stats.graded <= 0 && (
-              <p className="text-xs text-muted-foreground">
-                Noch keine bewerteten Teilnehmer.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
         {/* 3 Manuelle Notenmeldung */}
         <Card className="surface-panel">
           <CardHeader className="pb-2">
@@ -508,217 +458,265 @@ export default function DocumentsPage() {
             </Button>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Zweitkorrektur */}
-      <Card className="surface-panel">
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <CardTitle className="text-base">
-                Durchfaller / Zweitkorrektur
-                {failerRows.length > 0 && (
-                  <Badge variant="secondary" className="ml-2 font-normal">
-                    {scStatus.filled}/{scStatus.total} erfasst
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Vor dem PDF für alle Durchfaller die Zweitkorrektur-Punkte
-                eintragen (Anmerkungen optional).
-              </CardDescription>
+        {/* 4 Durchfaller – neben manueller Notenmeldung */}
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">
+                  4. Durchfaller / Zweitkorrektur
+                  {failerRows.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 font-normal">
+                      {scStatus.filled}/{scStatus.total} erfasst
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Vor dem PDF für alle Durchfaller die Zweitkorrektur-Punkte
+                  eintragen (Anmerkungen optional).
+                </CardDescription>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy != null || !scStatus.ready || !pdfAllowed}
+                onClick={() =>
+                  run(
+                    "failers",
+                    () => exportFailersPdf(project, rows),
+                    "Zweitkorrektur-PDF heruntergeladen."
+                  )
+                }
+              >
+                <FileText className="size-4" />
+                {busy === "failers" ? "…" : "PDF erzeugen"}
+              </Button>
             </div>
+          </CardHeader>
+          <CardContent>
+            {failerRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine Durchfaller vorhanden.
+              </p>
+            ) : (
+              <div className="max-h-72 overflow-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Matr.</TableHead>
+                      <TableHead>Punkte Erst</TableHead>
+                      <TableHead>Note</TableHead>
+                      <TableHead className="min-w-[5.5rem]">
+                        Punkte Zweit
+                      </TableHead>
+                      <TableHead className="min-w-[10rem]">Anmerkungen</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {failerRows.map((r) => {
+                      const rec = findPointsRecord(project, r.key);
+                      return (
+                        <TableRow key={r.key}>
+                          <TableCell className="text-sm">
+                            {r.student.lastName}, {r.student.firstName}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {r.key}
+                          </TableCell>
+                          <TableCell className="tabular-nums text-sm">
+                            {formatPoints(r.totalPoints)}
+                          </TableCell>
+                          <TableCell className="tabular-nums text-sm">
+                            {formatGrade(r.finalGrade)}
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              step="0.5"
+                              className="h-7 w-20"
+                              value={
+                                rec?.secondCorrectionPoints != null
+                                  ? String(rec.secondCorrectionPoints)
+                                  : ""
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.trim();
+                                const num =
+                                  raw === ""
+                                    ? null
+                                    : Number(raw.replace(",", "."));
+                                patchStudent(r.key, {
+                                  secondCorrectionPoints:
+                                    num != null && Number.isFinite(num)
+                                      ? num
+                                      : null,
+                                });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              className="h-7 min-w-[8rem]"
+                              value={rec?.secondCorrectionNotes ?? ""}
+                              onChange={(e) =>
+                                patchStudent(r.key, {
+                                  secondCorrectionNotes: e.target.value,
+                                })
+                              }
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            {failerRows.length > 0 && !scStatus.ready && (
+              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                Noch {scStatus.total - scStatus.filled}{" "}
+                Zweitkorrektur-Punktzahl(en) fehlen.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 5 Notenspiegel – neben Notenänderungen */}
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">5. Notenspiegel</CardTitle>
+            <CardDescription>
+              Aggregierte Notenverteilung und Kennzahlen zum aktiven Szenario –
+              ohne personenbezogene Daten. PDF oder Excel.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               variant="outline"
-              disabled={
-                busy != null || !scStatus.ready || !pdfAllowed
-              }
-              onClick={() =>
+              disabled={busy != null || !notenspiegelReady}
+              onClick={() => {
+                if (!stats) return;
                 run(
-                  "failers",
-                  () => exportFailersPdf(project, rows),
-                  "Zweitkorrektur-PDF heruntergeladen."
-                )
-              }
+                  "spiegel-pdf",
+                  () => exportNotenspiegelPdf(project, rows, stats),
+                  "Notenspiegel (PDF) heruntergeladen."
+                );
+              }}
             >
               <FileText className="size-4" />
-              {busy === "failers" ? "…" : "PDF erzeugen"}
+              {busy === "spiegel-pdf" ? "…" : "PDF"}
             </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {failerRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Keine Durchfaller vorhanden.
-            </p>
-          ) : (
-            <div className="max-h-72 overflow-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Matr.</TableHead>
-                    <TableHead>Punkte Erst</TableHead>
-                    <TableHead>Note</TableHead>
-                    <TableHead className="min-w-[5.5rem]">
-                      Punkte Zweit
-                    </TableHead>
-                    <TableHead className="min-w-[10rem]">Anmerkungen</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {failerRows.map((r) => {
-                    const rec = findPointsRecord(project, r.key);
-                    return (
-                      <TableRow key={r.key}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy != null || !notenspiegelReady}
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "spiegel-xlsx",
+                  () => exportNotenspiegelExcel(project, rows, stats),
+                  "Notenspiegel (Excel) heruntergeladen."
+                );
+              }}
+            >
+              <FileSpreadsheet className="size-4" />
+              {busy === "spiegel-xlsx" ? "…" : "Excel"}
+            </Button>
+            {stats && stats.graded <= 0 && (
+              <p className="text-xs text-muted-foreground">
+                Noch keine bewerteten Teilnehmer.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 6 Notenänderungen */}
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">
+                  6. Notenänderungen
+                  {changeRows.length > 0 && (
+                    <Badge variant="secondary" className="ml-2 font-normal">
+                      {changeRows.length}
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Manuelle Notenkorrekturen (z. B. nach Klausureinsicht) für das
+                  Prüfungsamt. Noten in der Notenübersicht anpassen.
+                </CardDescription>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={
+                  busy != null || changeRows.length === 0 || !pdfAllowed
+                }
+                onClick={() =>
+                  run(
+                    "changes",
+                    () => exportGradeChangesPdf(project, rows),
+                    "Notenänderungsliste heruntergeladen."
+                  )
+                }
+              >
+                <FileText className="size-4" />
+                {busy === "changes" ? "…" : "PDF erzeugen"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {changeRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine geänderten Noten. In der Notenübersicht eine Note manuell
+                überschreiben, um sie hier zu listen.
+              </p>
+            ) : (
+              <div className="max-h-56 overflow-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Matr.</TableHead>
+                      <TableHead>Studiengr.</TableHead>
+                      <TableHead>Bisher</TableHead>
+                      <TableHead>Neu</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {changeRows.map((c) => (
+                      <TableRow key={c.row.key}>
                         <TableCell className="text-sm">
-                          {r.student.lastName}, {r.student.firstName}
+                          {c.row.student.lastName}, {c.row.student.firstName}
                         </TableCell>
                         <TableCell className="font-mono text-xs">
-                          {r.key}
+                          {c.row.key}
                         </TableCell>
-                        <TableCell className="tabular-nums text-sm">
-                          {formatPoints(r.totalPoints)}
+                        <TableCell className="text-sm">
+                          {c.programCode ||
+                            resolveProgramCode(c.row, project) ||
+                            "–"}
                         </TableCell>
-                        <TableCell className="tabular-nums text-sm">
-                          {formatGrade(r.finalGrade)}
+                        <TableCell className="tabular-nums">
+                          {formatGrade(c.previousGrade)}
                         </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="0.5"
-                            className="h-7 w-20"
-                            value={
-                              rec?.secondCorrectionPoints != null
-                                ? String(rec.secondCorrectionPoints)
-                                : ""
-                            }
-                            onChange={(e) => {
-                              const raw = e.target.value.trim();
-                              const num =
-                                raw === ""
-                                  ? null
-                                  : Number(raw.replace(",", "."));
-                              patchStudent(r.key, {
-                                secondCorrectionPoints:
-                                  num != null && Number.isFinite(num)
-                                    ? num
-                                    : null,
-                              });
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            className="h-7 min-w-[8rem]"
-                            value={rec?.secondCorrectionNotes ?? ""}
-                            onChange={(e) =>
-                              patchStudent(r.key, {
-                                secondCorrectionNotes: e.target.value,
-                              })
-                            }
-                          />
+                        <TableCell className="tabular-nums font-medium">
+                          {formatGrade(c.newGrade)}
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-          {failerRows.length > 0 && !scStatus.ready && (
-            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-              Noch {scStatus.total - scStatus.filled} Zweitkorrektur-Punktzahl(en)
-              fehlen.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Notenänderungen */}
-      <Card className="surface-panel">
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <CardTitle className="text-base">
-                Notenänderungen
-                {changeRows.length > 0 && (
-                  <Badge variant="secondary" className="ml-2 font-normal">
-                    {changeRows.length}
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Manuelle Notenkorrekturen (z. B. nach Klausureinsicht) für das
-                Prüfungsamt. Noten in der Notenübersicht anpassen.
-              </CardDescription>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={
-                busy != null || changeRows.length === 0 || !pdfAllowed
-              }
-              onClick={() =>
-                run(
-                  "changes",
-                  () => exportGradeChangesPdf(project, rows),
-                  "Notenänderungsliste heruntergeladen."
-                )
-              }
-            >
-              <FileText className="size-4" />
-              {busy === "changes" ? "…" : "PDF erzeugen"}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {changeRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Keine geänderten Noten. In der Notenübersicht eine Note manuell
-              überschreiben, um sie hier zu listen.
-            </p>
-          ) : (
-            <div className="max-h-56 overflow-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Matr.</TableHead>
-                    <TableHead>Studiengr.</TableHead>
-                    <TableHead>Bisher</TableHead>
-                    <TableHead>Neu</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {changeRows.map((c) => (
-                    <TableRow key={c.row.key}>
-                      <TableCell className="text-sm">
-                        {c.row.student.lastName}, {c.row.student.firstName}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {c.row.key}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {c.programCode ||
-                          resolveProgramCode(c.row, project) ||
-                          "–"}
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {formatGrade(c.previousGrade)}
-                      </TableCell>
-                      <TableCell className="tabular-nums font-medium">
-                        {formatGrade(c.newGrade)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

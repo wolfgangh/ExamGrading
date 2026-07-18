@@ -12,6 +12,11 @@ import {
   hasUnresolvedOrphans,
   listUnresolvedOrphans,
 } from "@/lib/matching/orphan-resolution";
+import {
+  isSubAreaMappingComplete,
+  needsSubAreaMapping,
+  subAreaMappingIssues,
+} from "@/lib/grades/subarea-mapping";
 
 export interface ValidationItem {
   level: "error" | "warning" | "info";
@@ -56,6 +61,15 @@ export function validateForExport(
       level: "error",
       message: `${n} Antritt/Punkte ohne ${HISINONE_LABEL} noch ungeprüft – unter Zuordnung zusammenführen oder ablehnen (Notenliste und ${HISINONE_LABEL}-Export gesperrt).`,
       count: n,
+    });
+  }
+
+  if (needsSubAreaMapping(project) && !isSubAreaMappingComplete(project)) {
+    const issues = subAreaMappingIssues(project);
+    items.push({
+      level: "error",
+      message: `Teilgebiet-Zuordnung unvollständig: ${issues[0] ?? "Aufgaben den Teilgebieten zuordnen (Detailpunkte)"}.`,
+      count: issues.length,
     });
   }
 

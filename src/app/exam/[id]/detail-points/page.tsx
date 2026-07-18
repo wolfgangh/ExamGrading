@@ -28,15 +28,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { Lock, LockOpen, RefreshCw } from "lucide-react";
 import type { PointsRecord } from "@/lib/types";
+import {
+  isSubAreaMappingComplete,
+  needsSubAreaMapping,
+} from "@/lib/grades/subarea-mapping";
 
 export default function DetailPointsPage() {
   const { id } = useParams<{ id: string }>();
@@ -82,7 +80,8 @@ export default function DetailPointsPage() {
   const taskCount = ensureQuestionDefs(effectiveProject).length;
   const hasPointsButNoTasks =
     project.points.length > 0 && taskCount === 0;
-  const showSubareaMapping = effectiveProject.subAreas.length > 1;
+  const showSubareaMapping = needsSubAreaMapping(effectiveProject);
+  const subMapComplete = isSubAreaMappingComplete(effectiveProject);
 
   const updateQuestionSubArea = (questionId: string, subAreaId: string) => {
     setProject((prev) => {
@@ -93,7 +92,27 @@ export default function DetailPointsPage() {
       const points = prev.points.map((rec) =>
         recomputePointsRecord(rec, questionDefs, prev.subAreas)
       );
-      return { ...prev, questionDefs, points };
+      return {
+        ...prev,
+        questionDefs,
+        points,
+        subAreaMappingConfirmedAt: undefined,
+      };
+    });
+  };
+
+  const confirmSubAreaMapping = () => {
+    setProject((prev) => {
+      const questionDefs = ensureQuestionDefs(prev);
+      const points = prev.points.map((rec) =>
+        recomputePointsRecord(rec, questionDefs, prev.subAreas)
+      );
+      return {
+        ...prev,
+        questionDefs,
+        points,
+        subAreaMappingConfirmedAt: new Date().toISOString(),
+      };
     });
   };
 
@@ -240,47 +259,61 @@ export default function DetailPointsPage() {
       </div>
 
       {showSubareaMapping && (
-        <Accordion className="surface-panel rounded-xl border px-3">
-          <AccordionItem value="subareas" className="border-0">
-            <AccordionTrigger className="py-2.5 hover:no-underline">
-              <span className="flex flex-wrap items-center gap-2">
-                Zuordnung Teilgebiete
-                <Badge variant="outline" className="font-normal">
-                  {taskCount} Aufg. · {effectiveProject.subAreas.length} Gebiete
-                </Badge>
-              </span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <p className="mb-3 text-sm text-muted-foreground">
-                Für Auswertungen und Σ-Spalten in der Matrix
-              </p>
-              <QuestionSubareaMapper
-                questionDefs={ensureQuestionDefs(effectiveProject)}
-                subAreas={effectiveProject.subAreas}
-                onChange={updateQuestionSubArea}
-              />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+        <Card
+          className={cn(
+            "surface-panel",
+            subMapComplete
+              ? "border-emerald-400/80 ring-1 ring-emerald-400/30 dark:border-emerald-700"
+              : "border-amber-500 ring-2 ring-amber-400/40 dark:border-amber-600"
+          )}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              Zuordnung Teilgebiete
+              <Badge
+                variant="outline"
+                className="ml-2 font-normal"
+              >
+                {taskCount} Aufg. · {effectiveProject.subAreas.length} Gebiete
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Pflicht bei mehreren Teilgebieten – steuert Σ-Spalten und
+              Auswertungen. Bitte zuordnen und bestätigen.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <QuestionSubareaMapper
+              project={effectiveProject}
+              questionDefs={ensureQuestionDefs(effectiveProject)}
+              subAreas={effectiveProject.subAreas}
+              onChange={updateQuestionSubArea}
+              onConfirm={confirmSubAreaMapping}
+            />
+          </CardContent>
+        </Card>
       )}
 
-      <Card className="surface-panel">
+      <Card className="surface-panel overflow-hidden">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Punktematrix</CardTitle>
           <CardDescription>
-            ! = Bewertung notwendig · Gesamt und Σ Teilgebiet nur lesend
+            ! = Bewertung notwendig · Gesamt und Σ Teilgebiet nur lesend ·
+            horizontal und vertikal im Rahmen scrollen
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <PointsMatrix
-            project={effectiveProject}
-            unlocked={unlocked}
-            search={search}
-            onlyOpen={onlyOpen}
-            onCellCommit={onCellCommit}
-            questionStatsPercent={pctMap}
-            recomputeKey={project.updatedAt}
-          />
+        <CardContent className="p-0 sm:p-0">
+          <div className="px-0 sm:px-0">
+            <PointsMatrix
+              project={effectiveProject}
+              unlocked={unlocked}
+              search={search}
+              onlyOpen={onlyOpen}
+              onCellCommit={onCellCommit}
+              questionStatsPercent={pctMap}
+              recomputeKey={project.updatedAt}
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

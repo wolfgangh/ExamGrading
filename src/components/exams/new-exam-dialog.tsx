@@ -29,6 +29,7 @@ import {
   DEFAULT_LECTURER,
   EXAM_NAME_OPTIONS,
   LECTURER_OPTIONS,
+  defaultLecturersForExam,
   findCatalogEntry,
   resolveExamDisplayName,
   resolveSubAreasForExamName,
@@ -81,9 +82,11 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     setNameError(null);
     if (!raw.trim()) {
       setSubAreas([emptySubAreaRow()]);
+      setLecturers([DEFAULT_LECTURER]);
       return;
     }
     setSubAreas(resolveSubAreasForExamName(raw));
+    setLecturers(defaultLecturersForExam(raw));
   };
 
   const addLecturer = (value?: string) => {

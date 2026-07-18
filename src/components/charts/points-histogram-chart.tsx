@@ -15,14 +15,20 @@ import {
   chartTooltipCursor,
 } from "@/components/charts/chart-tooltip";
 
-export function PointsHistogramChart({ stats }: { stats: ExamStatistics }) {
+export function PointsHistogramChart({
+  stats,
+  className,
+}: {
+  stats: ExamStatistics;
+  className?: string;
+}) {
   const data = stats.pointsHistogram.map((b) => ({
     name: b.bin,
     count: b.count,
   }));
 
   return (
-    <div className="h-64 w-full">
+    <div className={className ?? "h-64 w-full"}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
