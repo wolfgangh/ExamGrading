@@ -52,7 +52,7 @@ function ExamShell({
   const backupNeeded = isBackupStale(project);
 
   return (
-    <div className="page-shell flex min-h-0 flex-1 flex-col">
+    <div className="page-shell flex min-h-0 flex-1 flex-col overflow-hidden">
       <AppHeader
         subtitle={project.name}
         actions={
@@ -76,13 +76,15 @@ function ExamShell({
         }
       />
       <BackupBanner />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <ExamSidebar examId={examId} examType={project.examType} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="border-b bg-card/50 px-4 py-2">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 border-b bg-card/50 px-4 py-2">
             <SummaryPanel stats={stats} compact />
           </div>
-          <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+          <main className="min-h-0 flex-1 overflow-auto p-4 md:p-6">
+            {children}
+          </main>
         </div>
       </div>
     </div>

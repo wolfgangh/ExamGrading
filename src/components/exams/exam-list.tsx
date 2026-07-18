@@ -83,7 +83,7 @@ export function ExamList() {
   };
 
   return (
-    <div className="page-shell">
+    <div className="page-shell flex min-h-0 flex-1 flex-col overflow-hidden">
       <AppHeader
         actions={
           <>
@@ -111,7 +111,7 @@ export function ExamList() {
         }
       />
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-auto px-4 py-8">
         <div className="mb-6 space-y-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">

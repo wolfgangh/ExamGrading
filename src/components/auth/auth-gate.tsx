@@ -44,9 +44,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden">
       <TeamsEmbedBanner />
-      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {children}
+      </div>
       <AppFooter />
     </div>
   );

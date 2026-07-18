@@ -64,8 +64,8 @@ export function ExamSidebar({
   const progress = steps.length > 0 ? workflowProgress(steps) : null;
 
   return (
-    <aside className="surface-panel flex w-56 shrink-0 flex-col border-r">
-      <div className="border-b p-2">
+    <aside className="surface-panel flex h-full min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r">
+      <div className="shrink-0 border-b p-2">
         <Link
           href="/"
           className={cn(
@@ -78,13 +78,13 @@ export function ExamSidebar({
           Zurück
         </Link>
       </div>
-      <div className="border-b px-3 py-2">
+      <div className="shrink-0 border-b px-3 py-2">
         <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <ClipboardList className="size-3.5" />
           Prüfung
         </p>
       </div>
-      <nav className="flex flex-col gap-0.5 p-2">
+      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
         {nav.map(({ href, label, icon: Icon }) => {
           const path = `${base}/${href}`;
           const active = pathname === path || pathname.startsWith(path + "/");
@@ -107,7 +107,7 @@ export function ExamSidebar({
       </nav>
 
       {progress && (
-        <div className="mt-auto border-t p-3">
+        <div className="shrink-0 border-t bg-card/80 p-3 backdrop-blur-sm">
           <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <ListChecks className="size-3.5" />
             Workflow
