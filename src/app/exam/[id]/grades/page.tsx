@@ -79,6 +79,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FileSpreadsheet, FileText, ListChecks } from "lucide-react";
+import { isStaManualExam, supportsStudentGroups } from "@/lib/types";
+import { GroupFilterBar } from "@/components/exam/group-filter-bar";
+import {
+  filterRowsByGroup,
+  type GroupFilterId,
+} from "@/lib/student-groups";
 
 export default function GradesPage() {
   const { id } = useParams<{ id: string }>();
@@ -95,6 +101,7 @@ export default function GradesPage() {
   const [showFailerPanel, setShowFailerPanel] = useState(false);
   const [spiegelBusy, setSpiegelBusy] = useState<string | null>(null);
   const [spiegelMsg, setSpiegelMsg] = useState<string | null>(null);
+  const [groupFilter, setGroupFilter] = useState<GroupFilterId>("all");
 
   const editRow = useMemo(
     () => rows.find((r) => r.key === editKey) ?? null,
@@ -659,8 +666,33 @@ export default function GradesPage() {
         </Card>
       )}
 
+      {project && supportsStudentGroups(project.examType) && (
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Gruppe wählen</CardTitle>
+            <CardDescription>
+              {isStaManualExam(project.examType)
+                ? "Noten für eine Gruppe eintragen und mit den Schaltflächen wechseln."
+                : "Tabelle auf eine Arbeitsgruppe einschränken."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <GroupFilterBar
+              project={project}
+              rows={rows}
+              value={groupFilter}
+              onChange={setGroupFilter}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <StudentsTable
-        rows={rows}
+        rows={
+          project && supportsStudentGroups(project.examType)
+            ? filterRowsByGroup(rows, groupFilter)
+            : rows
+        }
         onEditGrade={openEdit}
         showNextGrade
         borderlineFilter={borderlineFilter}

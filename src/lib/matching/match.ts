@@ -188,6 +188,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       firstName: stored?.firstName || his.firstName,
       email: stored?.email,
       attempt: stored?.attempt ?? null,
+      groupId: stored?.groupId ?? null,
     };
 
     // Mit Antrittsliste: fehlend = No-Show; ohne Liste: unbekannt (null)

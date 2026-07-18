@@ -68,6 +68,7 @@ function mergeStudents(
       firstName: s.firstName || prev?.firstName || "",
       email: s.email || prev?.email,
       attempt: s.attempt ?? prev?.attempt ?? null,
+      groupId: prev?.groupId ?? s.groupId ?? null,
     };
   }
   return next;

@@ -15,8 +15,14 @@ import {
   isPortfolioExam,
   isStaCriteriaExam,
   isStaManualExam,
+  supportsStudentGroups,
 } from "@/lib/types";
 import { defaultPortfolioComponents } from "@/lib/grades/portfolio";
+import {
+  createStudentGroup,
+  removeStudentGroup,
+  sortedStudentGroups,
+} from "@/lib/student-groups";
 import { formatGrade } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
@@ -67,6 +73,8 @@ export default function SettingsPage() {
   const isHisManual = isHisManualAssessmentExam(project.examType);
   const isStaCrit = isStaCriteriaExam(project.examType);
   const isPortfolio = isPortfolioExam(project.examType);
+  const showGroups = supportsStudentGroups(project.examType);
+  const groups = sortedStudentGroups(project);
 
   const updateMeta = <K extends keyof typeof project>(
     key: K,
@@ -208,6 +216,89 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {showGroups && (
+        <Card className="surface-panel">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">Studentengruppen</CardTitle>
+              <CardDescription>
+                Gruppen anlegen und in der Bewertung filtern – Noten pro
+                Gruppe eintragen und schnell wechseln.
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setProject((prev) => ({
+                  ...prev,
+                  studentGroups: [
+                    ...(prev.studentGroups ?? []),
+                    createStudentGroup(
+                      `Gruppe ${(prev.studentGroups?.length ?? 0) + 1}`,
+                      prev.studentGroups ?? []
+                    ),
+                  ],
+                }))
+              }
+            >
+              <Plus className="size-4" />
+              Gruppe
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {groups.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Noch keine Gruppen. Nach dem Anlegen unter Bewertung /
+                Notenübersicht zuordnen und filtern.
+              </p>
+            ) : (
+              groups.map((g) => {
+                const n = Object.values(project.students).filter(
+                  (s) => s.groupId === g.id
+                ).length;
+                return (
+                  <div
+                    key={g.id}
+                    className="flex flex-wrap items-end gap-2 rounded-lg border p-3"
+                  >
+                    <div className="grid min-w-[12rem] flex-1 gap-1">
+                      <Label className="text-xs">Name</Label>
+                      <Input
+                        value={g.name}
+                        onChange={(e) =>
+                          setProject((prev) => ({
+                            ...prev,
+                            studentGroups: (prev.studentGroups ?? []).map(
+                              (x) =>
+                                x.id === g.id
+                                  ? { ...x, name: e.target.value }
+                                  : x
+                            ),
+                          }))
+                        }
+                      />
+                    </div>
+                    <span className="pb-2 text-xs tabular-nums text-muted-foreground">
+                      {n} Person(en)
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() =>
+                        setProject((prev) => removeStudentGroup(prev, g.id))
+                      }
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {isStaCrit && (
         <Card className="surface-panel">

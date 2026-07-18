@@ -101,6 +101,15 @@ export interface Student {
   firstName: string;
   email?: string;
   attempt?: number | null;
+  /** Gruppe (StA / Portfolio) */
+  groupId?: string | null;
+}
+
+/** Arbeitsgruppe für StA / Portfolioprüfung */
+export interface StudentGroup {
+  id: string;
+  name: string;
+  orderIndex: number;
 }
 
 export interface AttendanceRecord {
@@ -333,6 +342,8 @@ export interface ExamProject {
   criteria?: AssessmentCriterion[];
   /** Teilleistungen (Portfolioprüfung) */
   portfolioComponents?: PortfolioComponent[];
+  /** Studentengruppen (StA / Portfolio) */
+  studentGroups?: StudentGroup[];
 
   /**
    * Dokumentierte manuelle Matrikel-Zusammenführungen (THE/elektrP).
@@ -499,6 +510,11 @@ export function isPortfolioExam(examType: ExamType): boolean {
 /** StA oder Portfolio: HIS + manuelle Personen, kein Antritt/Matching */
 export function isHisManualAssessmentExam(examType: ExamType): boolean {
   return isStudienarbeitExam(examType) || isPortfolioExam(examType);
+}
+
+/** Gruppenzuordnung in Bewertung (StA + Portfolio) */
+export function supportsStudentGroups(examType: ExamType): boolean {
+  return isHisManualAssessmentExam(examType);
 }
 
 /** Kein Moodle-Antritt / keine Matrikel-Zuordnung */

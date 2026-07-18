@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import type { ExamProject, PointsRecord, Student } from "@/lib/types";
+import { supportsStudentGroups } from "@/lib/types";
+import { StudentGroupSelect } from "@/components/exam/student-group-select";
 import { UserPlus } from "lucide-react";
 
 export function AddStudentForm({
@@ -18,8 +20,10 @@ export function AddStudentForm({
   const [mat, setMat] = useState("");
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const showGroup = supportsStudentGroups(project.examType);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +52,7 @@ export function AddStudentForm({
       matriculationNumber: mat.trim(),
       lastName: lastName.trim(),
       firstName: firstName.trim(),
+      groupId: showGroup ? groupId : null,
     };
 
     onAdd((prev) => {
@@ -79,11 +84,18 @@ export function AddStudentForm({
     setMat("");
     setLastName("");
     setFirstName("");
+    setGroupId(null);
   };
 
   return (
     <form onSubmit={submit} className="grid gap-3">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div
+        className={
+          showGroup
+            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            : "grid gap-3 sm:grid-cols-3"
+        }
+      >
         <div className="grid gap-1.5">
           <Label htmlFor="add-mat">Matrikelnummer</Label>
           <Input
@@ -111,6 +123,16 @@ export function AddStudentForm({
             onChange={(e) => setFirstName(e.target.value)}
           />
         </div>
+        {showGroup && (
+          <div className="grid gap-1.5">
+            <Label>Gruppe</Label>
+            <StudentGroupSelect
+              project={project}
+              groupId={groupId}
+              onChange={setGroupId}
+            />
+          </div>
+        )}
       </div>
       {error && (
         <p className="text-sm text-destructive" role="alert">

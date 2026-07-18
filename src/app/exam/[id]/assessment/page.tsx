@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
@@ -28,10 +28,18 @@ import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { isPortfolioExam, isStaCriteriaExam } from "@/lib/types";
 import { cn, formatGrade, formatPoints } from "@/lib/utils";
 import { Settings } from "lucide-react";
+import { GroupFilterBar } from "@/components/exam/group-filter-bar";
+import { StudentGroupSelect } from "@/components/exam/student-group-select";
+import {
+  filterRowsByGroup,
+  setStudentGroupId,
+  type GroupFilterId,
+} from "@/lib/student-groups";
 
 export default function AssessmentPage() {
   const { id } = useParams<{ id: string }>();
   const { project, setProject, rows } = useExamContext();
+  const [groupFilter, setGroupFilter] = useState<GroupFilterId>("all");
 
   const criteria = project?.criteria ?? [];
   const components = project?.portfolioComponents ?? [];
@@ -41,6 +49,10 @@ export default function AssessmentPage() {
         a.student.lastName.localeCompare(b.student.lastName, "de")
       ),
     [rows]
+  );
+  const filteredRows = useMemo(
+    () => filterRowsByGroup(sortedRows, groupFilter),
+    [sortedRows, groupFilter]
   );
 
   const isCriteria = project ? isStaCriteriaExam(project.examType) : false;
@@ -169,9 +181,27 @@ export default function AssessmentPage() {
           className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
         >
           <Settings className="size-4" />
-          {isPortfolio ? "Teilleistungen bearbeiten" : "Kriterien bearbeiten"}
+          {isPortfolio ? "Teilleistungen / Gruppen" : "Kriterien / Gruppen"}
         </Link>
       </div>
+
+      <Card className="surface-panel">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Gruppe wählen</CardTitle>
+          <CardDescription>
+            Nur Studierende der gewählten Gruppe in der Matrix – schnell
+            wechseln mit den Schaltflächen.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <GroupFilterBar
+            project={project}
+            rows={sortedRows}
+            value={groupFilter}
+            onChange={setGroupFilter}
+          />
+        </CardContent>
+      </Card>
 
       {cols.length === 0 ? (
         <Card className="surface-panel border-amber-400">
@@ -195,6 +225,8 @@ export default function AssessmentPage() {
               {isPortfolio
                 ? `${components.length} Teilleistungen · Gewichte relativ`
                 : `${criteria.length} Kriterien · Gewichte relativ · Max. Gesamtwert ${project.gradeSchema.maxPoints}`}
+              {" · "}
+              {filteredRows.length} von {sortedRows.length} Person(en)
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -206,6 +238,7 @@ export default function AssessmentPage() {
                       Name
                     </TableHead>
                     <TableHead className="min-w-[88px]">Matr.</TableHead>
+                    <TableHead className="min-w-[7.5rem]">Gruppe</TableHead>
                     {isPortfolio
                       ? components.map((c) => (
                           <TableHead
@@ -256,18 +289,19 @@ export default function AssessmentPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedRows.length === 0 ? (
+                  {filteredRows.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={4 + cols.length}
+                        colSpan={5 + cols.length}
                         className="h-20 text-center text-muted-foreground"
                       >
-                        Noch keine Personen – bitte HISinOne importieren oder
-                        manuell hinzufügen.
+                        {sortedRows.length === 0
+                          ? "Noch keine Personen – bitte HISinOne importieren oder manuell hinzufügen."
+                          : "Keine Personen in dieser Gruppe."}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    sortedRows.map((r) => {
+                    filteredRows.map((r) => {
                       const rec = project.points.find(
                         (p) =>
                           normalizeMatriculation(p.matriculationNumber) ===
@@ -294,6 +328,18 @@ export default function AssessmentPage() {
                           </TableCell>
                           <TableCell className="font-mono text-xs">
                             {r.key}
+                          </TableCell>
+                          <TableCell className="p-1">
+                            <StudentGroupSelect
+                              project={project}
+                              groupId={r.student.groupId}
+                              compact
+                              onChange={(gid) =>
+                                setProject((prev) =>
+                                  setStudentGroupId(prev, r.key, gid)
+                                )
+                              }
+                            />
                           </TableCell>
                           {isPortfolio
                             ? components.map((c) => {
