@@ -123,81 +123,76 @@ export default function OverviewPage() {
         </p>
       </div>
 
-      {stats.attendedOrphan > 0 && (
-        <div className="rounded-xl border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
-          <p className="font-medium">
-            {stats.attendedOrphan} Antritt/Antritte ohne HIS-Anmeldung
-            {onlineStyle && orphanN > 0 && (
-              <span className="font-normal">
-                {" "}
-                · {orphanN} mögliche Matrikel-Konflikte
-                {unresolvedN > 0 && ` · ${unresolvedN} ungeprüft`}
-              </span>
-            )}
-          </p>
-          <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
-            Diese Personen sind in der Moodle-Antrittsliste, aber nicht in den{" "}
-            {HISINONE_LABEL}-Dateien
-            {onlineStyle
-              ? " – oft Tippfehler in der selbst eingetragenen Matrikelnummer."
-              : "."}{" "}
-            Bitte in der{" "}
-            <Link href={`/exam/${id}/grades`} className="font-medium underline">
-              Notenübersicht
-            </Link>
-            {onlineStyle ? (
-              <>
-                {" "}
-                oder unter{" "}
-                <Link
-                  href={`/exam/${id}/matching`}
-                  className="inline-flex items-center gap-1 font-medium underline"
-                >
-                  <GitMerge className="size-3.5" />
-                  Zuordnung
-                </Link>{" "}
-                zusammenführen oder ablehnen (nie automatisch). Ungeprüfte
-                Fälle blockieren Notenliste und {HISINONE_LABEL}-Export.
-              </>
-            ) : (
-              <> prüfen (Filter „Antritt ohne HIS“).</>
-            )}
-            {(mergeN > 0 || dismissN > 0) && (
-              <>
-                {" "}
-                · {mergeN} Zusammenführung(en)
-                {dismissN > 0 && `, ${dismissN} Ablehnung(en)`} dokumentiert.
-              </>
-            )}
-          </p>
-          {orphans.length > 0 && orphans.length <= 8 && (
-            <ul className="mt-2 list-inside list-disc">
-              {orphans.map((r) => (
-                <li key={r.key}>
-                  {r.student.lastName}, {r.student.firstName} ({r.key})
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {stats.hasAttendanceList && noShows.length > 0 && (
-        <div className="rounded-xl border border-orange-300 bg-orange-50/80 px-4 py-3 text-sm dark:border-orange-800 dark:bg-orange-950/30">
-          <p className="font-medium">
-            {stats.noShow} No-Show(s) · Quote{" "}
-            {formatPercent(stats.noShowRate)}
-          </p>
-          <p className="mt-1 text-muted-foreground">
-            In HIS angemeldet, aber nicht in der Antrittsliste. Kennzahlen:
-            Moodle {stats.attendanceImported} · gematcht {stats.attended} ·
-            HIS {stats.registered}.
-          </p>
-        </div>
-      )}
-
       <div className="grid items-start gap-4 lg:grid-cols-12">
-        <Card className="surface-panel lg:col-span-7">
+        {/* Linke Spalte: Hinweise (kompakt) + Workflow – rechte Spalte startet oben */}
+        <div className="flex flex-col gap-4 lg:col-span-7">
+          {stats.attendedOrphan > 0 && (
+            <div className="rounded-xl border border-amber-400 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium leading-snug">
+                    {stats.attendedOrphan} Antritt ohne {HISINONE_LABEL}
+                    {onlineStyle && orphanN > 0 && (
+                      <span className="font-normal">
+                        {" "}
+                        · {orphanN} Matrikel-Konflikt
+                        {orphanN === 1 ? "" : "e"}
+                        {unresolvedN > 0 && ` · ${unresolvedN} ungeprüft`}
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-amber-900/90 dark:text-amber-100/90">
+                    Oft Tippfehler in der Moodle-Matrikel. Ungeprüfte Fälle
+                    blockieren Export.
+                    {(mergeN > 0 || dismissN > 0) && (
+                      <>
+                        {" "}
+                        · {mergeN} Merge(s)
+                        {dismissN > 0 && `, ${dismissN} Ablehnung(en)`}
+                      </>
+                    )}
+                  </p>
+                  {orphans.length > 0 && orphans.length <= 6 && (
+                    <ul className="mt-1.5 list-inside list-disc text-xs">
+                      {orphans.map((r) => (
+                        <li key={r.key}>
+                          {r.student.lastName}, {r.student.firstName} ({r.key})
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {onlineStyle && (
+                  <Link
+                    href={`/exam/${id}/matching`}
+                    className={cn(
+                      buttonVariants({ size: "sm" }),
+                      "shrink-0 gap-1.5"
+                    )}
+                  >
+                    <GitMerge className="size-3.5" />
+                    Zur Zuordnung
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+
+          {stats.hasAttendanceList && noShows.length > 0 && (
+            <div className="rounded-xl border border-orange-300 bg-orange-50/80 px-3 py-2.5 text-sm dark:border-orange-800 dark:bg-orange-950/30">
+              <p className="font-medium leading-snug">
+                {stats.noShow} No-Show(s) · Quote{" "}
+                {formatPercent(stats.noShowRate)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                In {HISINONE_LABEL} angemeldet, nicht in der Antrittsliste ·
+                Moodle {stats.attendanceImported} · gematcht {stats.attended} ·
+                HIS {stats.registered}
+              </p>
+            </div>
+          )}
+
+          <Card className="surface-panel">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -339,6 +334,7 @@ export default function OverviewPage() {
             })}
           </CardContent>
         </Card>
+        </div>
 
         <div className="flex flex-col gap-4 lg:col-span-5 lg:sticky lg:top-4 lg:self-start">
           <SummaryPanel stats={stats} />

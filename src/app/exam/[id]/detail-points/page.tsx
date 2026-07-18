@@ -83,11 +83,16 @@ export default function DetailPointsPage() {
   const showSubareaMapping = needsSubAreaMapping(effectiveProject);
   const subMapComplete = isSubAreaMappingComplete(effectiveProject);
 
-  const updateQuestionSubArea = (questionId: string, subAreaId: string) => {
+  const updateQuestionSubAreas = (
+    questionIds: string[],
+    subAreaId: string
+  ) => {
+    if (questionIds.length === 0) return;
+    const idSet = new Set(questionIds);
     setProject((prev) => {
       const baseDefs = ensureQuestionDefs(prev);
       const questionDefs = baseDefs.map((q) =>
-        q.id === questionId ? { ...q, subAreaId } : q
+        idSet.has(q.id) ? { ...q, subAreaId } : q
       );
       const points = prev.points.map((rec) =>
         recomputePointsRecord(rec, questionDefs, prev.subAreas)
@@ -287,7 +292,7 @@ export default function DetailPointsPage() {
               project={effectiveProject}
               questionDefs={ensureQuestionDefs(effectiveProject)}
               subAreas={effectiveProject.subAreas}
-              onChange={updateQuestionSubArea}
+              onChangeMany={updateQuestionSubAreas}
               onConfirm={confirmSubAreaMapping}
             />
           </CardContent>

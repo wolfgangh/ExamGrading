@@ -113,4 +113,4 @@ Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Deta
 ## Lizenz & Kontakt
 
 Internes Hochschul-Tool.  
-© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.2.0
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.2.1
