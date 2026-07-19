@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ClearableInput } from "@/components/ui/clearable-input";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -25,9 +26,13 @@ import {
 import { recomputeStaCriteriaRecord } from "@/lib/grades/sta-criteria";
 import { computePortfolioRawAverage } from "@/lib/grades/portfolio";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
-import { isPortfolioExam, isStaCriteriaExam } from "@/lib/types";
+import {
+  isPortfolioExam,
+  isStaCriteriaExam,
+  type EnrichedStudentRow,
+} from "@/lib/types";
 import { cn, formatGrade, formatPoints } from "@/lib/utils";
-import { Settings } from "lucide-react";
+import { Search, Settings } from "lucide-react";
 import { GroupFilterBar } from "@/components/exam/group-filter-bar";
 import { StudentGroupSelect } from "@/components/exam/student-group-select";
 import {
@@ -36,10 +41,28 @@ import {
   type GroupFilterId,
 } from "@/lib/student-groups";
 
+function matchesNameSearch(row: EnrichedStudentRow, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const last = (row.student.lastName ?? "").toLowerCase();
+  const first = (row.student.firstName ?? "").toLowerCase();
+  const full = `${last}, ${first}`;
+  const fullSpace = `${last} ${first}`;
+  const mat = (row.key ?? "").toLowerCase();
+  return (
+    last.includes(q) ||
+    first.includes(q) ||
+    full.includes(q) ||
+    fullSpace.includes(q) ||
+    mat.includes(q)
+  );
+}
+
 export default function AssessmentPage() {
   const { id } = useParams<{ id: string }>();
   const { project, setProject, rows } = useExamContext();
   const [groupFilter, setGroupFilter] = useState<GroupFilterId>("all");
+  const [nameQuery, setNameQuery] = useState("");
 
   const criteria = project?.criteria ?? [];
   const components = project?.portfolioComponents ?? [];
@@ -50,10 +73,15 @@ export default function AssessmentPage() {
       ),
     [rows]
   );
-  const filteredRows = useMemo(
-    () => filterRowsByGroup(sortedRows, groupFilter),
-    [sortedRows, groupFilter]
-  );
+  const searchActive = nameQuery.trim().length > 0;
+  const filteredRows = useMemo(() => {
+    // Bei aktiver Namenssuche über alle Gruppen – erleichtert die Zuordnung
+    const base = searchActive
+      ? sortedRows
+      : filterRowsByGroup(sortedRows, groupFilter);
+    if (!searchActive) return base;
+    return base.filter((r) => matchesNameSearch(r, nameQuery));
+  }, [sortedRows, groupFilter, nameQuery, searchActive]);
 
   const isCriteria = project ? isStaCriteriaExam(project.examType) : false;
   const isPortfolio = project ? isPortfolioExam(project.examType) : false;
@@ -220,14 +248,45 @@ export default function AssessmentPage() {
       ) : (
         <Card className="surface-panel overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Bewertungsmatrix</CardTitle>
-            <CardDescription>
-              {isPortfolio
-                ? `${components.length} Teilleistungen · Gewichte relativ`
-                : `${criteria.length} Kriterien · Gewichte relativ · Max. Gesamtwert ${project.gradeSchema.maxPoints}`}
-              {" · "}
-              {filteredRows.length} von {sortedRows.length} Person(en)
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <CardTitle className="text-base">Bewertungsmatrix</CardTitle>
+                <CardDescription>
+                  {isPortfolio
+                    ? `${components.length} Teilleistungen · Gewichte relativ`
+                    : `${criteria.length} Kriterien · Gewichte relativ · Max. Gesamtwert ${project.gradeSchema.maxPoints}`}
+                  {" · "}
+                  {filteredRows.length} von {sortedRows.length} Person(en)
+                  {searchActive && (
+                    <span className="text-foreground">
+                      {" "}
+                      · Suche über alle Gruppen
+                    </span>
+                  )}
+                </CardDescription>
+              </div>
+              <div className="w-full min-w-[14rem] max-w-xs sm:w-72">
+                <label className="sr-only" htmlFor="assessment-name-search">
+                  Name oder Matrikelnummer suchen
+                </label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <ClearableInput
+                    id="assessment-name-search"
+                    value={nameQuery}
+                    onChange={setNameQuery}
+                    placeholder="Suche Name / Matr.…"
+                    className="h-9 pl-8"
+                    autoComplete="off"
+                    clearLabel="Suche löschen"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Findet Personen gruppenübergreifend – Zuordnung in der Spalte
+                  Gruppe.
+                </p>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="max-h-[min(70vh,720px)] overflow-auto">
@@ -297,7 +356,9 @@ export default function AssessmentPage() {
                       >
                         {sortedRows.length === 0
                           ? "Noch keine Personen – bitte HISinOne importieren oder manuell hinzufügen."
-                          : "Keine Personen in dieser Gruppe."}
+                          : searchActive
+                            ? "Keine Person passt zur Suche."
+                            : "Keine Personen in dieser Gruppe."}
                       </TableCell>
                     </TableRow>
                   ) : (

@@ -38,7 +38,7 @@ Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (kein
 
 Bei StA und Portfolioprüfung können weitere Personen **manuell** unter Importe hinzugefügt werden (ohne HISinOne nur über die manuelle Notenmeldung exportierbar).
 
-**Gruppen (StA / Portfolio):** Unter Einstellungen Gruppen anlegen, in der Bewertungsmatrix (bzw. Notenübersicht) zuordnen und per Schaltflächen filtern – so lassen sich Noten pro Gruppe eintragen und schnell zwischen Gruppen wechseln.
+**Gruppen (StA / Portfolio):** Unter Einstellungen Gruppen anlegen, in der Bewertungsmatrix (bzw. Notenübersicht) zuordnen und per Schaltflächen filtern – so lassen sich Noten pro Gruppe eintragen und schnell zwischen Gruppen wechseln. In der Bewertungsmatrix hilft die **Namenssuche** (Name/Matrikel): Treffer erscheinen gruppenübergreifend, die Gruppe lässt sich direkt in der Zeile setzen.
 
 **Portfolioprüfung:** Gesamtnote = gewichteter Mittelwert der Teilnoten, gerundet auf die nächste deutsche Note (1,0 / 1,3 / … / 5,0).
 
