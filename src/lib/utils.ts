@@ -6,10 +6,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Dateiname mit Export-Datum und -Uhrzeit (lokal):
- * YYYY-MM-DD_HHmm_basis.ext
+ * Dateiname mit Export-Datum (lokal), optional Uhrzeit:
+ * - mit Zeit (Default): YYYY-MM-DD_HHmm_basis.ext
+ * - ohne Zeit: YYYY-MM-DD_basis.ext (z. B. JSON-Sicherungen)
  */
-export function datedExportFilename(base: string, ext = "json"): string {
+export function datedExportFilename(
+  base: string,
+  ext = "json",
+  options?: { withTime?: boolean }
+): string {
+  const withTime = options?.withTime !== false;
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const stamp = [
@@ -25,7 +31,9 @@ export function datedExportFilename(base: string, ext = "json"): string {
     .replace(/^_|_$/g, "")
     .slice(0, 100);
   const cleanExt = ext.replace(/^\./, "");
-  return `${stamp}_${time}_${safe}.${cleanExt}`;
+  return withTime
+    ? `${stamp}_${time}_${safe}.${cleanExt}`
+    : `${stamp}_${safe}.${cleanExt}`;
 }
 
 /** @deprecated Import aus `@/lib/download` – re-export für Kompatibilität */

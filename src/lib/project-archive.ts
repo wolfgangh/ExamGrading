@@ -110,7 +110,8 @@ export function projectArchiveFilename(
 ): string {
   const suffix = STAGE_SUFFIX[stage] ?? "Sicherung";
   const base = `ExamGrade_${project.name || "Pruefung"}_${suffix}`;
-  return datedExportFilename(base, "json");
+  // Datum + Schritt im Namen genügen – ohne Uhrzeit
+  return datedExportFilename(base, "json", { withTime: false });
 }
 
 /** Kurzinfo für Import-Meldung */
