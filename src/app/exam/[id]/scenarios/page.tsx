@@ -469,128 +469,158 @@ export default function ScenariosPage() {
         )}
       </div>
 
-      {/* Noten- und Stufenvergleich + Export */}
+      {/* Verteilungen: Stufen zuerst (Entscheidung), dann Noten – Tabelle | Chart */}
       {comparisonBundle && comparisonBundle.columns.length > 0 && (
-        <Card className="surface-panel">
-          <CardHeader className="pb-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <CardTitle className="text-base">
-                  Noten und Notenstufen im Szenario-Vergleich
-                </CardTitle>
-                <CardDescription>
-                  Anzahl und Anteil der bewerteten Studierenden je Note bzw.
-                  Notenstufe – zum internen Abgleich der Szenarien.
-                </CardDescription>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="default"
-                  className="gap-1.5"
-                  disabled={exportBusy}
-                  onClick={runPdfExport}
+        <div className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">
+                Verteilungen im Szenario-Vergleich
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Zuerst Notenstufen (Bestehen/Durchfallen), dann feine
+                Notenverteilung – jeweils Tabelle neben Grafik.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                className="gap-1.5"
+                disabled={exportBusy}
+                onClick={runPdfExport}
+              >
+                <FileDown className="size-4" />
+                PDF Export
+              </Button>
+              {exportMsg && (
+                <span className="text-xs text-muted-foreground">{exportMsg}</span>
+              )}
+            </div>
+          </div>
+
+          {/* 1) Notenstufen – Kernentscheidung */}
+          <Card className="surface-panel">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">
+                Notenstufen (sehr gut … nicht ausreichend)
+              </CardTitle>
+              <CardDescription>
+                Primär für die Wahl der Bestehensgrenze: wie verschiebt sich die
+                Stufenverteilung?
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 lg:grid-cols-[minmax(14rem,20rem)_minmax(0,1fr)] lg:items-start">
+                <div className="overflow-auto rounded-lg border">
+                  <Table className="text-xs">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="h-8 px-2 sticky left-0 z-10 bg-card">
+                          Stufe
+                        </TableHead>
+                        {comparisonBundle.columns.map((c) => (
+                          <TableHead
+                            key={c.id}
+                            className="h-8 px-1.5 text-center whitespace-nowrap"
+                          >
+                            {c.label}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {comparisonBundle.bucketMatrix.map((row) => (
+                        <TableRow key={row.name}>
+                          <TableCell className="sticky left-0 z-10 bg-card px-2 py-1 font-medium">
+                            {row.name}
+                          </TableCell>
+                          {row.cells.map((cell, i) => (
+                            <TableCell
+                              key={comparisonBundle.columns[i]?.id ?? i}
+                              className={cn(
+                                "px-1.5 py-1 text-center tabular-nums",
+                                row.name.startsWith("nicht") &&
+                                  "text-rose-700 dark:text-rose-300"
+                              )}
+                            >
+                              <span className="font-semibold">{cell.count}</span>
+                              <span className="block text-[10px] text-muted-foreground">
+                                {Math.round(cell.share * 1000) / 10}%
+                              </span>
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <ExpandableChart
+                  title="Notenstufen je Szenario"
+                  description="Anzahl · sehr gut … nicht ausreichend"
+                  filenameBase={`${fileBase}_Szenarien_Notenstufen`}
                 >
-                  <FileDown className="size-4" />
-                  PDF Export
-                </Button>
+                  <ScenarioGradeBucketChart
+                    series={chartSeries}
+                    mode="count"
+                  />
+                </ExpandableChart>
               </div>
-            </div>
-            {exportMsg && (
-              <p className="mt-2 text-xs text-muted-foreground">{exportMsg}</p>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="overflow-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="sticky left-0 z-10 bg-card">
-                      Note
-                    </TableHead>
-                    {comparisonBundle.columns.map((c) => (
-                      <TableHead
-                        key={c.id}
-                        className="min-w-[5.5rem] text-center"
-                      >
-                        {c.label}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {comparisonBundle.gradeMatrix.map((row) => (
-                    <TableRow key={row.grade}>
-                      <TableCell className="sticky left-0 z-10 bg-card font-medium tabular-nums">
-                        {row.gradeLabel}
-                      </TableCell>
-                      {row.cells.map((cell, i) => (
-                        <TableCell
-                          key={comparisonBundle.columns[i]?.id ?? i}
-                          className="text-center text-sm tabular-nums"
-                        >
-                          <span className="font-medium">{cell.count}</span>
-                          <span className="block text-[11px] text-muted-foreground">
-                            {Math.round(cell.share * 1000) / 10} %
-                          </span>
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="overflow-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="sticky left-0 z-10 bg-card">
-                      Notenstufe
-                    </TableHead>
-                    {comparisonBundle.columns.map((c) => (
-                      <TableHead
-                        key={c.id}
-                        className="min-w-[5.5rem] text-center"
-                      >
-                        {c.label}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {comparisonBundle.bucketMatrix.map((row) => (
-                    <TableRow key={row.name}>
-                      <TableCell className="sticky left-0 z-10 bg-card font-medium">
-                        {row.name}
-                      </TableCell>
-                      {row.cells.map((cell, i) => (
-                        <TableCell
-                          key={comparisonBundle.columns[i]?.id ?? i}
-                          className={cn(
-                            "text-center text-sm tabular-nums",
-                            row.name.startsWith("nicht") &&
-                              "text-rose-700 dark:text-rose-300"
-                          )}
-                        >
-                          <span className="font-medium">{cell.count}</span>
-                          <span className="block text-[11px] text-muted-foreground">
-                            {Math.round(cell.share * 1000) / 10} %
-                          </span>
-                        </TableCell>
+          {/* 2) Einzelnoten – Detailtiefe */}
+          <Card className="surface-panel">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">
+                Noten 1,0 … 5,0 (Detail)
+              </CardTitle>
+              <CardDescription>
+                Feine Verteilung zum Abgleich der Notenspiegel-Formen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 lg:grid-cols-[minmax(14rem,20rem)_minmax(0,1fr)] lg:items-start">
+                <div className="max-h-[22rem] overflow-auto rounded-lg border">
+                  <Table className="text-xs">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="h-8 px-2 sticky left-0 top-0 z-10 bg-card">
+                          Note
+                        </TableHead>
+                        {comparisonBundle.columns.map((c) => (
+                          <TableHead
+                            key={c.id}
+                            className="h-8 px-1.5 text-center whitespace-nowrap sticky top-0 bg-card"
+                          >
+                            {c.label}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {comparisonBundle.gradeMatrix.map((row) => (
+                        <TableRow key={row.grade}>
+                          <TableCell className="sticky left-0 z-10 bg-card px-2 py-1 font-medium tabular-nums">
+                            {row.gradeLabel}
+                          </TableCell>
+                          {row.cells.map((cell, i) => (
+                            <TableCell
+                              key={comparisonBundle.columns[i]?.id ?? i}
+                              className="px-1.5 py-1 text-center tabular-nums"
+                            >
+                              <span className="font-semibold">{cell.count}</span>
+                              <span className="block text-[10px] text-muted-foreground">
+                                {Math.round(cell.share * 1000) / 10}%
+                              </span>
+                            </TableCell>
+                          ))}
+                        </TableRow>
                       ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div>
-                <p className="mb-2 text-sm font-medium">
-                  Visualisierung Noten (Anteil)
-                </p>
+                    </TableBody>
+                  </Table>
+                </div>
                 <ExpandableChart
                   title="Notenverteilung je Szenario"
                   description="Anteil der Studierenden je Note"
@@ -602,34 +632,21 @@ export default function ScenariosPage() {
                   />
                 </ExpandableChart>
               </div>
-              <div>
-                <p className="mb-2 text-sm font-medium">
-                  Visualisierung Notenstufen (Anzahl)
-                </p>
-                <ExpandableChart
-                  title="Notenstufen je Szenario"
-                  description="sehr gut … nicht ausreichend"
-                  filenameBase={`${fileBase}_Szenarien_Notenstufen`}
-                >
-                  <ScenarioGradeBucketChart
-                    series={chartSeries}
-                    mode="count"
-                  />
-                </ExpandableChart>
-              </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Durchfaller-Analyse kompakt */}
-            <div>
-              <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+          {/* 3) Durchfaller – wer ist betroffen */}
+          <Card className="surface-panel">
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium">
+                  <CardTitle className="text-sm">
                     Durchfaller über Szenarien
-                  </p>
-                  <p className="text-xs text-muted-foreground">
+                  </CardTitle>
+                  <CardDescription>
                     {comparisonBundle.failers.length} Person(en) mit Note 5,0 in
-                    mindestens einem Szenario · Details im PDF-Export
-                  </p>
+                    mindestens einem Szenario · ausführlich im PDF
+                  </CardDescription>
                 </div>
                 <Button
                   type="button"
@@ -643,19 +660,24 @@ export default function ScenariosPage() {
                   Analyse als PDF
                 </Button>
               </div>
-              <div className="max-h-72 overflow-auto rounded-lg border">
-                <Table>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-64 overflow-auto rounded-lg border">
+                <Table className="text-xs">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Matr.</TableHead>
-                      <TableHead>Pkt.</TableHead>
+                      <TableHead className="h-8 px-2">Name</TableHead>
+                      <TableHead className="h-8 px-2">Matr.</TableHead>
+                      <TableHead className="h-8 px-2">Pkt.</TableHead>
                       {comparisonBundle.columns.map((c) => (
-                        <TableHead key={c.id} className="text-center">
+                        <TableHead
+                          key={c.id}
+                          className="h-8 px-1.5 text-center"
+                        >
                           {c.label}
                         </TableHead>
                       ))}
-                      <TableHead className="hidden md:table-cell">
+                      <TableHead className="h-8 px-2 hidden md:table-cell">
                         Hinweis
                       </TableHead>
                     </TableRow>
@@ -673,13 +695,13 @@ export default function ScenariosPage() {
                     ) : (
                       comparisonBundle.failers.map((f) => (
                         <TableRow key={f.key}>
-                          <TableCell className="whitespace-nowrap">
+                          <TableCell className="whitespace-nowrap px-2 py-1">
                             {f.lastName}, {f.firstName}
                           </TableCell>
-                          <TableCell className="font-mono text-xs">
+                          <TableCell className="px-2 py-1 font-mono text-[11px]">
                             {f.key}
                           </TableCell>
-                          <TableCell className="tabular-nums text-sm">
+                          <TableCell className="px-2 py-1 tabular-nums">
                             {f.totalPoints != null
                               ? formatStat(f.totalPoints, 1)
                               : "–"}
@@ -688,7 +710,7 @@ export default function ScenariosPage() {
                             <TableCell
                               key={comparisonBundle.columns[i]?.id ?? i}
                               className={cn(
-                                "text-center tabular-nums text-sm",
+                                "px-1.5 py-1 text-center tabular-nums",
                                 f.failsIn[i] &&
                                   "font-semibold text-rose-700 dark:text-rose-300"
                               )}
@@ -696,7 +718,7 @@ export default function ScenariosPage() {
                               {formatGrade(g)}
                             </TableCell>
                           ))}
-                          <TableCell className="hidden max-w-[12rem] text-xs text-muted-foreground md:table-cell">
+                          <TableCell className="hidden max-w-[11rem] px-2 py-1 text-[11px] text-muted-foreground md:table-cell">
                             {f.statusNote}
                           </TableCell>
                         </TableRow>
@@ -705,9 +727,9 @@ export default function ScenariosPage() {
                   </TableBody>
                 </Table>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {impact && scenarios.length >= 2 && (

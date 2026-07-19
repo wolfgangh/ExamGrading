@@ -131,59 +131,16 @@ export function exportScenarioComparisonPdf(
   });
   y = getLastTableY(doc, y) + 8;
 
-  // Grade table
-  y = ensureSpace(doc, y, 40);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text(pdfText("Anzahl und Anteil je Note"), PDF_MARGIN, y);
-  y += 3;
-
-  const gradeHeadSimple = [
-    "Note",
+  const colHead = (first: string) => [
+    first,
     ...bundle.columns.map((c) => pdfText(c.label)),
   ];
-  const gradeBody = bundle.gradeMatrix.map((row) => [
-    pdfText(row.gradeLabel),
-    ...row.cells.map(
-      (cell) =>
-        `${cell.count} (${Math.round(cell.share * 1000) / 10} %)`
-    ),
-  ]);
 
-  autoTable(doc, {
-    startY: y,
-    head: [gradeHeadSimple],
-    body: gradeBody,
-    styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.2 },
-    headStyles: {
-      fillColor: [68, 112, 153],
-      textColor: 255,
-      fontStyle: "bold",
-    },
-    margin: { left: PDF_MARGIN, right: PDF_MARGIN },
-  });
-  y = getLastTableY(doc, y) + 8;
-
-  // Chart grades
-  y = ensureSpace(doc, y, 80);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text(pdfText("Visualisierung Noten"), PDF_MARGIN, y);
-  y += 3;
-  const chartH = 62;
-  try {
-    doc.addImage(gradePng, "PNG", PDF_MARGIN, y, PDF_CONTENT_WIDTH, chartH);
-  } catch {
-    doc.setFontSize(9);
-    doc.text(pdfText("(Diagramm nicht einbettbar)"), PDF_MARGIN, y + 8);
-  }
-  y += chartH + 10;
-
-  // Buckets
+  // 1) Notenstufen zuerst (Entscheidungsrelevanz)
   y = ensureSpace(doc, y, 40);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text(pdfText("Notenstufen"), PDF_MARGIN, y);
+  doc.text(pdfText("Notenstufen (Anzahl und Anteil)"), PDF_MARGIN, y);
   y += 3;
 
   const bucketBody = bundle.bucketMatrix.map((row) => [
@@ -195,7 +152,7 @@ export function exportScenarioComparisonPdf(
   ]);
   autoTable(doc, {
     startY: y,
-    head: [gradeHeadSimple],
+    head: [colHead("Stufe")],
     body: bucketBody,
     styles: { font: "helvetica", fontSize: 8, cellPadding: 1.3 },
     headStyles: {
@@ -219,6 +176,49 @@ export function exportScenarioComparisonPdf(
     /* ignore */
   }
   y += chartH2 + 10;
+
+  // 2) Einzelnoten (Detail)
+  y = ensureSpace(doc, y, 40);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text(pdfText("Anzahl und Anteil je Note"), PDF_MARGIN, y);
+  y += 3;
+
+  const gradeBody = bundle.gradeMatrix.map((row) => [
+    pdfText(row.gradeLabel),
+    ...row.cells.map(
+      (cell) =>
+        `${cell.count} (${Math.round(cell.share * 1000) / 10} %)`
+    ),
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [colHead("Note")],
+    body: gradeBody,
+    styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.2 },
+    headStyles: {
+      fillColor: [68, 112, 153],
+      textColor: 255,
+      fontStyle: "bold",
+    },
+    margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+  });
+  y = getLastTableY(doc, y) + 8;
+
+  y = ensureSpace(doc, y, 80);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text(pdfText("Visualisierung Noten"), PDF_MARGIN, y);
+  y += 3;
+  const chartH = 62;
+  try {
+    doc.addImage(gradePng, "PNG", PDF_MARGIN, y, PDF_CONTENT_WIDTH, chartH);
+  } catch {
+    doc.setFontSize(9);
+    doc.text(pdfText("(Diagramm nicht einbettbar)"), PDF_MARGIN, y + 8);
+  }
+  y += chartH + 10;
 
   // Impact summary
   if (bundle.impact) {

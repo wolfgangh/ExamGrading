@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -34,14 +33,18 @@ export function ExpandableChart({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogChartRef = useRef<HTMLDivElement>(null);
 
   const savePng = async (from: "preview" | "dialog") => {
     setErr(null);
     setBusy(true);
     try {
-      const el = from === "dialog" ? dialogRef.current : previewRef.current;
-      await exportSvgContainerAsPng(el, filenameBase);
+      const el =
+        from === "dialog" ? dialogChartRef.current : previewRef.current;
+      await exportSvgContainerAsPng(el, filenameBase, {
+        title,
+        description,
+      });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Export fehlgeschlagen");
     } finally {
@@ -87,9 +90,9 @@ export function ExpandableChart({
           PNG
         </Button>
         <span className="text-[11px] text-muted-foreground">
-          Klick auf Grafik zum Vergrößern
+          Klick zum Vergrößern · PNG inkl. Titel
         </span>
-        {err && (
+        {err && !open && (
           <span className="text-[11px] text-destructive">{err}</span>
         )}
       </div>
@@ -99,19 +102,34 @@ export function ExpandableChart({
           className="flex max-h-[min(92vh,900px)] w-[min(96vw,1100px)] max-w-none flex-col gap-3 sm:max-w-none"
           showCloseButton
         >
-          <DialogHeader className="shrink-0 pr-8">
+          <DialogHeader className="sr-only">
             <DialogTitle>{title}</DialogTitle>
-            {description && (
-              <DialogDescription>{description}</DialogDescription>
-            )}
           </DialogHeader>
+
+          {/* Sichtbare Beschriftungen – werden im PNG mitgeschrieben */}
+          <div className="shrink-0 space-y-0.5 border-b pb-2 pr-8">
+            <p className="text-base font-semibold tracking-tight text-foreground">
+              {title}
+            </p>
+            {description && (
+              <p className="text-sm text-muted-foreground">{description}</p>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Achsen und Balkenbeschriftungen gehören zur Grafik · Export
+              enthält Titel und Untertitel.
+            </p>
+          </div>
+
           <div
-            ref={dialogRef}
-            className={cn("min-h-0 flex-1 overflow-auto", chartClassName ?? "h-[min(60vh,520px)]")}
+            ref={dialogChartRef}
+            className={cn(
+              "min-h-0 flex-1 overflow-auto rounded-lg border bg-background p-2",
+              chartClassName ?? "h-[min(58vh,500px)]"
+            )}
           >
-            {/* Chart erneut rendern im Dialog (gleiche children) */}
             <div className="h-full min-h-[280px] w-full">{children}</div>
           </div>
+
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t pt-2">
             {err && (
               <span className="mr-auto text-xs text-destructive">{err}</span>
@@ -126,7 +144,11 @@ export function ExpandableChart({
               <Download className="size-4" />
               Als PNG speichern
             </Button>
-            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setOpen(false)}
+            >
               <X className="size-4" />
               Schließen
             </Button>
