@@ -60,6 +60,7 @@ import {
   ScenarioGradeDistributionChart,
   shortScenarioLabel,
 } from "@/components/charts/grade-distribution-chart";
+import { ExpandableChart } from "@/components/charts/expandable-chart";
 import {
   hasOpenGrading,
   openGradingSummary,
@@ -346,10 +347,20 @@ export default function GradesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ScenarioGradeDistributionChart
-                series={scenarioChartSeries}
-                mode="share"
-              />
+              <ExpandableChart
+                title="Notenverteilung im Szenario-Vergleich"
+                description={
+                  scenarioChartSeries.length > 1
+                    ? scenarioChartSeries.map((s) => s.label).join(" · ")
+                    : "Anteil je Note"
+                }
+                filenameBase={`ExamGrade_${project.name || "Pruefung"}_Szenarien_Notenverteilung`}
+              >
+                <ScenarioGradeDistributionChart
+                  series={scenarioChartSeries}
+                  mode="share"
+                />
+              </ExpandableChart>
             </CardContent>
           </Card>
           <Card className="surface-panel min-w-0">
@@ -365,10 +376,16 @@ export default function GradesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ScenarioGradeBucketChart
-                series={scenarioChartSeries}
-                mode="count"
-              />
+              <ExpandableChart
+                title="Notenstufen im Szenario-Vergleich"
+                description="sehr gut … nicht ausreichend"
+                filenameBase={`ExamGrade_${project.name || "Pruefung"}_Szenarien_Notenstufen`}
+              >
+                <ScenarioGradeBucketChart
+                  series={scenarioChartSeries}
+                  mode="count"
+                />
+              </ExpandableChart>
             </CardContent>
           </Card>
         </div>

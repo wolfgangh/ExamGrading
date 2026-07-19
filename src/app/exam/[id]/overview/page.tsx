@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import { GradeDistributionChart } from "@/components/charts/grade-distribution-chart";
 import { PointsHistogramChart } from "@/components/charts/points-histogram-chart";
+import { ExpandableChart } from "@/components/charts/expandable-chart";
 import { SummaryPanel } from "@/components/layout/summary-panel";
 import {
   Card,
@@ -357,7 +358,13 @@ export default function OverviewPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0">
-              <GradeDistributionChart stats={stats} className="h-52 w-full" />
+              <ExpandableChart
+                title="Notenverteilung"
+                description={`Ø ${formatGrade(stats.averageGrade)} · Bestehen ${formatPercent(stats.passRate)}`}
+                filenameBase={`ExamGrade_${project.name || "Pruefung"}_Notenverteilung`}
+              >
+                <GradeDistributionChart stats={stats} className="h-52 w-full" />
+              </ExpandableChart>
             </CardContent>
           </Card>
 
@@ -370,7 +377,13 @@ export default function OverviewPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0">
-              <PointsHistogramChart stats={stats} className="h-52 w-full" />
+              <ExpandableChart
+                title="Punkteverteilung"
+                description={`Max. ${project.gradeSchema.maxPoints} · Bestehen ab ${project.gradeSchema.passThreshold}`}
+                filenameBase={`ExamGrade_${project.name || "Pruefung"}_Punkteverteilung`}
+              >
+                <PointsHistogramChart stats={stats} className="h-52 w-full" />
+              </ExpandableChart>
             </CardContent>
           </Card>
         </div>

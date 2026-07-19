@@ -118,7 +118,7 @@ Solange ungeprüfte Orphans existieren, bleiben Notenliste und HISinOne-Export *
 
 | Seite | Nutzen |
 |-------|--------|
-| **Notenszenarien** | Verschiedene Bestehensgrenzen / Schwellen vergleichen, aktives Szenario wählen |
+| **Notenszenarien** | Bestehensgrenzen vergleichen; Tabelle Anzahl/Anteil je Note und Notenstufe; Visualisierung; PDF-Export mit Durchfaller-Analyse über Szenarien; Diagramme vergrößern und als PNG speichern |
 | **Noten** | Tabelle aller Studierenden, Status, Overrides, Kommentare, Szenario-Impact |
 | **Notenspiegel** | Verteilung, Kennzahlen (Mittel, Median), Export PDF/Excel inkl. Diagramme |
 

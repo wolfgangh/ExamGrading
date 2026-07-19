@@ -26,8 +26,9 @@ Geeignet u. a. für:
 | **Import** | HISinOne-Noteneintrag (auch mehrere Dateien), Moodle-Antritt, Moodle-/Punkte-Excel |
 | **Zuordnung** | Matrikel-Tippfehler: Vorschläge, manuell zusammenführen, ablehnen, rückgängig |
 | **Bewertung** | Detailpunkte, offene Aufgaben („Bewertung notwendig“), Teilgebiete |
-| **Noten** | Szenarien (Bestehensgrenzen), Overrides, Notenspiegel mit Diagrammen |
-| **Export** | Formatgetreues HISinOne-XLSX, Notenliste/Änderungen/Manuell/Durchfaller (PDF), Notenspiegel PDF/Excel, JSON-Sicherung |
+| **Noten** | Szenarien (Bestehensgrenzen), Noten-/Stufen-Vergleich, Overrides, Notenspiegel |
+| **Diagramme** | Klick zum Vergrößern, PNG-Export; Szenarienvergleich als PDF inkl. Durchfaller |
+| **Export** | HISinOne-XLSX, Notenliste/Änderungen/Manuell/Durchfaller (PDF), Notenspiegel PDF/Excel, Szenarien-PDF, JSON-Sicherung |
 | **Workflow** | Fortschrittsanzeige, Meilensteine „Sicherung nach Import/Noten“ |
 | **Teams** | Einbettung als Website-Tab; robuste Downloads (File-Picker / manueller Link) |
 | **Darstellung** | Hell/Dunkel, Schriftgröße (3 Stufen), hoher Kontrast |
@@ -113,4 +114,4 @@ Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Deta
 ## Lizenz & Kontakt
 
 Internes Hochschul-Tool.  
-© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.3.14
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.0

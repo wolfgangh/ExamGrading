@@ -38,7 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, formatGrade, formatStat } from "@/lib/utils";
-import { Check, ListChecks } from "lucide-react";
+import { Check, Download, FileDown, ListChecks } from "lucide-react";
 import { computeScenarioImpact } from "@/lib/grades/scenario-impact";
 import { ScenarioImpactPanel } from "@/components/grades/scenario-impact-panel";
 import {
@@ -49,6 +49,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  buildScenarioComparisonBundle,
+  scenarioSeriesForCharts,
+} from "@/lib/grades/scenario-comparison";
+import {
+  ScenarioGradeBucketChart,
+  ScenarioGradeDistributionChart,
+} from "@/components/charts/grade-distribution-chart";
+import { ExpandableChart } from "@/components/charts/expandable-chart";
+import { exportScenarioComparisonPdf } from "@/lib/pdf/export-scenario-comparison-pdf";
 
 export default function ScenariosPage() {
   const { id } = useParams<{ id: string }>();
@@ -57,6 +67,8 @@ export default function ScenariosPage() {
   const [compareA, setCompareA] = useState<string | null>(null);
   const [compareB, setCompareB] = useState<string | null>(null);
   const [onlyChanged, setOnlyChanged] = useState(true);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
   const allScenarios = useMemo(
     () => (project ? ensureScenarios(project) : []),
@@ -87,6 +99,19 @@ export default function ScenariosPage() {
     });
   }, [project, scenarios, allScenarios]);
 
+  const comparisonBundle = useMemo(() => {
+    if (!project) return null;
+    return buildScenarioComparisonBundle(project, compareA, compareB);
+  }, [project, compareA, compareB, scenarios]);
+
+  const chartSeries = useMemo(
+    () =>
+      comparisonBundle
+        ? scenarioSeriesForCharts(comparisonBundle.columns)
+        : [],
+    [comparisonBundle]
+  );
+
   if (!project) return null;
 
   const activeId = project.activeScenarioId ?? scenarios[0]?.id;
@@ -110,6 +135,26 @@ export default function ScenariosPage() {
   const thresholds = active
     ? [...active.schema.thresholds].sort((a, b) => a.grade - b.grade)
     : [];
+
+  const runPdfExport = () => {
+    setExportMsg(null);
+    setExportBusy(true);
+    try {
+      exportScenarioComparisonPdf(project, {
+        impactA: idA,
+        impactB: idB,
+      });
+      setExportMsg("PDF Szenarienvergleich heruntergeladen.");
+    } catch (e) {
+      setExportMsg(
+        e instanceof Error ? e.message : "PDF-Export fehlgeschlagen"
+      );
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const fileBase = `ExamGrade_${project.name || "Pruefung"}`;
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -423,6 +468,247 @@ export default function ScenariosPage() {
           </Card>
         )}
       </div>
+
+      {/* Noten- und Stufenvergleich + Export */}
+      {comparisonBundle && comparisonBundle.columns.length > 0 && (
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="text-base">
+                  Noten und Notenstufen im Szenario-Vergleich
+                </CardTitle>
+                <CardDescription>
+                  Anzahl und Anteil der bewerteten Studierenden je Note bzw.
+                  Notenstufe – zum internen Abgleich der Szenarien.
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="default"
+                  className="gap-1.5"
+                  disabled={exportBusy}
+                  onClick={runPdfExport}
+                >
+                  <FileDown className="size-4" />
+                  PDF Export
+                </Button>
+              </div>
+            </div>
+            {exportMsg && (
+              <p className="mt-2 text-xs text-muted-foreground">{exportMsg}</p>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="overflow-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="sticky left-0 z-10 bg-card">
+                      Note
+                    </TableHead>
+                    {comparisonBundle.columns.map((c) => (
+                      <TableHead
+                        key={c.id}
+                        className="min-w-[5.5rem] text-center"
+                      >
+                        {c.label}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {comparisonBundle.gradeMatrix.map((row) => (
+                    <TableRow key={row.grade}>
+                      <TableCell className="sticky left-0 z-10 bg-card font-medium tabular-nums">
+                        {row.gradeLabel}
+                      </TableCell>
+                      {row.cells.map((cell, i) => (
+                        <TableCell
+                          key={comparisonBundle.columns[i]?.id ?? i}
+                          className="text-center text-sm tabular-nums"
+                        >
+                          <span className="font-medium">{cell.count}</span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {Math.round(cell.share * 1000) / 10} %
+                          </span>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="overflow-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="sticky left-0 z-10 bg-card">
+                      Notenstufe
+                    </TableHead>
+                    {comparisonBundle.columns.map((c) => (
+                      <TableHead
+                        key={c.id}
+                        className="min-w-[5.5rem] text-center"
+                      >
+                        {c.label}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {comparisonBundle.bucketMatrix.map((row) => (
+                    <TableRow key={row.name}>
+                      <TableCell className="sticky left-0 z-10 bg-card font-medium">
+                        {row.name}
+                      </TableCell>
+                      {row.cells.map((cell, i) => (
+                        <TableCell
+                          key={comparisonBundle.columns[i]?.id ?? i}
+                          className={cn(
+                            "text-center text-sm tabular-nums",
+                            row.name.startsWith("nicht") &&
+                              "text-rose-700 dark:text-rose-300"
+                          )}
+                        >
+                          <span className="font-medium">{cell.count}</span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {Math.round(cell.share * 1000) / 10} %
+                          </span>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-sm font-medium">
+                  Visualisierung Noten (Anteil)
+                </p>
+                <ExpandableChart
+                  title="Notenverteilung je Szenario"
+                  description="Anteil der Studierenden je Note"
+                  filenameBase={`${fileBase}_Szenarien_Notenverteilung`}
+                >
+                  <ScenarioGradeDistributionChart
+                    series={chartSeries}
+                    mode="share"
+                  />
+                </ExpandableChart>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium">
+                  Visualisierung Notenstufen (Anzahl)
+                </p>
+                <ExpandableChart
+                  title="Notenstufen je Szenario"
+                  description="sehr gut … nicht ausreichend"
+                  filenameBase={`${fileBase}_Szenarien_Notenstufen`}
+                >
+                  <ScenarioGradeBucketChart
+                    series={chartSeries}
+                    mode="count"
+                  />
+                </ExpandableChart>
+              </div>
+            </div>
+
+            {/* Durchfaller-Analyse kompakt */}
+            <div>
+              <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">
+                    Durchfaller über Szenarien
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {comparisonBundle.failers.length} Person(en) mit Note 5,0 in
+                    mindestens einem Szenario · Details im PDF-Export
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  disabled={exportBusy}
+                  onClick={runPdfExport}
+                >
+                  <Download className="size-3.5" />
+                  Analyse als PDF
+                </Button>
+              </div>
+              <div className="max-h-72 overflow-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Matr.</TableHead>
+                      <TableHead>Pkt.</TableHead>
+                      {comparisonBundle.columns.map((c) => (
+                        <TableHead key={c.id} className="text-center">
+                          {c.label}
+                        </TableHead>
+                      ))}
+                      <TableHead className="hidden md:table-cell">
+                        Hinweis
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {comparisonBundle.failers.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4 + comparisonBundle.columns.length}
+                          className="text-center text-muted-foreground"
+                        >
+                          Keine Durchfaller in den sichtbaren Szenarien.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      comparisonBundle.failers.map((f) => (
+                        <TableRow key={f.key}>
+                          <TableCell className="whitespace-nowrap">
+                            {f.lastName}, {f.firstName}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {f.key}
+                          </TableCell>
+                          <TableCell className="tabular-nums text-sm">
+                            {f.totalPoints != null
+                              ? formatStat(f.totalPoints, 1)
+                              : "–"}
+                          </TableCell>
+                          {f.grades.map((g, i) => (
+                            <TableCell
+                              key={comparisonBundle.columns[i]?.id ?? i}
+                              className={cn(
+                                "text-center tabular-nums text-sm",
+                                f.failsIn[i] &&
+                                  "font-semibold text-rose-700 dark:text-rose-300"
+                              )}
+                            >
+                              {formatGrade(g)}
+                            </TableCell>
+                          ))}
+                          <TableCell className="hidden max-w-[12rem] text-xs text-muted-foreground md:table-cell">
+                            {f.statusNote}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {impact && scenarios.length >= 2 && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
