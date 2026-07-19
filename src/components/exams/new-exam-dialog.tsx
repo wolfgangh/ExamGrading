@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,17 +24,16 @@ import {
 } from "@/components/ui/select";
 import { ComboboxField } from "@/components/ui/combobox-field";
 import { ClearableInput } from "@/components/ui/clearable-input";
-import { Badge } from "@/components/ui/badge";
 import {
   DEFAULT_LECTURER,
   EXAM_NAME_OPTIONS,
-  LECTURER_OPTIONS,
   defaultLecturersForExam,
   findCatalogEntry,
   resolveExamDisplayName,
   resolveSubAreasForExamName,
   type CatalogSubArea,
 } from "@/lib/exam-catalog";
+import { LecturerPicker } from "@/components/exam/lecturer-picker";
 import { createEmptyExamProject } from "@/lib/project-factory";
 import { saveExam } from "@/lib/storage";
 import {
@@ -59,7 +58,6 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
   const [semester, setSemester] = useState(() => currentSemesterLabel());
   const [examType, setExamType] = useState<ExamTypeValue>("the");
   const [lecturers, setLecturers] = useState<string[]>([DEFAULT_LECTURER]);
-  const [lecturerDraft, setLecturerDraft] = useState("");
   const [subAreas, setSubAreas] = useState<CatalogSubArea[]>([
     emptySubAreaRow(),
   ]);
@@ -76,7 +74,6 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     setSemester(currentSemesterLabel());
     setExamType("the");
     setLecturers([DEFAULT_LECTURER]);
-    setLecturerDraft("");
     setSubAreas([emptySubAreaRow()]);
     setNameError(null);
   };
@@ -91,21 +88,6 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     }
     setSubAreas(resolveSubAreasForExamName(raw));
     setLecturers(defaultLecturersForExam(raw));
-  };
-
-  const addLecturer = (value?: string) => {
-    const name = (value ?? lecturerDraft).trim();
-    if (!name) return;
-    setLecturers((prev) =>
-      prev.some((l) => l.toLowerCase() === name.toLowerCase())
-        ? prev
-        : [...prev, name]
-    );
-    setLecturerDraft("");
-  };
-
-  const removeLecturer = (name: string) => {
-    setLecturers((prev) => prev.filter((l) => l !== name));
   };
 
   const updateSubArea = (index: number, patch: Partial<CatalogSubArea>) => {
@@ -264,64 +246,11 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
             </div>
           </div>
 
-          {/* Dozenten */}
-          <div className="grid gap-1.5">
-            <Label>Dozenten</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {lecturers.map((l) => (
-                <Badge
-                  key={l}
-                  variant="secondary"
-                  className="gap-1 pr-1 font-normal"
-                >
-                  {l}
-                  <button
-                    type="button"
-                    className="rounded-sm p-0.5 hover:bg-muted"
-                    onClick={() => removeLecturer(l)}
-                    aria-label={`${l} entfernen`}
-                  >
-                    <X className="size-3" />
-                  </button>
-                </Badge>
-              ))}
-              {lecturers.length === 0 && (
-                <span className="text-sm text-muted-foreground">
-                  Kein Dozent ausgewählt
-                </span>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <div className="relative min-w-0 flex-1">
-                <ClearableInput
-                  list="lecturer-options"
-                  value={lecturerDraft}
-                  onChange={setLecturerDraft}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addLecturer();
-                    }
-                  }}
-                  placeholder="Dozent wählen oder eingeben…"
-                  autoComplete="off"
-                  clearLabel="Dozenteneingabe löschen"
-                />
-                <datalist id="lecturer-options">
-                  {LECTURER_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt} />
-                  ))}
-                </datalist>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => addLecturer()}
-              >
-                Hinzufügen
-              </Button>
-            </div>
-          </div>
+          <LecturerPicker
+            value={lecturers}
+            onChange={setLecturers}
+            id="new-exam-lecturers"
+          />
 
           {/* Teilgebiete */}
           <div className="grid gap-2">

@@ -62,6 +62,7 @@ import { CRITERION_SCALE_LABELS } from "@/lib/grades/sta-criteria";
 import { recomputeStaCriteriaRecord } from "@/lib/grades/sta-criteria";
 import { semesterSelectOptions } from "@/lib/semester";
 import { ComboboxField } from "@/components/ui/combobox-field";
+import { LecturerPicker } from "@/components/exam/lecturer-picker";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
@@ -199,21 +200,11 @@ export default function SettingsPage() {
               </Select>
             </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label>Dozenten (Komma-getrennt)</Label>
-            <Input
-              value={project.lecturers.join(", ")}
-              onChange={(e) =>
-                updateMeta(
-                  "lecturers",
-                  e.target.value
-                    .split(/[,;]/)
-                    .map((s) => s.trim())
-                    .filter(Boolean)
-                )
-              }
-            />
-          </div>
+          <LecturerPicker
+            value={project.lecturers ?? []}
+            onChange={(lecturers) => updateMeta("lecturers", lecturers)}
+            id="settings-lecturers"
+          />
         </CardContent>
       </Card>
 
