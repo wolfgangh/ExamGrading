@@ -20,6 +20,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
   Table,
   TableBody,
   TableCell,
@@ -29,11 +35,16 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import {
+  GERMAN_GRADES,
   STUDENT_STATUS_LABELS,
   type EnrichedStudentRow,
   type StudentStatus,
 } from "@/lib/types";
 import { cn, formatGrade, formatPercent, formatPoints } from "@/lib/utils";
+import { ChevronDown } from "lucide-react";
+
+/** Multi-Filter: leeres Set = alle Noten; "none" = ohne Note */
+type GradeFilterKey = number | "none";
 
 export type BorderlineFilter =
   | "off"
@@ -76,6 +87,7 @@ export function StudentsTable({
   ]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [gradeFilter, setGradeFilter] = useState<GradeFilterKey[]>([]);
 
   const borderlineLimit = useMemo(() => {
     if (borderlineFilter === "off") return null;
@@ -83,10 +95,52 @@ export function StudentsTable({
     return Number(borderlineFilter);
   }, [borderlineFilter, borderlineCustom]);
 
+  const gradeFilterActive = gradeFilter.length > 0;
+
+  const gradeFilterLabel = useMemo(() => {
+    if (!gradeFilterActive) return "Alle Noten";
+    if (gradeFilter.length === 1) {
+      const k = gradeFilter[0];
+      return k === "none" ? "Ohne Note" : `Note ${formatGrade(k)}`;
+    }
+    return `${gradeFilter.length} Noten`;
+  }, [gradeFilter, gradeFilterActive]);
+
+  const toggleGradeFilter = (key: GradeFilterKey, on: boolean) => {
+    setGradeFilter((prev) => {
+      const has = prev.some((p) =>
+        p === "none" || key === "none" ? p === key : Math.abs(p - key) < 0.05
+      );
+      if (on && !has) return [...prev, key];
+      if (!on && has) {
+        return prev.filter((p) =>
+          p === "none" || key === "none" ? p !== key : Math.abs(p - (key as number)) >= 0.05
+        );
+      }
+      return prev;
+    });
+  };
+
+  const isGradeSelected = (key: GradeFilterKey) =>
+    gradeFilter.some((p) =>
+      p === "none" || key === "none" ? p === key : Math.abs(p - (key as number)) < 0.05
+    );
+
   const filtered = useMemo(() => {
     let list = rows;
     if (statusFilter !== "all") {
       list = list.filter((r) => r.status === statusFilter);
+    }
+    if (gradeFilterActive) {
+      list = list.filter((r) => {
+        const g = r.finalGrade;
+        if (g == null || !Number.isFinite(g)) {
+          return gradeFilter.includes("none");
+        }
+        return gradeFilter.some(
+          (k) => k !== "none" && Math.abs(g - k) < 0.05
+        );
+      });
     }
     if (failersOnly) {
       list = list.filter((r) => r.isFailed);
@@ -110,6 +164,8 @@ export function StudentsTable({
   }, [
     rows,
     statusFilter,
+    gradeFilter,
+    gradeFilterActive,
     failersOnly,
     noShowOnly,
     orphanOnly,
@@ -344,6 +400,78 @@ export function StudentsTable({
             )}
           </SelectContent>
         </Select>
+
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "h-9 min-w-[8.5rem] justify-between gap-1.5 font-normal",
+                  gradeFilterActive && "border-primary bg-primary/5"
+                )}
+              />
+            }
+          >
+            <span className="truncate">{gradeFilterLabel}</span>
+            <ChevronDown className="size-3.5 opacity-60" />
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-52 p-2">
+            <p className="mb-1.5 px-1 text-xs font-medium text-muted-foreground">
+              Nach Note filtern (Mehrfachauswahl)
+            </p>
+            <div className="mb-1.5 flex gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 flex-1 text-xs"
+                onClick={() => setGradeFilter([])}
+              >
+                Alle
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 flex-1 text-xs"
+                onClick={() => setGradeFilter([...GERMAN_GRADES])}
+              >
+                Nur Noten
+              </Button>
+            </div>
+            <div className="max-h-64 space-y-0.5 overflow-auto">
+              <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted">
+                <Checkbox
+                  checked={isGradeSelected("none")}
+                  onCheckedChange={(v) =>
+                    toggleGradeFilter("none", v === true)
+                  }
+                />
+                <span className="text-sm">Ohne Note</span>
+              </label>
+              {GERMAN_GRADES.map((g) => (
+                <label
+                  key={g}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted"
+                >
+                  <Checkbox
+                    checked={isGradeSelected(g)}
+                    onCheckedChange={(v) =>
+                      toggleGradeFilter(g, v === true)
+                    }
+                  />
+                  <span className="text-sm tabular-nums">
+                    {formatGrade(g)}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
         <span className="ml-auto text-sm text-muted-foreground">
           {table.getRowModel().rows.length} / {rows.length} Zeilen
         </span>

@@ -2,7 +2,7 @@
 
 Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (keine Serverübertragung von Notenlisten).
 
-**Version:** 0.4.1
+**Version:** 0.4.2
 
 ---
 
@@ -131,7 +131,7 @@ Solange ungeprüfte Orphans existieren, bleiben Notenliste und HISinOne-Export *
 | Seite | Nutzen |
 |-------|--------|
 | **Notenszenarien** | Bestehensgrenzen wählen und vergleichen (siehe unten) |
-| **Noten** | Tabelle aller Studierenden, Status, Overrides, Kommentare, Szenario-Charts |
+| **Noten** | Tabelle aller Studierenden; Filter nach Status und **Note** (Mehrfachauswahl 1,0–5,0 / ohne Note); Overrides, Kommentare, Szenario-Charts |
 | **Notenspiegel** | Kennzahlen und Export PDF/Excel inkl. Diagramm |
 
 ### Empfehlung: Szenarien entscheiden

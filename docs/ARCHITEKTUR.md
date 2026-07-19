@@ -167,7 +167,7 @@ Details: [SECURITY.md](../SECURITY.md).
 
 Bei Releases `package.json`, `app-version.ts` und README-Footer abstimmen.
 
-**Stand dieser Doku:** App v0.4.1.
+**Stand dieser Doku:** App v0.4.2.
 
 ---
 
