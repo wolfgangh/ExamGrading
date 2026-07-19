@@ -41,10 +41,90 @@ import {
   type StudentStatus,
 } from "@/lib/types";
 import { cn, formatGrade, formatPercent, formatPoints } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ClipboardCopy } from "lucide-react";
 
 /** Multi-Filter: leeres Set = alle Noten; "none" = ohne Note */
 type GradeFilterKey = number | "none";
+
+const CLIPBOARD_HEADERS = [
+  "Matr.-Nr.",
+  "Name",
+  "Studiengang",
+  "Punkte",
+  "Note",
+] as const;
+
+function gradeOverviewClipboardRows(
+  rows: EnrichedStudentRow[]
+): { cells: string[] }[] {
+  return rows.map((r) => {
+    const name = [r.student.lastName, r.student.firstName]
+      .filter(Boolean)
+      .join(", ");
+    return {
+      cells: [
+        r.key,
+        name,
+        r.programCode?.trim() || "",
+        r.totalPoints != null && Number.isFinite(r.totalPoints)
+          ? formatPoints(r.totalPoints)
+          : "",
+        r.finalGrade != null && Number.isFinite(r.finalGrade)
+          ? formatGrade(r.finalGrade)
+          : "",
+      ],
+    };
+  });
+}
+
+function toTsv(rows: { cells: string[] }[]): string {
+  const esc = (s: string) => s.replace(/\t/g, " ").replace(/\r?\n/g, " ");
+  const lines = [
+    CLIPBOARD_HEADERS.join("\t"),
+    ...rows.map((r) => r.cells.map(esc).join("\t")),
+  ];
+  return lines.join("\r\n");
+}
+
+function toHtmlTable(rows: { cells: string[] }[]): string {
+  const esc = (s: string) =>
+    s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  const th = CLIPBOARD_HEADERS.map((h) => `<th>${esc(h)}</th>`).join("");
+  const body = rows
+    .map(
+      (r) =>
+        `<tr>${r.cells.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`
+    )
+    .join("");
+  return `<table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+async function writeClipboardTable(
+  tsv: string,
+  html: string
+): Promise<void> {
+  if (
+    typeof ClipboardItem !== "undefined" &&
+    navigator.clipboard?.write
+  ) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/plain": new Blob([tsv], { type: "text/plain" }),
+          "text/html": new Blob([html], { type: "text/html" }),
+        }),
+      ]);
+      return;
+    } catch {
+      /* fallback below */
+    }
+  }
+  await navigator.clipboard.writeText(tsv);
+}
 
 export type BorderlineFilter =
   | "off"
@@ -88,6 +168,7 @@ export function StudentsTable({
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [gradeFilter, setGradeFilter] = useState<GradeFilterKey[]>([]);
+  const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
   const borderlineLimit = useMemo(() => {
     if (borderlineFilter === "off") return null;
@@ -369,6 +450,27 @@ export function StudentsTable({
     },
   });
 
+  const copyVisibleToClipboard = async () => {
+    const visible = table.getRowModel().rows.map((r) => r.original);
+    if (visible.length === 0) {
+      setCopyMsg("Keine Zeilen zum Kopieren.");
+      return;
+    }
+    const payload = gradeOverviewClipboardRows(visible);
+    const tsv = toTsv(payload);
+    const html = toHtmlTable(payload);
+    try {
+      await writeClipboardTable(tsv, html);
+      setCopyMsg(
+        `${visible.length} Zeile${visible.length === 1 ? "" : "n"} kopiert (Matr., Name, Studiengang, Punkte, Note).`
+      );
+    } catch {
+      setCopyMsg(
+        "Kopieren fehlgeschlagen – Browser-Berechtigung für die Zwischenablage prüfen."
+      );
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -474,10 +576,28 @@ export function StudentsTable({
           </PopoverContent>
         </Popover>
 
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5"
+          disabled={table.getRowModel().rows.length === 0}
+          title="Sichtbare Zeilen: Matr.-Nr., Name, Studiengang, Punkte, Note – für Teams/Excel"
+          onClick={() => void copyVisibleToClipboard()}
+        >
+          <ClipboardCopy className="size-3.5" />
+          Kopieren
+        </Button>
+
         <span className="ml-auto text-sm text-muted-foreground">
           {table.getRowModel().rows.length} / {rows.length} Zeilen
         </span>
       </div>
+      {copyMsg && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {copyMsg}
+        </p>
+      )}
 
       <div className="surface-panel overflow-auto rounded-xl border">
         <Table>
