@@ -76,7 +76,11 @@ export interface GradeSchema {
   passThreshold: number;
   /** absteigend nach minPoints */
   thresholds: GradeThreshold[];
-  /** wie Excel ROUNDUP vor Notenbildung */
+  /**
+   * Historisch: Excel ROUNDUP auf ganze Punkte vor Notenbildung.
+   * Wird bei der Notenfindung nicht mehr angewendet (halbe Punkte blieben sonst
+   * z. B. 80,5 → 81 und fälschlich an der nächsthöheren Schwelle hängen).
+   */
   roundPointsUp: boolean;
 }
 

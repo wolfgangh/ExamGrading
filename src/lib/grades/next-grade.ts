@@ -8,13 +8,16 @@ export interface NextGradeInfo {
   thresholdForNext: number | null;
 }
 
-/** Effektive Punkte für Notenlogik (Excel ROUNDUP) */
+/**
+ * Effektive Punkte für Notenlogik / „bis nächste Note“.
+ * Unverändert (kein ganzzahliges Aufrunden) – konsistent mit calculateGrade.
+ */
 export function effectivePointsForGrading(
   points: number,
-  schema: GradeSchema
+  _schema: GradeSchema
 ): number {
   if (!Number.isFinite(points)) return 0;
-  return schema.roundPointsUp ? Math.ceil(points - 1e-9) : points;
+  return points;
 }
 
 /**

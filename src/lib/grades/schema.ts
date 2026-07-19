@@ -9,7 +9,8 @@ import { GERMAN_GRADES } from "@/lib/types";
 export function generateLinearGradeSchema(
   maxPoints: number,
   passThreshold: number,
-  roundPointsUp = true
+  /** Historisch (Excel ROUNDUP); steuert die Notenfindung nicht mehr. */
+  roundPointsUp = false
 ): GradeSchema {
   const safeMax = Math.max(0, maxPoints);
   const safePass = Math.min(Math.max(0, passThreshold), safeMax);
@@ -41,17 +42,23 @@ export function generateLinearGradeSchema(
   };
 }
 
+/**
+ * Punkte → Note über Schwellen (≥ minPoints).
+ * Kein Aufrunden auf ganze Punkte: 80,5 bei Grenze 81 für 1,3 ergibt nicht 1,3.
+ * Kleines Epsilon nur gegen Floating-Point (z. B. 80.999999999 vs. 81).
+ */
 export function calculateGrade(
   points: number,
   schema: GradeSchema
 ): number {
   if (!Number.isFinite(points)) return 5.0;
-  const p = schema.roundPointsUp ? Math.ceil(points - 1e-9) : points;
+  // schema.roundPointsUp absichtlich ignoriert (früher Math.ceil → 80,5 → 81)
+  void schema.roundPointsUp;
   const sorted = [...schema.thresholds].sort(
     (a, b) => b.minPoints - a.minPoints
   );
   for (const t of sorted) {
-    if (p >= t.minPoints) return t.grade;
+    if (points + 1e-9 >= t.minPoints) return t.grade;
   }
   return 5.0;
 }

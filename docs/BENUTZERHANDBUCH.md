@@ -2,7 +2,7 @@
 
 Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (keine Serverübertragung von Notenlisten).
 
-**Version:** 0.4.4
+**Version:** 0.4.5
 
 ---
 
@@ -149,6 +149,8 @@ Diagramme: **Klick zum Vergrößern**; **PNG speichern** enthält Titel und Besc
 **PDF Export** bündelt Kennzahlen, Verteilungen und Durchfaller-Analyse zum internen Austausch.
 
 Manuelle Notenkorrekturen mit Kommentar dokumentieren.
+
+**Punktenoten (THE, elektrP, Klausur, StA-Kriterien):** Die Note ergibt sich aus den **exakten** Gesamtpunkten und den Schwellen (≥). Es wird **nicht** vor der Zuordnung auf ganze Punkte aufgerundet (z. B. 80,5 bei Grenze 81 für Note 1,3 → Note 1,7, nicht 1,3).
 
 ---
 
