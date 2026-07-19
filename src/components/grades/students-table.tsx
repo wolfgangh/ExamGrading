@@ -426,20 +426,22 @@ export function StudentsTable({
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
+                variant="secondary"
                 className="h-7 flex-1 text-xs"
-                onClick={() => setGradeFilter([])}
+                onClick={() =>
+                  setGradeFilter(["none", ...GERMAN_GRADES])
+                }
               >
-                Alle
+                Alle wählen
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
                 className="h-7 flex-1 text-xs"
-                onClick={() => setGradeFilter([...GERMAN_GRADES])}
+                onClick={() => setGradeFilter([])}
               >
-                Nur Noten
+                Alle abwählen
               </Button>
             </div>
             <div className="max-h-64 space-y-0.5 overflow-auto">
