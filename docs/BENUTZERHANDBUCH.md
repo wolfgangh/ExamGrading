@@ -2,7 +2,7 @@
 
 Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (keine Serverübertragung von Notenlisten).
 
-**Version:** 0.4.5
+**Version:** 0.4.6
 
 ---
 
@@ -172,7 +172,7 @@ Seite: **Dokumente** bzw. **Export**.
 
 Export ist gesperrt bei offenen Bewertungen, ungeprüften Orphans oder fehlender Original-HISinOne-Vorlage (je nach Typ).
 
-PDFs können **alle hinterlegten Dozenten** ausweisen.
+PDFs führen im **Briefkopf** und in den Metadaten **alle** hinterlegten Dozenten/Prüfer auf (nicht nur den ersten).
 
 ---
 

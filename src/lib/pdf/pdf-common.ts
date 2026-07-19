@@ -52,18 +52,51 @@ export function formatDeDate(d = new Date()): string {
   });
 }
 
+/** Alle Prüfer/Dozenten, bereinigt */
+export function listLecturers(lecturers: string[] | undefined | null): string[] {
+  return (lecturers ?? []).map((l) => l.trim()).filter(Boolean);
+}
+
 /**
- * OTH-Hößl-Letterhead analog oth_hoessl_header.html / .tex
+ * OTH-Letterhead; bei mehreren Dozenten alle Namen im Kopf.
  * @returns Y-Position unterhalb des Headers
  */
 export function drawOthHeader(
   doc: jsPDF,
-  options?: { subjectLine?: string }
+  options?: { subjectLine?: string; lecturers?: string[] | null }
 ): number {
   const top = 8;
-  const boxH = 22;
   const left = PDF_MARGIN;
   const width = PDF_CONTENT_WIDTH;
+  const textX = left + 4 + 20;
+  const maxTextW = width - 28;
+
+  const names = listLecturers(options?.lecturers);
+  const displayNames =
+    names.length > 0 ? names : ["Prof. Dr. Wolfgang Hößl"];
+
+  // Prüferzeilen: ein Name groß; mehrere mit Umbruch
+  doc.setFont("helvetica", "bold");
+  const nameFontSize = displayNames.length === 1 ? 12 : 10;
+  doc.setFontSize(nameFontSize);
+  const nameJoined = displayNames.map((n) => pdfText(n)).join(" · ");
+  const nameLines = doc.splitTextToSize(nameJoined, maxTextW) as string[];
+  const nameBlockH = Math.max(5, nameLines.length * 4.5);
+
+  const subject =
+    options?.subjectLine?.trim() ||
+    "Internationale Finanzmärkte und Asset Management";
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  const subjectLines = doc.splitTextToSize(
+    pdfText(subject),
+    maxTextW
+  ) as string[];
+  const subjectBlockH = Math.max(4, subjectLines.length * 4);
+
+  // Layout: Fakultät (6) + Namen + Abstand + Fach
+  const contentH = 6 + nameBlockH + 2 + subjectBlockH + 4;
+  const boxH = Math.max(22, contentH);
 
   // Hintergrund leicht getönt
   doc.setFillColor(238, 243, 248);
@@ -76,7 +109,7 @@ export function drawOthHeader(
 
   // Logo-Platzhalter (OTH-Kasten)
   const logoX = left + 4;
-  const logoY = top + 3.5;
+  const logoY = top + Math.max(3.5, (boxH - 15) / 2);
   doc.setFillColor(...OTH_BLUE_DARK);
   doc.roundedRect(logoX, logoY, 16, 15, 1, 1, "F");
   doc.setTextColor(255, 255, 255);
@@ -84,27 +117,32 @@ export function drawOthHeader(
   doc.setFontSize(11);
   doc.text("OTH", logoX + 8, logoY + 9, { align: "center" });
 
-  const textX = logoX + 20;
   doc.setTextColor(...OTH_BLUE);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   doc.text(
     pdfText("OTH REGENSBURG  ·  FAKULTÄT BUSINESS AND MANAGEMENT"),
     textX,
-    top + 6
+    top + 5.5
   );
 
+  let y = top + 10.5;
   doc.setTextColor(34, 40, 47);
-  doc.setFontSize(12);
-  doc.text(pdfText("Prof. Dr. Wolfgang Hößl"), textX, top + 12);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(nameFontSize);
+  for (const line of nameLines) {
+    doc.text(line, textX, y);
+    y += 4.5;
+  }
 
+  y += 1.5;
   doc.setTextColor(...OTH_MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  const subject =
-    options?.subjectLine?.trim() ||
-    "Internationale Finanzmärkte und Asset Management";
-  doc.text(pdfText(subject), textX, top + 17.5);
+  for (const line of subjectLines) {
+    doc.text(line, textX, y);
+    y += 4;
+  }
 
   // Blaue Linie unter dem Header
   const lineY = top + boxH + 2;
@@ -115,11 +153,6 @@ export function drawOthHeader(
   doc.setTextColor(0);
 
   return lineY + 6;
-}
-
-/** Alle Prüfer/Dozenten, bereinigt */
-export function listLecturers(lecturers: string[] | undefined | null): string[] {
-  return (lecturers ?? []).map((l) => l.trim()).filter(Boolean);
 }
 
 /** Eine Zeile: „Prüfer: A, B, C“ */
@@ -322,7 +355,10 @@ export function startPdfWithHeader(
   title: string
 ): { doc: jsPDF; y: number } {
   const doc = createPdfDoc();
-  let y = drawOthHeader(doc, { subjectLine: project.name });
+  let y = drawOthHeader(doc, {
+    subjectLine: project.name,
+    lecturers: project.lecturers,
+  });
   y = drawDocTitle(doc, title, y);
   return { doc, y };
 }

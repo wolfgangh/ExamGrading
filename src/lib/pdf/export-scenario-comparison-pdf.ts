@@ -9,6 +9,8 @@ import {
 } from "@/lib/charts/scenario-bars-export";
 import {
   autoTable,
+  drawKeyValueBlock,
+  examHeaderLines,
   getLastTableY,
   pdfGrade,
   pdfPoints,
@@ -63,7 +65,7 @@ export function exportScenarioComparisonPdf(
     project,
     "Szenarienvergleich / Notenverteilung"
   );
-  let y = y0;
+  let y = drawKeyValueBlock(doc, examHeaderLines(project), y0);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
