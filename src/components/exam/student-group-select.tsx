@@ -7,8 +7,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ExamProject } from "@/lib/types";
-import { sortedStudentGroups } from "@/lib/student-groups";
+import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
+import {
+  countInGroup,
+  sortedStudentGroups,
+} from "@/lib/student-groups";
 import { cn } from "@/lib/utils";
 
 const NONE = "__none__";
@@ -19,12 +22,18 @@ export function StudentGroupSelect({
   onChange,
   className,
   compact,
+  rows,
+  highlightEmpty,
 }: {
   project: ExamProject;
   groupId: string | null | undefined;
   onChange: (groupId: string | null) => void;
   className?: string;
   compact?: boolean;
+  /** Für Anzeige der Personenzahl pro Gruppe */
+  rows?: EnrichedStudentRow[];
+  /** Unzugeordneten Trigger hervorheben */
+  highlightEmpty?: boolean;
 }) {
   const groups = sortedStudentGroups(project);
   if (groups.length === 0) {
@@ -34,6 +43,15 @@ export function StudentGroupSelect({
   }
 
   const value = groupId && groups.some((g) => g.id === groupId) ? groupId : NONE;
+  const unassigned = value === NONE;
+  const showCounts = rows != null && rows.length >= 0;
+  const noneCount = showCounts ? countInGroup(rows, "none") : null;
+
+  const labelFor = (id: string, name: string) => {
+    if (!showCounts || rows == null) return name;
+    const n = countInGroup(rows, id);
+    return `${name} · ${n}`;
+  };
 
   return (
     <Select
@@ -46,22 +64,46 @@ export function StudentGroupSelect({
       <SelectTrigger
         className={cn(
           compact ? "h-7 min-w-[6.5rem] text-xs" : "w-full",
+          highlightEmpty &&
+            unassigned &&
+            "border-amber-500/70 bg-amber-50 text-amber-950 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-50",
           className
         )}
       >
         <SelectValue placeholder="Gruppe">
           {value === NONE
-            ? "–"
-            : groups.find((g) => g.id === value)?.name ?? "–"}
+            ? showCounts && noneCount != null
+              ? `– · ${noneCount}`
+              : "–"
+            : labelFor(
+                value,
+                groups.find((g) => g.id === value)?.name ?? "–"
+              )}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={NONE}>Keine Gruppe</SelectItem>
-        {groups.map((g) => (
-          <SelectItem key={g.id} value={g.id}>
-            {g.name}
-          </SelectItem>
-        ))}
+        <SelectItem value={NONE}>
+          {showCounts && noneCount != null
+            ? `Keine Gruppe · ${noneCount}`
+            : "Keine Gruppe"}
+        </SelectItem>
+        {groups.map((g) => {
+          const n = showCounts && rows != null ? countInGroup(rows, g.id) : null;
+          const empty = n === 0;
+          return (
+            <SelectItem
+              key={g.id}
+              value={g.id}
+              className={cn(
+                empty &&
+                  "text-amber-900 dark:text-amber-100 data-highlighted:bg-amber-50 dark:data-highlighted:bg-amber-950/40"
+              )}
+            >
+              {n != null ? `${g.name} · ${n}` : g.name}
+              {empty ? " (leer)" : ""}
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );

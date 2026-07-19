@@ -61,21 +61,35 @@ export function setStudentGroupId(
   matKey: string,
   groupId: string | null
 ): ExamProject {
-  const key = normalizeMatriculation(matKey);
-  if (!key) return project;
-  const prev = project.students[key];
-  const student = prev
-    ? { ...prev, groupId }
-    : {
-        matriculationNumber: matKey,
-        lastName: "",
-        firstName: "",
-        groupId,
-      };
-  return {
-    ...project,
-    students: { ...project.students, [key]: student },
-  };
+  return setStudentGroupIds(project, [matKey], groupId);
+}
+
+/** Mehrere Matrikelnummern in einem Update einer Gruppe (oder keiner) zuordnen */
+export function setStudentGroupIds(
+  project: ExamProject,
+  matKeys: string[],
+  groupId: string | null
+): ExamProject {
+  if (matKeys.length === 0) return project;
+  const students = { ...project.students };
+  let changed = false;
+  for (const matKey of matKeys) {
+    const key = normalizeMatriculation(matKey);
+    if (!key) continue;
+    const prev = students[key];
+    const next = prev
+      ? { ...prev, groupId }
+      : {
+          matriculationNumber: matKey,
+          lastName: "",
+          firstName: "",
+          groupId,
+        };
+    if (prev?.groupId === groupId && prev) continue;
+    students[key] = next;
+    changed = true;
+  }
+  return changed ? { ...project, students } : project;
 }
 
 export function removeStudentGroup(
