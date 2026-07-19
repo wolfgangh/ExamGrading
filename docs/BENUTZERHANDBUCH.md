@@ -31,7 +31,7 @@ Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (kein
 | **Take-Home-Exam (THE)** | HISinOne → Antritt → Matrikel-Zuordnung → Punkte → Noten → Export |
 | **Elektronische Prüfung (elektrP)** | wie THE (Prüfung vor Ort, sonst gleicher Ablauf) |
 | **Klausur** | HISinOne → Punkte (Vorlage/Import) → Noten → Export (kein Moodle-Antritt) |
-| **Studienarbeit (StA) – Kriterien** | HISinOne → Kriterien definieren → Werte (%, Punkte oder Note) mit Gewichten → Note → Export |
+| **Studienarbeit (StA) – Kriterien** | HISinOne → Kriterien definieren → Werte (%, Punkte oder Note) mit Gewichten → Note → Export; in der Matrix: Skalen-Badge, Placeholder und ⓘ-Tooltip pro Kriterium |
 | **Studienarbeit (StA) – manuelle Note** | HISinOne → Note manuell je Person → Export |
 | **Portfolioprüfung** | HISinOne → Teilleistungen (Standard: 2) benennen/gewichten → Teilnoten → gewichtete Gesamtnote → Export |
 | **Sonstige** | flexibel, je nach konfiguriertem Ablauf |

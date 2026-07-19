@@ -11,6 +11,62 @@ export const CRITERION_SCALE_LABELS: Record<CriterionScale, string> = {
   grade: "Note (1,0–5,0)",
 };
 
+/** Kurze Skalenangabe für Spaltenköpfe (z. B. „0–100 %“) */
+export function criterionScaleShort(c: AssessmentCriterion): string {
+  switch (c.scale) {
+    case "percent":
+      return "0–100 %";
+    case "grade":
+      return "Note 1–5";
+    case "points": {
+      const max =
+        c.maxPoints != null && c.maxPoints > 0 ? c.maxPoints : null;
+      return max != null ? `Punkte 0–${max}` : "Punkte";
+    }
+    default:
+      return CRITERION_SCALE_LABELS[c.scale] ?? "Wert";
+  }
+}
+
+/** Placeholder im Eingabefeld */
+export function criterionPlaceholder(c: AssessmentCriterion): string {
+  switch (c.scale) {
+    case "percent":
+      return "0–100";
+    case "grade":
+      return "1,0–5,0";
+    case "points": {
+      const max =
+        c.maxPoints != null && c.maxPoints > 0 ? c.maxPoints : null;
+      return max != null ? `0–${max}` : "Punkte";
+    }
+    default:
+      return "–";
+  }
+}
+
+/**
+ * Ausführlicher Hinweis für Tooltip / aria / title:
+ * Skala, Bereich, Gewicht, Dezimalformat.
+ */
+export function criterionScaleHint(c: AssessmentCriterion): string {
+  const scaleLine =
+    c.scale === "points" && c.maxPoints != null && c.maxPoints > 0
+      ? `Punkte von 0 bis ${c.maxPoints} (Max. des Kriteriums)`
+      : CRITERION_SCALE_LABELS[c.scale];
+  const name = c.name?.trim() || c.code || "Kriterium";
+  const weight =
+    Number.isFinite(c.weight) && c.weight > 0
+      ? `Relatives Gewicht: ${c.weight}`
+      : "Gewicht: –";
+  return [
+    name,
+    `Eingabe: ${scaleLine}`,
+    weight,
+    "Dezimalzahlen mit Komma oder Punkt (z. B. 1,3 oder 12,5).",
+  ].join(" · ");
+}
+
 /** Note → 0…1 (1,0 = best, 5,0 = 0) */
 export function gradeToUnit(grade: number): number {
   if (!Number.isFinite(grade)) return 0;

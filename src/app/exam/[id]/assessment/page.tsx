@@ -24,7 +24,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { recomputeStaCriteriaRecord } from "@/lib/grades/sta-criteria";
+import {
+  criterionPlaceholder,
+  criterionScaleHint,
+  criterionScaleShort,
+  recomputeStaCriteriaRecord,
+} from "@/lib/grades/sta-criteria";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   averageLecturerGradesForComponent,
   computePortfolioRawAverageForProject,
@@ -38,7 +48,7 @@ import {
   type EnrichedStudentRow,
 } from "@/lib/types";
 import { cn, formatGrade, formatPoints } from "@/lib/utils";
-import { Search, Settings, Users } from "lucide-react";
+import { CircleHelp, Search, Settings, Users } from "lucide-react";
 import { GroupFilterBar } from "@/components/exam/group-filter-bar";
 import { StudentGroupSelect } from "@/components/exam/student-group-select";
 import {
@@ -312,7 +322,7 @@ export default function AssessmentPage() {
               ? perLecturer
                 ? "Jeder Dozent vergibt Teilnoten; Teilnote = Mittel der Dozenten (gleichgewichtet). Gesamtnote = gewichteter Mittelwert der Teilleistungen (nächste deutsche Note)."
                 : "Teilnoten je Teilleistung eintragen. Gesamtnote = gewichteter Mittelwert, gerundet auf die nächste deutsche Note (1,0 … 5,0)."
-              : "Werte je Kriterium eintragen. Gesamtwert und Note werden gewichtet berechnet (Notenschlüssel unter Szenarien)."}
+              : "Werte je Kriterium eintragen (Skala pro Spalte: % / Note / Punkte). Gesamtwert und Note werden gewichtet berechnet (Notenschlüssel unter Szenarien). Hover auf ⓘ im Spaltenkopf für Details."}
           </p>
         </div>
         <Link
@@ -394,6 +404,21 @@ export default function AssessmentPage() {
                     </span>
                   )}
                 </CardDescription>
+                {isCriteria && (
+                  <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+                    Eingabe je Spalte:{" "}
+                    <span className="text-foreground">0–100 %</span>
+                    {" · "}
+                    <span className="text-foreground">Note 1,0–5,0</span>
+                    {" · "}
+                    <span className="text-foreground">
+                      Punkte 0…Max des Kriteriums
+                    </span>
+                    {" · "}Gewichte relativ · Hover auf{" "}
+                    <CircleHelp className="inline size-3 align-text-bottom" />{" "}
+                    für Skala und Bereich.
+                  </p>
+                )}
               </div>
               <div className="w-full min-w-[14rem] max-w-xs sm:w-72">
                 <label className="sr-only" htmlFor="assessment-name-search">
@@ -526,19 +551,43 @@ export default function AssessmentPage() {
                       : criteria.map((c) => (
                           <TableHead
                             key={c.id}
-                            className="min-w-[100px] text-center"
-                            title={`${c.name} · Gewicht ${c.weight} · ${c.scale}`}
+                            className="min-w-[7.5rem] text-center"
                           >
-                            <div className="font-semibold">
-                              {c.code || c.name}
-                            </div>
-                            <div className="text-[10px] font-normal text-muted-foreground">
-                              {c.scale === "percent"
-                                ? "%"
-                                : c.scale === "grade"
-                                  ? "Note"
-                                  : `P/${c.maxPoints ?? "–"}`}{" "}
-                              · w{c.weight}
+                            <div className="flex items-start justify-center gap-0.5">
+                              <div className="min-w-0">
+                                <div
+                                  className="font-semibold leading-tight"
+                                  title={c.name}
+                                >
+                                  {c.code || c.name}
+                                </div>
+                                <div className="mt-0.5 flex flex-wrap items-center justify-center gap-1">
+                                  <Badge
+                                    variant="outline"
+                                    className="h-5 max-w-full px-1.5 text-[10px] font-semibold whitespace-normal"
+                                  >
+                                    {criterionScaleShort(c)}
+                                  </Badge>
+                                  <span className="text-[10px] font-normal text-muted-foreground tabular-nums">
+                                    w{c.weight}
+                                  </span>
+                                </div>
+                              </div>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  type="button"
+                                  className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  aria-label={`Eingabehilfe: ${c.name || c.code}`}
+                                >
+                                  <CircleHelp className="size-3.5" />
+                                </TooltipTrigger>
+                                <TooltipContent
+                                  side="bottom"
+                                  className="max-w-[16rem] text-left leading-snug"
+                                >
+                                  {criterionScaleHint(c)}
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
                           </TableHead>
                         ))}
@@ -745,20 +794,24 @@ export default function AssessmentPage() {
                                 })
                             : criteria.map((c) => {
                                 const v = rec?.criterionValues?.[c.id];
+                                const hint = criterionScaleHint(c);
                                 return (
                                   <TableCell
                                     key={c.id}
                                     className={cn("p-1 text-center", rowBg)}
                                   >
                                     <Input
-                                      className="mx-auto h-8 w-[4.5rem] text-center text-sm"
+                                      className="mx-auto h-8 w-[5rem] text-center text-sm"
                                       defaultValue={
                                         v != null
                                           ? String(v).replace(".", ",")
                                           : ""
                                       }
                                       key={`${r.key}-${c.id}-${project.updatedAt}`}
-                                      placeholder="–"
+                                      placeholder={criterionPlaceholder(c)}
+                                      title={hint}
+                                      aria-label={`${c.name || c.code}: ${criterionScaleShort(c)}`}
+                                      inputMode="decimal"
                                       onBlur={(e) =>
                                         setCriterionValue(
                                           r.key,
