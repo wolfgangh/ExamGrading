@@ -122,3 +122,7 @@ Ohne Variable schlägt `npm run build` fehl.
 - Sicherheit und Auth-Modell: [SECURITY.md](../SECURITY.md)  
 - Architektur: [ARCHITEKTUR.md](ARCHITEKTUR.md)  
 - Nutzung: [BENUTZERHANDBUCH.md](BENUTZERHANDBUCH.md)  
+- Projektüberblick (GitHub): [../README.md](../README.md)  
+
+App-Version im UI: `src/lib/app-version.ts` (mit `package.json` abstimmen).  
+
