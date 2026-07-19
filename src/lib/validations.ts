@@ -23,7 +23,7 @@ import {
   isStaManualExam,
 } from "@/lib/types";
 import { countMissingCriteria } from "@/lib/grades/sta-criteria";
-import { countMissingPortfolioGrades } from "@/lib/grades/portfolio";
+import { countMissingPortfolioCells } from "@/lib/grades/portfolio";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 
 export interface ValidationItem {
@@ -135,12 +135,7 @@ export function validateForExport(
         const rec = project.points.find(
           (p) => normalizeMatriculation(p.matriculationNumber) === r.key
         );
-        return (
-          countMissingPortfolioGrades(
-            rec?.portfolioGrades,
-            project.portfolioComponents ?? []
-          ) > 0
-        );
+        return countMissingPortfolioCells(project, rec) > 0;
       });
       if (incomplete.length > 0) {
         items.push({

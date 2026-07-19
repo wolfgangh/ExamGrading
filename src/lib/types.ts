@@ -157,8 +157,16 @@ export interface PointsRecord {
    * Einheit = scale des jeweiligen AssessmentCriterion.
    */
   criterionValues?: Record<string, number | null>;
-  /** Teilnoten je Portfolio-Teilleistung (1,0–5,0) */
+  /** Teilnoten je Portfolio-Teilleistung (1,0–5,0) – einfacher Modus */
   portfolioGrades?: Record<string, number | null>;
+  /**
+   * Portfolio mit Dozenten-Teilnoten: Teilleistungs-Id → Dozentenname → Note.
+   * Dozenten-Schlüssel = exakter Eintrag in project.lecturers.
+   */
+  portfolioGradesByLecturer?: Record<
+    string,
+    Record<string, number | null>
+  >;
 }
 
 export interface HISTemplateRow {
@@ -342,6 +350,11 @@ export interface ExamProject {
   criteria?: AssessmentCriterion[];
   /** Teilleistungen (Portfolioprüfung) */
   portfolioComponents?: PortfolioComponent[];
+  /**
+   * Portfolio: Teilnoten je Dozent (Gleichgewichtung), dann gewichtete Teilleistungen.
+   * Default false / undefined = eine Note pro Teilleistung.
+   */
+  portfolioPerLecturerGrading?: boolean;
   /** Studentengruppen (StA / Portfolio) */
   studentGroups?: StudentGroup[];
 

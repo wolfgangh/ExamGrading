@@ -40,7 +40,7 @@ Bei StA und Portfolioprüfung können weitere Personen **manuell** unter Importe
 
 **Gruppen (StA / Portfolio):** Unter Einstellungen Gruppen anlegen, in der Bewertungsmatrix (bzw. Notenübersicht) zuordnen und per Schaltflächen filtern – so lassen sich Noten pro Gruppe eintragen und schnell zwischen Gruppen wechseln. In der Bewertungsmatrix: **Namenssuche** (mehrere Namen mit Komma), Hervorhebung von Personen **ohne Gruppe** und von noch **unbefüllten** Gruppen (dürfen absichtlich leer bleiben), Personenzahl im Gruppen-Dropdown, sowie **Mehrfachauswahl** (Checkboxen) mit Sammelzuordnung zu einer Gruppe.
 
-**Portfolioprüfung:** Gesamtnote = gewichteter Mittelwert der Teilnoten, gerundet auf die nächste deutsche Note (1,0 / 1,3 / … / 5,0).
+**Portfolioprüfung:** Gesamtnote = gewichteter Mittelwert der Teilnoten, gerundet auf die nächste deutsche Note (1,0 / 1,3 / … / 5,0). Optional (Einstellungen, Standard aus): **Teilnoten je Dozent** – jeder Dozent vergibt Noten pro Teilleistung; die Teilnote ist das **gleichgewichtete Mittel** der Dozenten, danach wie bisher die gewichtete Gesamtnote.
 
 ---
 

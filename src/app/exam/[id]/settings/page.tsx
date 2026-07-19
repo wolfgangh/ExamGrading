@@ -17,7 +17,12 @@ import {
   isStaManualExam,
   supportsStudentGroups,
 } from "@/lib/types";
-import { defaultPortfolioComponents } from "@/lib/grades/portfolio";
+import {
+  collapseLecturerGradesToSimple,
+  defaultPortfolioComponents,
+  seedLecturerGradesFromSimple,
+} from "@/lib/grades/portfolio";
+import { Switch } from "@/components/ui/switch";
 import {
   createStudentGroup,
   removeStudentGroup,
@@ -479,6 +484,34 @@ export default function SettingsPage() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-0.5">
+                <Label htmlFor="portfolio-per-lecturer" className="text-sm">
+                  Teilnoten je Dozent (Gleichgewichtung)
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Jeder Dozent vergibt Noten pro Teilleistung. Die Teilnote ist
+                  das Mittel über alle Dozenten; danach gewichtete Gesamtnote
+                  wie bisher. Standard: aus.
+                </p>
+                {(project.lecturers ?? []).length === 0 && (
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
+                    Bitte zuerst Dozenten unter Stammdaten eintragen.
+                  </p>
+                )}
+              </div>
+              <Switch
+                id="portfolio-per-lecturer"
+                checked={project.portfolioPerLecturerGrading === true}
+                onCheckedChange={(on) => {
+                  setProject((prev) =>
+                    on
+                      ? seedLecturerGradesFromSimple(prev)
+                      : collapseLecturerGradesToSimple(prev)
+                  );
+                }}
+              />
+            </div>
             {(project.portfolioComponents ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Keine Teilleistungen – bitte hinzufügen.

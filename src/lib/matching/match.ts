@@ -8,8 +8,8 @@ import {
 import { ensureScenarios, getActiveScenario } from "@/lib/grades/scenarios";
 import { countMissingCriteria } from "@/lib/grades/sta-criteria";
 import {
-  computePortfolioGrade,
-  countMissingPortfolioGrades,
+  computePortfolioGradeForProject,
+  countMissingPortfolioCells,
 } from "@/lib/grades/portfolio";
 import { flattenHisRows, getHisSources } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
@@ -44,10 +44,7 @@ function calculatedGradeForRecord(
   gradeSchema: GradeSchema
 ): number | null {
   if (isPortfolioExam(project.examType)) {
-    return computePortfolioGrade(
-      pointsRec?.portfolioGrades,
-      project.portfolioComponents ?? []
-    );
+    return computePortfolioGradeForProject(project, pointsRec);
   }
   if (totalPoints != null) {
     return calculateGrade(totalPoints, gradeSchema);
@@ -229,10 +226,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     const missingPortfolio =
       isPortfolioExam(project.examType) &&
       (project.portfolioComponents?.length ?? 0) > 0
-        ? countMissingPortfolioGrades(
-            pointsRec?.portfolioGrades,
-            project.portfolioComponents ?? []
-          )
+        ? countMissingPortfolioCells(project, pointsRec)
         : 0;
     const hasOpenGrading =
       needsGradingCount > 0 || missingCriteria > 0 || missingPortfolio > 0;
@@ -485,10 +479,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     const missingPortfolio =
       isPortfolioExam(project.examType) &&
       (project.portfolioComponents?.length ?? 0) > 0
-        ? countMissingPortfolioGrades(
-            pointsRec?.portfolioGrades,
-            project.portfolioComponents ?? []
-          )
+        ? countMissingPortfolioCells(project, pointsRec)
         : 0;
     const warnings = ["Manuell hinzugefügt – nicht in HISinOne-Masterliste"];
     if (missingCriteria > 0) {
