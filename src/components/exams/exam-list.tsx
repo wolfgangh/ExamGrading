@@ -29,7 +29,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { EXAM_TYPE_LABELS, type ExamProject } from "@/lib/types";
+import {
+  EXAM_TYPE_LABELS,
+  isHisManualAssessmentExam,
+  type ExamProject,
+} from "@/lib/types";
 import { downloadBlob, downloadJson } from "@/lib/download";
 import {
   exportExamJson,
@@ -57,6 +61,22 @@ import {
 } from "@/lib/semester";
 import { datedExportFilename, cn } from "@/lib/utils";
 import { getExamWorkflowSummary } from "@/lib/workflow-steps";
+import { buildEnrichedRows } from "@/lib/matching/match";
+
+/**
+ * Meta-Zeile auf Prüfungskarten.
+ * StA/Portfolio: Prüflinge (HIS + manuell); ohne Note nicht mitzählen, sobald Noten existieren.
+ */
+function examListCountsLabel(exam: ExamProject): string {
+  const his = exam.hisRows?.length ?? 0;
+  if (isHisManualAssessmentExam(exam.examType)) {
+    const rows = buildEnrichedRows(exam);
+    const withGrade = rows.filter((r) => r.finalGrade != null).length;
+    const n = withGrade > 0 ? withGrade : rows.length;
+    return `${his} HIS · ${n} Prüflinge`;
+  }
+  return `${his} HIS · ${exam.attendance?.length ?? 0} Antritte · ${exam.points?.length ?? 0} Punkte`;
+}
 
 export function ExamList() {
   const { exams, loading, error, refresh, remove, duplicate } = useExams();
@@ -348,8 +368,7 @@ export function ExamList() {
                       <span className="block">
                         {exam.examNumber || "ohne Nummer"}
                         {" · "}
-                        {exam.hisRows.length} HIS · {exam.attendance.length}{" "}
-                        Antritte · {exam.points.length} Punkte
+                        {examListCountsLabel(exam)}
                       </span>
                       {stale && (
                         <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-950 dark:bg-amber-900 dark:text-amber-50">

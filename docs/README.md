@@ -1,7 +1,7 @@
 # Dokumentation ExamGrade
 
 Zentrale Übersicht der Projektdokumentation.  
-**App-Version:** 0.4.7 (abstimmen mit `package.json` und `src/lib/app-version.ts`)
+**App-Version:** 0.4.8 (abstimmen mit `package.json` und `src/lib/app-version.ts`)
 
 | Dokument | Beschreibung |
 |----------|--------------|
