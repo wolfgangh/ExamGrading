@@ -1,5 +1,6 @@
 import { computeGradeBuckets } from "@/lib/grades/scenario-impact";
 import { ensureScenarios } from "@/lib/grades/scenarios";
+import { computeSubAreaStats } from "@/lib/grades/question-stats";
 import type {
   EnrichedStudentRow,
   ExamProject,
@@ -70,6 +71,15 @@ export interface NotenspiegelData {
     count: number;
     share: number;
     color: string;
+  }[];
+  /** Auswertung je Teilgebiet (nur bei mehreren Teilgebieten) */
+  subAreaRows: {
+    name: string;
+    code: string;
+    maxPoints: number;
+    n: number;
+    averagePoints: number | null;
+    averagePercent: number | null;
   }[];
   note: string;
 }
@@ -153,6 +163,56 @@ export function buildNotenspiegelData(
     },
   ];
 
+  // Teilgebiete: aus Enriched-Rows (bewertet) + Fallback computeSubAreaStats
+  const subAreas = project.subAreas ?? [];
+  let subAreaRows: NotenspiegelData["subAreaRows"] = [];
+  if (subAreas.length > 1) {
+    const gradedRows = rows.filter(
+      (r) =>
+        r.finalGrade != null &&
+        r.attended !== false &&
+        (r.hasPoints || r.totalPoints != null)
+    );
+    subAreaRows = subAreas.map((sa) => {
+      const vals: number[] = [];
+      for (const r of gradedRows) {
+        const v = r.subAreaPoints?.[sa.id];
+        if (v != null && Number.isFinite(v)) vals.push(v);
+      }
+      const n = vals.length;
+      const averagePoints =
+        n > 0
+          ? Math.round(
+              (vals.reduce((a, b) => a + b, 0) / n) * 100
+            ) / 100
+          : null;
+      const averagePercent =
+        averagePoints != null && sa.maxPoints > 0
+          ? Math.round((averagePoints / sa.maxPoints) * 1000) / 10
+          : null;
+      return {
+        name: sa.name,
+        code: sa.code,
+        maxPoints: sa.maxPoints,
+        n,
+        averagePoints,
+        averagePercent,
+      };
+    });
+    // Falls kaum subAreaPoints: Stats aus Fragen ergänzen
+    if (subAreaRows.every((s) => s.n === 0)) {
+      const fromQ = computeSubAreaStats(project);
+      subAreaRows = fromQ.map((s) => ({
+        name: s.name,
+        code: s.code,
+        maxPoints: s.maxPoints,
+        n: s.nWithData,
+        averagePoints: s.averagePoints,
+        averagePercent: s.averagePercent,
+      }));
+    }
+  }
+
   return {
     title: "Notenspiegel",
     examName: project.name || "Prüfung",
@@ -169,6 +229,7 @@ export function buildNotenspiegelData(
     metrics,
     gradeRows,
     bucketRows,
+    subAreaRows,
     note: "Aggregierte Auswertung ohne personenbezogene Daten. Bezug: aktives Notenszenario.",
   };
 }

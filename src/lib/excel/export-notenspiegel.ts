@@ -142,6 +142,29 @@ export async function exportNotenspiegelExcel(
     row++;
   }
 
+  if (data.subAreaRows.length > 0) {
+    row += 2;
+    ws.getCell(row, 1).value = "Teilgebiete";
+    ws.getCell(row, 1).font = { bold: true, size: 12 };
+    row += 1;
+    ["Teilgebiet", "Max.", "n", "Ø Punkte", "Ø %"].forEach((h, i) => {
+      ws.getCell(row, i + 1).value = h;
+      ws.getCell(row, i + 1).font = { bold: true };
+    });
+    row += 1;
+    for (const s of data.subAreaRows) {
+      ws.getCell(row, 1).value = s.code ? `${s.name} (${s.code})` : s.name;
+      ws.getCell(row, 2).value = s.maxPoints;
+      ws.getCell(row, 3).value = s.n;
+      ws.getCell(row, 4).value = s.averagePoints ?? "–";
+      ws.getCell(row, 5).value =
+        s.averagePercent != null
+          ? `${String(s.averagePercent).replace(".", ",")} %`
+          : "–";
+      row++;
+    }
+  }
+
   // Blatt Diagramm
   const wsChart = wb.addWorksheet("Diagramm", {
     properties: { defaultColWidth: 16 },

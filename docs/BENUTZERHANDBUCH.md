@@ -2,7 +2,7 @@
 
 Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (keine Serverübertragung von Notenlisten).
 
-**Version:** 0.4.6
+**Version:** 0.4.7
 
 ---
 
@@ -161,11 +161,11 @@ Seite: **Dokumente** bzw. **Export**.
 | Export | Verwendung |
 |--------|------------|
 | **HISinOne-XLSX** | Upload ins Campus-System – Struktur der Originalvorlage, aktualisierte Noten |
-| **Notenliste PDF** | Dokumentation |
+| **Notenliste PDF** | Dokumentation inkl. Studiengang |
 | **Notenänderungen PDF** | Korrekturen nach Einsicht |
 | **Manuelle Noten PDF** | z. B. für Abteilung Studium |
 | **Durchfaller / Zweitkorrektur** | Listen |
-| **Notenspiegel** | PDF und Excel |
+| **Notenspiegel** | PDF und Excel; Kennzahlen und Notenverteilung nebeneinander; bei mehreren Teilgebieten Auswertung je Teilgebiet |
 | **Szenarienvergleich PDF** | Notenszenarien-Seite – Prüferaustausch |
 | **Diagramm-PNG** | aus vergrößerter Ansicht oder PNG-Button |
 | **JSON-Sicherung** | vollständiges Projekt |

@@ -10,6 +10,7 @@ import {
   pdfPoints,
   pdfText,
   PDF_MARGIN,
+  resolveProgramCode,
   savePdf,
   shortStatus,
   startPdfWithHeader,
@@ -63,10 +64,12 @@ export function exportGradesListPdf(
     if (r.mergedFromMatriculation) {
       status = `${status} (ZF ${r.mergedFromMatriculation})`;
     }
+    const program = resolveProgramCode(r, project);
     return [
       pdfText(r.student.lastName),
       pdfText(r.student.firstName),
       pdfText(r.key),
+      pdfText(program || "–"),
       isNoShow ? "–" : pdfPoints(r.totalPoints),
       isNoShow ? "–" : pdfGrade(r.finalGrade),
       pdfText(status),
@@ -76,10 +79,18 @@ export function exportGradesListPdf(
   autoTable(doc, {
     startY: y + 2,
     head: [
-      ["Nachname", "Vorname", "Matrikel-Nr.", "Punkte", "Note", "Status"],
+      [
+        "Nachname",
+        "Vorname",
+        "Matrikel-Nr.",
+        "Studiengang",
+        "Punkte",
+        "Note",
+        "Status",
+      ],
     ],
     body: data,
-    styles: { font: "helvetica", fontSize: 8, cellPadding: 1.5 },
+    styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.3 },
     headStyles: {
       fillColor: [68, 112, 153],
       textColor: 255,
@@ -87,10 +98,13 @@ export function exportGradesListPdf(
     },
     alternateRowStyles: { fillColor: [245, 247, 250] },
     columnStyles: {
-      2: { cellWidth: 28 },
-      3: { halign: "right", cellWidth: 18 },
+      0: { cellWidth: 28 },
+      1: { cellWidth: 24 },
+      2: { cellWidth: 26 },
+      3: { cellWidth: 22 },
       4: { halign: "right", cellWidth: 16 },
-      5: { cellWidth: 28 },
+      5: { halign: "right", cellWidth: 14 },
+      6: { cellWidth: 26 },
     },
     margin: { left: PDF_MARGIN, right: PDF_MARGIN },
   });
