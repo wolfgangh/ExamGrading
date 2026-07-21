@@ -151,7 +151,7 @@ export function renderDurationPointsScatterPng(
   // Legende kurz
   ctx.font = "11px system-ui, -apple-system, sans-serif";
   ctx.textAlign = "left";
-  let lx = pad.left;
+  const lx = pad.left;
   const ly = height - 28;
   ctx.setLineDash([6, 4]);
   ctx.strokeStyle = "#0f172a";
