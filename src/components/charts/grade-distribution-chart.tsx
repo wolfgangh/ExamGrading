@@ -26,6 +26,43 @@ const SERIES_COLORS = [
   "var(--color-chart-5)",
 ];
 
+const INACTIVE_OPACITY = 0.28;
+
+function ScenarioLegend({
+  series,
+  activeKey,
+}: {
+  series: ScenarioSeriesMeta[];
+  activeKey?: string;
+}) {
+  return (
+    <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 pt-1 text-xs">
+      {series.map((s, i) => {
+        const inactive = Boolean(activeKey && s.key !== activeKey);
+        return (
+          <li
+            key={s.key}
+            className="inline-flex items-center gap-1.5"
+            style={{ opacity: inactive ? 0.55 : 1 }}
+          >
+            <span
+              className="inline-block size-2.5 shrink-0 rounded-sm"
+              style={{
+                backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length],
+                opacity: inactive ? INACTIVE_OPACITY : 1,
+              }}
+            />
+            <span className={inactive ? "text-muted-foreground" : undefined}>
+              {s.label}
+              {activeKey && s.key === activeKey ? " · aktiv" : ""}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export type ScenarioSeriesMeta = {
   /** Stable key used as dataKey in the chart */
   key: string;
@@ -192,10 +229,9 @@ export function ScenarioGradeDistributionChart({
             }
           />
           <Legend
-            wrapperStyle={{ fontSize: 12 }}
-            formatter={(value) =>
-              series.find((s) => s.key === value)?.label ?? String(value)
-            }
+            content={() => (
+              <ScenarioLegend series={series} activeKey={activeKey} />
+            )}
           />
           {series.map((s, i) => (
             <Bar
@@ -204,7 +240,7 @@ export function ScenarioGradeDistributionChart({
               name={s.key}
               fill={SERIES_COLORS[i % SERIES_COLORS.length]}
               fillOpacity={
-                activeKey && s.key !== activeKey ? 0.28 : 1
+                activeKey && s.key !== activeKey ? INACTIVE_OPACITY : 1
               }
               radius={[3, 3, 0, 0]}
               maxBarSize={36}
@@ -316,10 +352,9 @@ export function ScenarioGradeBucketChart({
             }
           />
           <Legend
-            wrapperStyle={{ fontSize: 12 }}
-            formatter={(value) =>
-              series.find((s) => s.key === value)?.label ?? String(value)
-            }
+            content={() => (
+              <ScenarioLegend series={series} activeKey={activeKey} />
+            )}
           />
           {series.map((s, i) => (
             <Bar
@@ -328,7 +363,7 @@ export function ScenarioGradeBucketChart({
               name={s.key}
               fill={SERIES_COLORS[i % SERIES_COLORS.length]}
               fillOpacity={
-                activeKey && s.key !== activeKey ? 0.28 : 1
+                activeKey && s.key !== activeKey ? INACTIVE_OPACITY : 1
               }
               radius={[3, 3, 0, 0]}
               maxBarSize={40}

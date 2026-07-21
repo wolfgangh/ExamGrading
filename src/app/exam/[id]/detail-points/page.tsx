@@ -37,6 +37,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  PageSectionNav,
+  SECTION_SCROLL_MT,
+} from "@/components/layout/page-section-nav";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Lock, LockOpen, RefreshCw } from "lucide-react";
 import type { PointsRecord } from "@/lib/types";
@@ -255,12 +259,20 @@ export default function DetailPointsPage() {
         </div>
       )}
 
-      {taskCount > 0 && (
-        <QuestionStatsPanel
-          questionStats={questionStats}
-          subAreaStats={subAreaStats}
-        />
-      )}
+      <PageSectionNav
+        sections={[
+          ...(showSubareaMapping
+            ? [{ id: "teilgebiete", label: "Teilgebiete" }]
+            : []),
+          { id: "punktematrix", label: "Punktematrix" },
+          ...(taskCount > 0
+            ? [{ id: "aufgaben-auswertung", label: "Aufgaben-Auswertung" }]
+            : []),
+          ...(isOnlineStyleExam(project.examType)
+            ? [{ id: "dauer-analyse", label: "Bearbeitungsdauer" }]
+            : []),
+        ]}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <Input
@@ -288,8 +300,10 @@ export default function DetailPointsPage() {
 
       {showSubareaMapping && (
         <Accordion
+          id="teilgebiete"
           className={cn(
             "surface-panel rounded-xl border px-3",
+            SECTION_SCROLL_MT,
             subMapComplete
               ? "border-emerald-400/80 ring-1 ring-emerald-400/30 dark:border-emerald-700"
               : "border-amber-500 ring-2 ring-amber-400/40 dark:border-amber-600"
@@ -335,7 +349,10 @@ export default function DetailPointsPage() {
         </Accordion>
       )}
 
-      <Card className="surface-panel overflow-hidden">
+      <Card
+        id="punktematrix"
+        className={cn("surface-panel overflow-hidden", SECTION_SCROLL_MT)}
+      >
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Punktematrix</CardTitle>
           <CardDescription>
@@ -361,8 +378,23 @@ export default function DetailPointsPage() {
         </CardContent>
       </Card>
 
+      {taskCount > 0 && (
+        <div id="aufgaben-auswertung" className={SECTION_SCROLL_MT}>
+          <QuestionStatsPanel
+            questionStats={questionStats}
+            subAreaStats={subAreaStats}
+          />
+        </div>
+      )}
+
       {isOnlineStyleExam(project.examType) && (
-        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-5">
+        <div
+          id="dauer-analyse"
+          className={cn(
+            "grid grid-cols-1 items-start gap-4 xl:grid-cols-5",
+            SECTION_SCROLL_MT
+          )}
+        >
           <div className="min-w-0 xl:col-span-2">
             <DurationHistogramCard project={effectiveProject} />
           </div>

@@ -47,6 +47,11 @@ import {
   isOnlineStyleExam,
 } from "@/lib/types";
 import { AddStudentForm } from "@/components/exam/add-student-form";
+import {
+  PageSectionNav,
+  SECTION_SCROLL_MT,
+} from "@/components/layout/page-section-nav";
+import { cn } from "@/lib/utils";
 
 type PreviewState = {
   type: ImportType;
@@ -464,6 +469,23 @@ export default function ImportPage() {
         </p>
       </div>
 
+      <PageSectionNav
+        sections={[
+          { id: "import-his", label: "HIS" },
+          ...(isHisManual
+            ? [{ id: "import-manual", label: "Person manuell" }]
+            : isKlausur
+              ? [
+                  { id: "import-vorlage", label: "Vorlage" },
+                  { id: "points-import", label: "Punkte" },
+                ]
+              : [
+                  { id: "import-antritt", label: "Antritt" },
+                  { id: "points-import", label: "Punkte" },
+                ]),
+        ]}
+      />
+
       <div
         className={
           isHisManual || isKlausur
@@ -471,7 +493,7 @@ export default function ImportPage() {
             : "grid gap-4 md:grid-cols-3"
         }
       >
-        <div className="space-y-2">
+        <div id="import-his" className={cn("space-y-2", SECTION_SCROLL_MT)}>
           <ImportDropzone
             label="1. HIS / QIS Noteneintrag"
             description="Eine oder mehrere Dateien (z. B. MEB + MBW). Wird ergänzt, nicht überschrieben."
@@ -513,7 +535,10 @@ export default function ImportPage() {
         </div>
 
         {isHisManual ? (
-          <Card className="surface-panel">
+          <Card
+            id="import-manual"
+            className={cn("surface-panel", SECTION_SCROLL_MT)}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
                 2. Person manuell hinzufügen
@@ -528,7 +553,10 @@ export default function ImportPage() {
           </Card>
         ) : isKlausur ? (
           <div className="space-y-3">
-            <Card className="surface-panel border-dashed">
+            <Card
+              id="import-vorlage"
+              className={cn("surface-panel border-dashed", SECTION_SCROLL_MT)}
+            >
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">2. Punkte-Vorlage</CardTitle>
                 <CardDescription>
@@ -555,7 +583,11 @@ export default function ImportPage() {
               </CardContent>
             </Card>
 
-            <div ref={pointsRef} className="space-y-2" id="points-import">
+            <div
+              ref={pointsRef}
+              className={cn("space-y-2", SECTION_SCROLL_MT)}
+              id="points-import"
+            >
               <ImportDropzone
                 label={
                   project.points.length > 0
@@ -573,7 +605,10 @@ export default function ImportPage() {
           </div>
         ) : (
           <>
-            <div className="space-y-2">
+            <div
+              id="import-antritt"
+              className={cn("space-y-2", SECTION_SCROLL_MT)}
+            >
               <ImportDropzone
                 label={
                   project.attendance.length > 0
@@ -588,7 +623,11 @@ export default function ImportPage() {
                 log={lastByType("attendance")}
               />
             </div>
-            <div ref={pointsRef} className="space-y-2" id="points-import">
+            <div
+              ref={pointsRef}
+              className={cn("space-y-2", SECTION_SCROLL_MT)}
+              id="points-import"
+            >
               <ImportDropzone
                 label={
                   project.points.length > 0

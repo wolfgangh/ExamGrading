@@ -38,6 +38,10 @@ import {
   formatStat,
 } from "@/lib/utils";
 import {
+  PageSectionNav,
+  SECTION_SCROLL_MT,
+} from "@/components/layout/page-section-nav";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -285,6 +289,19 @@ export default function GradesPage() {
         </p>
       </div>
 
+      <PageSectionNav
+        sections={[
+          ...(scenarioChartSeries.length > 0
+            ? [{ id: "szenario-charts", label: "Szenario-Grafiken" }]
+            : []),
+          { id: "kennzahlen", label: "Kennzahlen" },
+          { id: "notenliste", label: "Notenliste" },
+          ...(failerAnalysis && failerAnalysis.count > 0
+            ? [{ id: "durchfaller", label: "Durchfaller" }]
+            : []),
+        ]}
+      />
+
       {gradingLocked && (
         <div
           role="alert"
@@ -332,7 +349,10 @@ export default function GradesPage() {
       </div>
 
       {scenarioChartSeries.length > 0 && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div
+          id="szenario-charts"
+          className={cn("grid gap-4 lg:grid-cols-2", SECTION_SCROLL_MT)}
+        >
           <Card className="surface-panel min-w-0">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
@@ -394,7 +414,10 @@ export default function GradesPage() {
       )}
 
       {stats && (
-        <div className="flex flex-wrap items-end gap-3">
+        <div
+          id="kennzahlen"
+          className={cn("flex flex-wrap items-end gap-3", SECTION_SCROLL_MT)}
+        >
           <div className="flex min-w-0 flex-1 flex-wrap gap-2">
             {[
               { l: "Bewertet", v: String(stats.graded) },
@@ -610,7 +633,13 @@ export default function GradesPage() {
       </div>
 
       {showFailerPanel && (
-        <Card className="border-rose-200 bg-rose-50/40 dark:border-rose-900 dark:bg-rose-950/20">
+        <Card
+          id="durchfaller"
+          className={cn(
+            "border-rose-200 bg-rose-50/40 dark:border-rose-900 dark:bg-rose-950/20",
+            SECTION_SCROLL_MT
+          )}
+        >
           <CardHeader>
             <CardTitle className="text-base">
               Durchfaller-Analyse (nur Prüfer)
@@ -708,6 +737,7 @@ export default function GradesPage() {
         </Card>
       )}
 
+      <div id="notenliste" className={SECTION_SCROLL_MT}>
       <StudentsTable
         rows={
           project && supportsStudentGroups(project.examType)
@@ -730,6 +760,7 @@ export default function GradesPage() {
             : {}
         }
       />
+      </div>
 
       <Dialog open={!!editKey} onOpenChange={(o) => !o && setEditKey(null)}>
         <DialogContent>

@@ -293,10 +293,18 @@ export function DurationPointsScatterCard({
                     const chartH = chartAreaRef.current?.clientHeight ?? 320;
                     const cx = coordinate?.x ?? 0;
                     const cy = coordinate?.y ?? 0;
-                    // rechts / unten: Tooltip zur freien Seite spiegeln
-                    // (Student-Tooltip ist hoch → früher nach oben klappen)
-                    const flipLeft = cx > chartW * 0.52;
-                    const flipUp = cy > chartH * 0.42;
+                    // Platzbasiert spiegeln (kein Überlauf oben/rechts)
+                    const tipW = 288;
+                    const tipH = student ? 175 : 48;
+                    const pad = 12;
+                    const spaceRight = chartW - cx - pad;
+                    const spaceLeft = cx - pad;
+                    const spaceBelow = chartH - cy - pad;
+                    const spaceAbove = cy - pad;
+                    const flipLeft =
+                      spaceRight < tipW && spaceLeft > spaceRight;
+                    const flipUp =
+                      spaceBelow < tipH && spaceAbove > spaceBelow;
                     const tipTransform = `translate(${
                       flipLeft ? "calc(-100% - 8px)" : "0"
                     }, ${flipUp ? "calc(-100% - 8px)" : "0"})`;

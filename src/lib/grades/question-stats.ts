@@ -1,6 +1,7 @@
 import type { ExamProject, PointsRecord } from "@/lib/types";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { computeEffectiveTotal } from "@/lib/grades/points-total";
+import { median, quantile } from "@/lib/stats/quantile";
 
 export interface QuestionStat {
   questionId: string;
@@ -9,9 +10,16 @@ export interface QuestionStat {
   nAnswered: number;
   nNeedsGrading: number;
   averagePoints: number | null;
+  medianPoints: number | null;
+  q25Points: number | null;
+  q75Points: number | null;
   averagePercent: number | null;
   /** 0–100, für Farbcode */
   difficultyScore: number | null;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 export interface SubAreaStat {
@@ -52,10 +60,11 @@ export function computeQuestionStats(project: ExamProject): QuestionStat[] {
     }
     const averagePoints =
       values.length > 0
-        ? Math.round(
-            (values.reduce((a, b) => a + b, 0) / values.length) * 100
-          ) / 100
+        ? round2(values.reduce((a, b) => a + b, 0) / values.length)
         : null;
+    const med = median(values);
+    const q25 = quantile(values, 0.25);
+    const q75 = quantile(values, 0.75);
     const averagePercent =
       averagePoints != null && q.maxPoints > 0
         ? Math.round((averagePoints / q.maxPoints) * 1000) / 10
@@ -68,6 +77,9 @@ export function computeQuestionStats(project: ExamProject): QuestionStat[] {
       nAnswered: values.length,
       nNeedsGrading: nNeeds,
       averagePoints,
+      medianPoints: med != null ? round2(med) : null,
+      q25Points: q25 != null ? round2(q25) : null,
+      q75Points: q75 != null ? round2(q75) : null,
       averagePercent,
       difficultyScore: averagePercent,
     };

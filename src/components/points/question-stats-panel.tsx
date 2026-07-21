@@ -129,6 +129,9 @@ export function QuestionStatsPanel({
                 <TableHead>Aufg.</TableHead>
                 <TableHead>Max</TableHead>
                 <TableHead>Ø Pkte</TableHead>
+                <TableHead>Median</TableHead>
+                <TableHead>Q25</TableHead>
+                <TableHead>Q75</TableHead>
                 <TableHead>Ø %</TableHead>
                 <TableHead>n</TableHead>
                 <TableHead>offen</TableHead>
@@ -138,9 +141,20 @@ export function QuestionStatsPanel({
               {questionStats.map((q) => (
                 <TableRow key={q.questionId}>
                   <TableCell className="font-medium">{q.label}</TableCell>
-                  <TableCell className="tabular-nums">{q.maxPoints}</TableCell>
                   <TableCell className="tabular-nums">
-                    {formatPoints(q.averagePoints)}
+                    {formatPoints(q.maxPoints, 2)}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatPoints(q.averagePoints, 2)}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatPoints(q.medianPoints, 2)}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatPoints(q.q25Points, 2)}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatPoints(q.q75Points, 2)}
                   </TableCell>
                   <TableCell
                     className={cn(
