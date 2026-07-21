@@ -96,8 +96,19 @@ export function formatStat(
   return value.toFixed(digits).replace(".", ",");
 }
 
-export function formatPoints(points: number | null | undefined): string {
+/**
+ * Punkte formatieren.
+ * @param decimals Wenn gesetzt: immer so viele Nachkommastellen (z. B. 2 → „12,00“).
+ *   Ohne Argument: ganze Zahlen ohne Dezimalen, sonst 1 Nachkommastelle.
+ */
+export function formatPoints(
+  points: number | null | undefined,
+  decimals?: number
+): string {
   if (points == null || Number.isNaN(points)) return "–";
+  if (decimals != null && decimals >= 0) {
+    return points.toFixed(decimals).replace(".", ",");
+  }
   if (Number.isInteger(points)) return String(points);
   return points.toFixed(1).replace(".", ",");
 }

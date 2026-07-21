@@ -359,6 +359,7 @@ export default function GradesPage() {
                 <ScenarioGradeDistributionChart
                   series={scenarioChartSeries}
                   mode="share"
+                  activeKey={project.activeScenarioId}
                 />
               </ExpandableChart>
             </CardContent>
@@ -384,6 +385,7 @@ export default function GradesPage() {
                 <ScenarioGradeBucketChart
                   series={scenarioChartSeries}
                   mode="count"
+                  activeKey={project.activeScenarioId}
                 />
               </ExpandableChart>
             </CardContent>
@@ -398,6 +400,8 @@ export default function GradesPage() {
               { l: "Bewertet", v: String(stats.graded) },
               { l: "Ø Note", v: formatGrade(stats.averageGrade) },
               { l: "Median", v: formatGrade(stats.medianGrade) },
+              { l: "25%-Quantil", v: formatGrade(stats.q25Grade) },
+              { l: "75%-Quantil", v: formatGrade(stats.q75Grade) },
               { l: "Stabw.", v: formatStat(stats.stdDevGrade, 2) },
               { l: "Bestehen", v: formatPercent(stats.passRate) },
               { l: "Durchfaller", v: `${stats.failCount}` },

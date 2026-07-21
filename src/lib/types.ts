@@ -462,6 +462,10 @@ export interface ExamStatistics {
   mismatches: number;
   averageGrade: number | null;
   medianGrade: number | null;
+  /** 25-%-Quantil der Noten */
+  q25Grade: number | null;
+  /** 75-%-Quantil der Noten */
+  q75Grade: number | null;
   /** Stichproben-Standardabweichung der Noten (n-1), null wenn n < 2 */
   stdDevGrade: number | null;
   passRate: number | null;

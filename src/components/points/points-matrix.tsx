@@ -261,7 +261,7 @@ function MatrixRow({
                   open && "font-medium text-amber-800 dark:text-amber-200"
                 )}
               >
-                {val != null ? formatPoints(val) : open ? "!" : "–"}
+                {val != null ? formatPoints(val, 2) : open ? "!" : "–"}
               </span>
             )}
           </TableCell>
@@ -277,12 +277,12 @@ function MatrixRow({
               colors.cell
             )}
           >
-            {formatPoints(record.bySubArea[sa.id] ?? null)}
+            {formatPoints(record.bySubArea[sa.id] ?? null, 2)}
           </TableCell>
         );
       })}
       <TableCell className="text-center tabular-nums text-sm font-semibold bg-muted/40">
-        {formatPoints(total)}
+        {formatPoints(total, 2)}
       </TableCell>
     </TableRow>
   );
@@ -298,7 +298,7 @@ function CellInput({
   onCommit: (v: number | null) => void;
 }) {
   const [val, setVal] = useState(
-    initial != null ? String(initial).replace(".", ",") : ""
+    initial != null ? formatPoints(initial, 2) : ""
   );
 
   return (

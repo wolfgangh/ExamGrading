@@ -125,9 +125,12 @@ export function GradeDistributionChart({
 export function ScenarioGradeDistributionChart({
   series,
   mode = "count",
+  activeKey,
 }: {
   series: ScenarioDistributionSeries[];
   mode?: "count" | "share";
+  /** Aktives Szenario: volle Deckkraft; andere transparenter */
+  activeKey?: string;
 }) {
   if (series.length === 0) return null;
 
@@ -200,6 +203,9 @@ export function ScenarioGradeDistributionChart({
               dataKey={s.key}
               name={s.key}
               fill={SERIES_COLORS[i % SERIES_COLORS.length]}
+              fillOpacity={
+                activeKey && s.key !== activeKey ? 0.28 : 1
+              }
               radius={[3, 3, 0, 0]}
               maxBarSize={36}
             />
@@ -255,9 +261,12 @@ export function GradeBucketChart({
 export function ScenarioGradeBucketChart({
   series,
   mode = "count",
+  activeKey,
 }: {
   series: ScenarioBucketSeries[];
   mode?: "count" | "share";
+  /** Aktives Szenario: volle Deckkraft; andere transparenter */
+  activeKey?: string;
 }) {
   if (series.length === 0) return null;
 
@@ -318,6 +327,9 @@ export function ScenarioGradeBucketChart({
               dataKey={s.key}
               name={s.key}
               fill={SERIES_COLORS[i % SERIES_COLORS.length]}
+              fillOpacity={
+                activeKey && s.key !== activeKey ? 0.28 : 1
+              }
               radius={[3, 3, 0, 0]}
               maxBarSize={40}
             />

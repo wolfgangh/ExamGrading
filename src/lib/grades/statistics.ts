@@ -16,6 +16,22 @@ function median(values: number[]): number | null {
   return sorted[mid];
 }
 
+/**
+ * Quantil p ∈ [0, 1] mit linearer Interpolation (R type-7 / Excel PERCENTILE).
+ */
+function quantile(values: number[], p: number): number | null {
+  if (values.length === 0) return null;
+  if (p <= 0) return Math.min(...values);
+  if (p >= 1) return Math.max(...values);
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  const t = idx - lo;
+  return sorted[lo] * (1 - t) + sorted[hi] * t;
+}
+
 /** Stichproben-Standardabweichung (n−1) */
 function stdDevSample(values: number[]): number | null {
   if (values.length < 2) return null;
@@ -104,6 +120,8 @@ export function computeStatistics(
         ? grades.reduce((a, b) => a + b, 0) / grades.length
         : null,
     medianGrade: median(grades),
+    q25Grade: quantile(grades, 0.25),
+    q75Grade: quantile(grades, 0.75),
     stdDevGrade: stdDevSample(grades),
     passRate: grades.length > 0 ? passed / grades.length : null,
     averagePoints:
