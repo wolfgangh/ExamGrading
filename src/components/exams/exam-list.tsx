@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -28,6 +28,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   EXAM_TYPE_LABELS,
@@ -106,6 +114,9 @@ function examListCountsLabel(exam: ExamProject): string {
   return `${his} HIS · ${att} Antritte · ${withPoints} mit Punkten`;
 }
 
+const SEMESTER_FILTER_ALL = "__all__";
+const SEMESTER_FILTER_NONE = "__none__";
+
 export function ExamList() {
   const { exams, loading, error, refresh, remove, duplicate } = useExams();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -113,10 +124,40 @@ export function ExamList() {
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  /** Default: aktuelles Semester; „Alle“ / „ohne Semester“ wählbar */
+  const [semesterFilter, setSemesterFilter] = useState<string>(() =>
+    currentSemesterLabel()
+  );
 
   const semesterNow = currentSemesterLabel();
   const semesterExams = exams.filter(
     (e) => (e.semester || "").trim() === semesterNow
+  );
+
+  const semesterOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of exams) {
+      const s = (e.semester || "").trim();
+      if (s) set.add(s);
+    }
+    // Aktuelles Semester immer anbieten
+    set.add(semesterNow);
+    return [...set].sort((a, b) => a.localeCompare(b, "de"));
+  }, [exams, semesterNow]);
+
+  const filteredExams = useMemo(() => {
+    if (semesterFilter === SEMESTER_FILTER_ALL) return exams;
+    if (semesterFilter === SEMESTER_FILTER_NONE) {
+      return exams.filter((e) => !(e.semester || "").trim());
+    }
+    return exams.filter(
+      (e) => (e.semester || "").trim() === semesterFilter
+    );
+  }, [exams, semesterFilter]);
+
+  const noneSemesterCount = useMemo(
+    () => exams.filter((e) => !(e.semester || "").trim()).length,
+    [exams]
   );
 
   const importOneProjectJson = async (
@@ -315,17 +356,74 @@ export function ExamList() {
 
       <main className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-auto px-4 py-8">
         <div className="mb-6 space-y-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Prüfungen
-            </h1>
-            <p className="mt-1 text-muted-foreground">
-              Notenvergabe und HISinOne-Export – ersetzt den Excel-Workflow.
-              Aktuelles Semester: <strong>{semesterNow}</strong>
-              {semesterExams.length > 0 && (
-                <> · {semesterExams.length} Prüfung(en) in diesem Semester</>
-              )}
-            </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Prüfungen
+              </h1>
+              <p className="mt-1 text-muted-foreground">
+                Notenvergabe und HISinOne-Export – ersetzt den Excel-Workflow.
+                {semesterFilter === SEMESTER_FILTER_ALL ? (
+                  <>
+                    {" "}
+                    · {exams.length} Prüfung(en) gesamt
+                    {semesterExams.length > 0 && (
+                      <>
+                        {" "}
+                        · {semesterExams.length} im aktuellen Semester (
+                        {semesterNow})
+                      </>
+                    )}
+                  </>
+                ) : semesterFilter === SEMESTER_FILTER_NONE ? (
+                  <>
+                    {" "}
+                    · {filteredExams.length} ohne Semester
+                  </>
+                ) : (
+                  <>
+                    {" "}
+                    · {filteredExams.length} Prüfung(en) in{" "}
+                    <strong>{semesterFilter}</strong>
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="grid w-full gap-1 sm:w-56">
+              <Label htmlFor="semester-filter" className="text-xs">
+                Semester filtern
+              </Label>
+              <Select
+                value={semesterFilter}
+                onValueChange={(v) => v && setSemesterFilter(v)}
+              >
+                <SelectTrigger id="semester-filter" className="w-full">
+                  <SelectValue>
+                    {semesterFilter === SEMESTER_FILTER_ALL
+                      ? "Alle Semester"
+                      : semesterFilter === SEMESTER_FILTER_NONE
+                        ? "Ohne Semester"
+                        : semesterFilter}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SEMESTER_FILTER_ALL}>
+                    Alle Semester
+                  </SelectItem>
+                  {semesterOptions.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                      {s === semesterNow ? " (aktuell)" : ""}
+                    </SelectItem>
+                  ))}
+                  {noneSemesterCount > 0 && (
+                    <SelectItem value={SEMESTER_FILTER_NONE}>
+                      Ohne Semester ({noneSemesterCount})
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="rounded-xl border border-amber-300/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-50">
@@ -382,8 +480,33 @@ export function ExamList() {
           </Card>
         )}
 
+        {!loading && exams.length > 0 && filteredExams.length === 0 && (
+          <Card className="surface-panel border-dashed">
+            <CardHeader>
+              <CardTitle className="text-base">
+                Keine Prüfung in diesem Filter
+              </CardTitle>
+              <CardDescription>
+                {semesterFilter === SEMESTER_FILTER_NONE
+                  ? "Es gibt keine Prüfungen ohne gesetztes Semester."
+                  : `Keine Prüfung mit Semester „${semesterFilter}“. Filter auf „Alle Semester“ stellen oder Semester in den Prüfungseinstellungen anpassen.`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSemesterFilter(SEMESTER_FILTER_ALL)}
+              >
+                Alle Semester anzeigen
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-3 sm:grid-cols-2">
-          {exams.map((exam) => {
+          {filteredExams.map((exam) => {
             const stale = isBackupStale(exam);
             const semester = (exam.semester || "").trim();
             const isCurrentSemester = semester === semesterNow;
