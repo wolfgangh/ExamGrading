@@ -53,6 +53,7 @@ import {
 import {
   assertFileSizeLimit,
   MAX_PROJECT_ARCHIVE_BYTES,
+  MAX_SEMESTER_ZIP_BYTES,
 } from "@/lib/import-limits";
 import { createId } from "@/lib/id";
 import {
@@ -91,7 +92,34 @@ export function ExamList() {
     (e) => (e.semester || "").trim() === semesterNow
   );
 
-  const importJsonFiles = async (files: FileList | File[]) => {
+  const importOneProjectJson = async (
+    text: string,
+    sourceLabel: string
+  ): Promise<{ summary: string; id: string }> => {
+    assertFileSizeLimit(
+      { size: new TextEncoder().encode(text).length, name: sourceLabel },
+      MAX_PROJECT_ARCHIVE_BYTES,
+      "JSON-Sicherung"
+    );
+    let project = parseExamJson(text);
+    project.id = createId("exam");
+    project.createdAt = new Date().toISOString();
+    project = markProjectRestoredFromBackup(project);
+    await saveExam(project);
+    return { summary: projectArchiveSummary(project), id: project.id };
+  };
+
+  const isZipFile = (file: File): boolean => {
+    const n = file.name.toLowerCase();
+    return (
+      n.endsWith(".zip") ||
+      file.type === "application/zip" ||
+      file.type === "application/x-zip-compressed"
+    );
+  };
+
+  /** JSON-Dateien und Semester-ZIPs (analog „Semester sichern“) importieren */
+  const importBackupFiles = async (files: FileList | File[]) => {
     setImportMsg(null);
     setImportErr(null);
     setExportMsg(null);
@@ -104,15 +132,49 @@ export function ExamList() {
 
     for (const file of list) {
       try {
-        assertFileSizeLimit(file, MAX_PROJECT_ARCHIVE_BYTES, "JSON-Sicherung");
-        const text = await file.text();
-        let project = parseExamJson(text);
-        project.id = createId("exam");
-        project.createdAt = new Date().toISOString();
-        project = markProjectRestoredFromBackup(project);
-        await saveExam(project);
-        ok.push(projectArchiveSummary(project));
-        lastId = project.id;
+        if (isZipFile(file)) {
+          assertFileSizeLimit(file, MAX_SEMESTER_ZIP_BYTES, "ZIP-Sicherung");
+          const JSZip = (await import("jszip")).default;
+          const zip = await JSZip.loadAsync(await file.arrayBuffer());
+          const jsonEntries = Object.values(zip.files).filter(
+            (e) =>
+              !e.dir &&
+              e.name.toLowerCase().endsWith(".json") &&
+              !e.name.split("/").some((p) => p.startsWith("."))
+          );
+          if (jsonEntries.length === 0) {
+            throw new Error(
+              "ZIP enthält keine .json-Projektsicherungen."
+            );
+          }
+          // stabile Reihenfolge
+          jsonEntries.sort((a, b) =>
+            a.name.localeCompare(b.name, "de")
+          );
+          for (const entry of jsonEntries) {
+            try {
+              const text = await entry.async("string");
+              const { summary, id } = await importOneProjectJson(
+                text,
+                `${file.name}/${entry.name}`
+              );
+              ok.push(summary);
+              lastId = id;
+            } catch (e) {
+              fail.push(
+                `${file.name}/${entry.name}: ${
+                  e instanceof Error ? e.message : "Import fehlgeschlagen"
+                }`
+              );
+            }
+          }
+        } else {
+          assertFileSizeLimit(file, MAX_PROJECT_ARCHIVE_BYTES, "JSON-Sicherung");
+          const text = await file.text();
+          const { summary, id } = await importOneProjectJson(text, file.name);
+          ok.push(summary);
+          lastId = id;
+        }
       } catch (e) {
         fail.push(
           `${file.name}: ${
@@ -193,19 +255,19 @@ export function ExamList() {
             <input
               ref={fileRef}
               type="file"
-              accept="application/json,.json"
+              accept="application/json,.json,application/zip,.zip"
               multiple
               className="hidden"
               onChange={(e) => {
                 const files = e.target.files;
-                if (files?.length) void importJsonFiles(files);
+                if (files?.length) void importBackupFiles(files);
                 e.target.value = "";
               }}
             />
             <Button
               variant="outline"
               onClick={() => fileRef.current?.click()}
-              title="Eine oder mehrere Projektsicherungen (.json) wiederherstellen"
+              title="JSON-Projektsicherungen und/oder Semester-ZIP wiederherstellen"
             >
               <HardDrive className="size-4" />
               Sicherung importieren
@@ -244,9 +306,10 @@ export function ExamList() {
             <p className="mt-1 opacity-90">
               Prüfungsprojekte werden lokal gespeichert (IndexedDB), nicht auf
               dem Server. Nach Importen und vor dem HISinOne-/PDF-Export:{" "}
-              <strong>JSON-Sicherung</strong> herunterladen. Mehrere Dateien
-              können auf einmal importiert werden. „Semester sichern“ packt
-              alle Prüfungen mit Semester „{semesterNow}“ in eine ZIP-Datei.
+              <strong>JSON-Sicherung</strong> herunterladen. Mehrere JSON-Dateien
+              oder eine <strong>Semester-ZIP</strong> können importiert werden.
+              „Semester sichern“ packt alle Prüfungen mit Semester „
+              {semesterNow}“ in eine ZIP-Datei.
             </p>
           </div>
 
@@ -275,8 +338,8 @@ export function ExamList() {
             <CardHeader>
               <CardTitle>Noch keine Prüfung</CardTitle>
               <CardDescription>
-                Legen Sie eine neue Prüfung an oder importieren Sie eine oder
-                mehrere Projektsicherungen (.json).
+                Legen Sie eine neue Prüfung an oder importieren Sie
+                Projektsicherungen (.json) bzw. eine Semester-ZIP.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">

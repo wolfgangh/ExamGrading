@@ -1,6 +1,9 @@
 /** Max. Größe einer JSON-Projektsicherung (inkl. Base64-HIS-Vorlagen). */
 export const MAX_PROJECT_ARCHIVE_BYTES = 50 * 1024 * 1024;
 
+/** Max. Größe einer Semester-/Sammel-ZIP mit mehreren JSON-Sicherungen. */
+export const MAX_SEMESTER_ZIP_BYTES = 150 * 1024 * 1024;
+
 /** Max. Größe einer Excel-Importdatei (HIS / Antritt / Punkte). */
 export const MAX_EXCEL_IMPORT_BYTES = 15 * 1024 * 1024;
 

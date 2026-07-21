@@ -4,7 +4,7 @@
 
 © Prof. Dr. Wolfgang Hößl · OTH Regensburg · *Client-seitig · Keine Serverübertragung*
 
-**Aktuelle Version:** 0.4.8 (siehe auch `package.json` und App-Footer)
+**Aktuelle Version:** 0.4.9 (siehe auch `package.json` und App-Footer)
 
 ---
 
@@ -28,7 +28,7 @@ Geeignet u. a. für:
 | Bereich | Inhalt |
 |--------|--------|
 | **Prüfungstypen** | THE, elektrP, Klausur, StA (Kriterien / manuell), Portfolio (optional Teilnoten je Dozent), Sonstige |
-| **Startseite** | Prüfungskarten mit Semester, Prüfungsform, Workflow-Status; Multi-JSON-Import; **Semester-ZIP**-Sicherung |
+| **Startseite** | Prüfungskarten mit Semester, Prüfungsform, Workflow-Status; Multi-JSON- und **Semester-ZIP**-Import/Export |
 | **Import** | HISinOne (auch mehrere Dateien), Moodle-Antritt, Moodle-/Punkte-Excel; manuell Personen (StA/Portfolio) |
 | **Zuordnung** | Matrikel-Tippfehler: Vorschläge, zusammenführen, ablehnen, rückgängig |
 | **Bewertung** | Detailpunkte, offene Aufgaben; **Bewertungsmatrix** (StA-Kriterien / Portfolio-Teilnoten) mit Skalenhinweisen, Gruppen, Namenssuche |
@@ -145,4 +145,4 @@ Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Deta
 ## Lizenz & Kontakt
 
 Internes Hochschul-Tool.  
-© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.8
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.9

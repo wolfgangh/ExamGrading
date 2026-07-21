@@ -2,7 +2,7 @@
 
 Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (keine Serverübertragung von Notenlisten).
 
-**Version:** 0.4.7
+**Version:** 0.4.9
 
 ---
 
@@ -188,9 +188,9 @@ PDFs führen im **Briefkopf** und in den Metadaten **alle** hinterlegten Dozente
 
 ### Wiederherstellen
 
-1. Startseite → Sicherung importieren (eine oder mehrere JSON-Dateien).  
-2. Kopie der Prüfung in **diesem** Browser.  
-3. Relevante Daten (inkl. Base64-HISinOne-Vorlagen, falls importiert) stecken in der JSON-Datei.
+1. Startseite → **Sicherung importieren**: eine oder mehrere **JSON**-Dateien und/oder eine **Semester-ZIP** (wie von „Semester sichern“ erzeugt; enthält mehrere JSON-Projekte).  
+2. Jede Datei wird als **neue Kopie** der Prüfung in **diesem** Browser angelegt.  
+3. Relevante Daten (inkl. Base64-HISinOne-Vorlagen, falls importiert) stecken in den JSON-Dateien.
 
 ---
 
