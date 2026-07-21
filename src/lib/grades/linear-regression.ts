@@ -48,9 +48,9 @@ function betaCf(a: number, b: number, x: number): number {
   let am = 1;
   let bm = 1;
   let az = 1;
-  let qab = a + b;
-  let qap = a + 1;
-  let qam = a - 1;
+  const qab = a + b;
+  const qap = a + 1;
+  const qam = a - 1;
   let bz = 1 - (qab * x) / qap;
   for (let m = 1; m <= maxIt; m++) {
     const em = m;

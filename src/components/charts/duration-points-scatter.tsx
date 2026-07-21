@@ -60,9 +60,17 @@ export function DurationPointsScatterCard({
 }: {
   project: ExamProject;
 }) {
-  if (!isOnlineStyleExam(project.examType)) return null;
+  const online = isOnlineStyleExam(project.examType);
 
   const { points, regression, lineData, nWithDuration } = useMemo(() => {
+    if (!online) {
+      return {
+        points: [] as ScatterPoint[],
+        regression: null,
+        lineData: [] as { x: number; yHat: number }[],
+        nWithDuration: 0,
+      };
+    }
     const pts: ScatterPoint[] = [];
     for (const rec of project.points ?? []) {
       const dur = rec.processingDurationMinutes;
@@ -110,7 +118,9 @@ export function DurationPointsScatterCard({
       lineData: line,
       nWithDuration: pts.length,
     };
-  }, [project]);
+  }, [project, online]);
+
+  if (!online) return null;
 
   if (nWithDuration === 0) {
     return (

@@ -102,7 +102,7 @@ export default function ScenariosPage() {
   const comparisonBundle = useMemo(() => {
     if (!project) return null;
     return buildScenarioComparisonBundle(project, compareA, compareB);
-  }, [project, compareA, compareB, scenarios]);
+  }, [project, compareA, compareB]);
 
   const chartSeries = useMemo(
     () =>

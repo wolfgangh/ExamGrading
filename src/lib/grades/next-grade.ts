@@ -14,9 +14,11 @@ export interface NextGradeInfo {
  */
 export function effectivePointsForGrading(
   points: number,
-  _schema: GradeSchema
+  _schema?: GradeSchema
 ): number {
   if (!Number.isFinite(points)) return 0;
+  // schema optional (historisch für ROUNDUP); Notenfindung nutzt exakte Punkte
+  void _schema;
   return points;
 }
 
