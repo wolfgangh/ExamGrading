@@ -7,6 +7,8 @@ import { useExamContext } from "@/components/exam/exam-context";
 import { PointsMatrix } from "@/components/points/points-matrix";
 import { QuestionSubareaMapper } from "@/components/points/question-subarea-mapper";
 import { QuestionStatsPanel } from "@/components/points/question-stats-panel";
+import { DurationPointsScatterCard } from "@/components/charts/duration-points-scatter";
+import { isOnlineStyleExam } from "@/lib/types";
 import {
   computeQuestionStats,
   computeSubAreaStats,
@@ -336,8 +338,11 @@ export default function DetailPointsPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Punktematrix</CardTitle>
           <CardDescription>
-            ! = Bewertung notwendig · Gesamt und Σ Teilgebiet nur lesend ·
-            horizontal und vertikal im Rahmen scrollen
+            ! = Bewertung notwendig · Gesamt und Σ Teilgebiet nur lesend
+            {isOnlineStyleExam(project.examType)
+              ? " · Spalte Dauer aus Moodle-Import"
+              : ""}{" "}
+            · horizontal und vertikal im Rahmen scrollen
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0 sm:p-0">
@@ -354,6 +359,10 @@ export default function DetailPointsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {isOnlineStyleExam(project.examType) && (
+        <DurationPointsScatterCard project={effectiveProject} />
+      )}
     </div>
   );
 }

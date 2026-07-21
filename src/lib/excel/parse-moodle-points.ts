@@ -19,6 +19,7 @@ import type {
   SubArea,
 } from "@/lib/types";
 import { recomputePointsRecord } from "@/lib/grades/points-total";
+import { parseProcessingDurationMinutes } from "@/lib/excel/parse-duration";
 
 export interface PointsParseResult {
   records: PointsRecord[];
@@ -244,6 +245,21 @@ export function parsePointsMatrix(
   const attemptIdx = map.attempt;
   const loginIdx = map.login;
   const emailIdx = map.email;
+  let durationIdx = map.processingDuration;
+  if (durationIdx == null) {
+    const di = headers.findIndex((h) => {
+      const t = String(h ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+      return (
+        t === "dauer" ||
+        t.startsWith("dauer ") ||
+        /bearbeitungsdauer|bearbeitungszeit|time\s*taken|time\s*spent/i.test(t)
+      );
+    });
+    if (di >= 0) durationIdx = di;
+  }
 
   // Explizit Bewertung/ finden
   let resolvedTotalIdx = totalIdx;
@@ -343,12 +359,18 @@ export function parsePointsMatrix(
         ? parsePointsCell(row[resolvedTotalIdx]).points
         : null;
 
+    const durationMin =
+      durationIdx != null
+        ? parseProcessingDurationMinutes(row[durationIdx])
+        : null;
+
     let rec: PointsRecord = {
       matriculationNumber: mat,
       bySubArea,
       byQuestion: Object.keys(byQuestion).length ? byQuestion : undefined,
       needsGrading: needsGrading.length ? needsGrading : undefined,
       totalPoints: importTotal,
+      processingDurationMinutes: durationMin,
       source: "moodle",
     };
 

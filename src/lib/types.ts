@@ -150,6 +150,11 @@ export interface PointsRecord {
   byQuestion?: Record<string, number | null>;
   /** Offene manuelle Bewertungen */
   needsGrading?: string[];
+  /**
+   * Bearbeitungsdauer aus Moodle/THE (Minuten).
+   * Spalte z. B. „Bearbeitungsdauer“.
+   */
+  processingDurationMinutes?: number | null;
   /** Manueller Studiengang, wenn nicht aus HIS ableitbar */
   manualProgramCode?: string | null;
   /** Zweitkorrektur-Punkte (Durchfaller) */

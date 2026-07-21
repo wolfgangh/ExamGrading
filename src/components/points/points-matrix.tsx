@@ -5,6 +5,8 @@ import type { ExamProject, PointsRecord, QuestionDef, SubArea } from "@/lib/type
 import { matrixRows } from "@/lib/grades/question-stats";
 import { subAreaColorAt } from "@/lib/grades/subarea-colors";
 import { cn, formatPoints } from "@/lib/utils";
+import { formatDurationMinutes } from "@/lib/excel/parse-duration";
+import { isOnlineStyleExam } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -36,6 +38,7 @@ export function PointsMatrix({
 }) {
   const defs = project.questionDefs ?? [];
   const subAreas = project.subAreas;
+  const showDuration = isOnlineStyleExam(project.examType);
 
   const saIndexById = useMemo(() => {
     const m = new Map<string, number>();
@@ -82,6 +85,14 @@ export function PointsMatrix({
             <TableHead className="sticky left-[140px] z-30 bg-card min-w-[96px]">
               Matr.
             </TableHead>
+            {showDuration && (
+              <TableHead
+                className="min-w-[7rem] text-center whitespace-nowrap"
+                title="Moodle-Spalte „Dauer“ / Bearbeitungsdauer"
+              >
+                Dauer
+              </TableHead>
+            )}
             {defs.map((q) => {
               const pct = questionStatsPercent?.[q.id];
               const sa = resolveSa(q);
@@ -135,7 +146,12 @@ export function PointsMatrix({
           {rows.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={3 + defs.length + subAreaCols.length}
+                colSpan={
+                  3 +
+                  (showDuration ? 1 : 0) +
+                  defs.length +
+                  subAreaCols.length
+                }
                 className="h-24 text-center text-muted-foreground"
               >
                 Keine Punktedaten – THE importieren oder Filter prüfen.
@@ -150,6 +166,8 @@ export function PointsMatrix({
                 firstName={r.firstName}
                 record={r.record}
                 total={r.total}
+                durationMinutes={r.durationMinutes}
+                showDuration={showDuration}
                 defs={defs}
                 subAreas={subAreas}
                 saIndexById={saIndexById}
@@ -170,6 +188,8 @@ function MatrixRow({
   firstName,
   record,
   total,
+  durationMinutes,
+  showDuration,
   defs,
   subAreas,
   saIndexById,
@@ -181,6 +201,8 @@ function MatrixRow({
   firstName: string;
   record: PointsRecord;
   total: number | null;
+  durationMinutes: number | null;
+  showDuration: boolean;
   defs: QuestionDef[];
   subAreas: SubArea[];
   saIndexById: Map<string, number>;
@@ -199,6 +221,18 @@ function MatrixRow({
       <TableCell className="sticky left-[140px] z-10 bg-card font-mono text-sm">
         {rowKey}
       </TableCell>
+      {showDuration && (
+        <TableCell
+          className="text-center text-xs tabular-nums whitespace-nowrap"
+          title={
+            durationMinutes != null
+              ? `${durationMinutes} Minuten`
+              : "Keine Dauer im Import"
+          }
+        >
+          {formatDurationMinutes(durationMinutes)}
+        </TableCell>
+      )}
       {defs.map((q) => {
         const open = needs.has(q.id);
         const val = record.byQuestion?.[q.id];

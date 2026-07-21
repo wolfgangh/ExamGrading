@@ -9,7 +9,8 @@ export type LogicalField =
   | "totalPoints"
   | "grade"
   | "attempt"
-  | "attendance";
+  | "attendance"
+  | "processingDuration";
 
 /**
  * Moodle „Antritt“: … | E-Mail-Adresse | … | Name | Vorname | Matrikelnummer
@@ -69,6 +70,17 @@ const SYNONYMS: Record<LogicalField, string[]> = {
   grade: ["note", "grade", "bewertung (note)"],
   attempt: ["versuch", "versuche", "attempt"],
   attendance: ["antritt", "teilnahme", "anwesend", "attended"],
+  processingDuration: [
+    "bearbeitungsdauer",
+    "bearbeitungszeit",
+    "zeitaufwand",
+    "time taken",
+    "time spent",
+    "duration",
+    "dauer der bearbeitung",
+    // Moodle-THE oft nur „Dauer“ (z. B. „1 Stunde 23 Minuten“)
+    "dauer",
+  ],
 };
 
 function normalizeHeader(h: string): string {
@@ -89,6 +101,11 @@ export function detectField(header: string): LogicalField | null {
   // Gesamtpunkte exakt / mit Präfix – vor generischen „Punkte …“-Teilgebieten
   if (n === "gesamtpunkte" || n.startsWith("gesamtpunkte")) {
     return "totalPoints";
+  }
+
+  // Moodle: Spalte oft exakt „Dauer“ (vor generischem date/timestamp)
+  if (n === "dauer" || n.startsWith("dauer ") || n === "bearbeitungsdauer") {
+    return "processingDuration";
   }
 
   for (const [field, synonyms] of Object.entries(SYNONYMS) as [

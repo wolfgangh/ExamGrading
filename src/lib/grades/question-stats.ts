@@ -139,6 +139,7 @@ export function matrixRows(project: ExamProject): {
   firstName: string;
   record: PointsRecord;
   total: number | null;
+  durationMinutes: number | null;
 }[] {
   const out: {
     key: string;
@@ -146,6 +147,7 @@ export function matrixRows(project: ExamProject): {
     firstName: string;
     record: PointsRecord;
     total: number | null;
+    durationMinutes: number | null;
   }[] = [];
 
   for (const rec of project.points) {
@@ -158,6 +160,11 @@ export function matrixRows(project: ExamProject): {
       firstName: st?.firstName || "",
       record: rec,
       total: computeEffectiveTotal(rec),
+      durationMinutes:
+        rec.processingDurationMinutes != null &&
+        Number.isFinite(rec.processingDurationMinutes)
+          ? rec.processingDurationMinutes
+          : null,
     });
   }
 
