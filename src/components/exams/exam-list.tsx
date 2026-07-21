@@ -64,9 +64,30 @@ import { datedExportFilename, cn } from "@/lib/utils";
 import { getExamWorkflowSummary } from "@/lib/workflow-steps";
 import { buildEnrichedRows } from "@/lib/matching/match";
 
+/** Personen mit erfassten Punkten (nicht: Länge des points-Arrays). */
+function countPeopleWithPoints(exam: ExamProject): number {
+  return (exam.points ?? []).filter((p) => {
+    if (p.totalPoints != null && Number.isFinite(p.totalPoints)) return true;
+    if (p.totalOverride != null && Number.isFinite(p.totalOverride)) return true;
+    if (
+      p.bySubArea &&
+      Object.values(p.bySubArea).some((v) => v != null && Number.isFinite(v))
+    ) {
+      return true;
+    }
+    if (
+      p.byQuestion &&
+      Object.values(p.byQuestion).some((v) => v != null && Number.isFinite(v))
+    ) {
+      return true;
+    }
+    return false;
+  }).length;
+}
+
 /**
  * Meta-Zeile auf Prüfungskarten.
- * StA/Portfolio: Prüflinge (HIS + manuell); ohne Note nicht mitzählen, sobald Noten existieren.
+ * StA/Portfolio: Prüflinge; THE/elektrP: Antritte + mit Punkten; Klausur: mit Punkten (kein Antritt).
  */
 function examListCountsLabel(exam: ExamProject): string {
   const his = exam.hisRows?.length ?? 0;
@@ -76,7 +97,13 @@ function examListCountsLabel(exam: ExamProject): string {
     const n = withGrade > 0 ? withGrade : rows.length;
     return `${his} HIS · ${n} Prüflinge`;
   }
-  return `${his} HIS · ${exam.attendance?.length ?? 0} Antritte · ${exam.points?.length ?? 0} Punkte`;
+  const withPoints = countPeopleWithPoints(exam);
+  if (exam.examType === "written") {
+    return `${his} HIS · ${withPoints} mit Punkten`;
+  }
+  // THE / elektrP / Sonstige
+  const att = exam.attendance?.length ?? 0;
+  return `${his} HIS · ${att} Antritte · ${withPoints} mit Punkten`;
 }
 
 export function ExamList() {

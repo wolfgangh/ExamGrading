@@ -2,7 +2,7 @@
 
 Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (keine Serverübertragung von Notenlisten).
 
-**Version:** 0.4.9
+**Version:** 0.4.10
 
 ---
 
@@ -63,7 +63,7 @@ Bei StA und Portfolioprüfung können weitere Personen **manuell** unter Importe
 ### 3.2 Klausur
 
 1. HISinOne-Masterliste importieren.  
-2. Punktevorlage nutzen bzw. Punkte importieren/erfassen.  
+2. Punkte: Vorlage exportieren und importieren **oder** unter **Punkte** manuell in der Tabelle eintragen/ändern.  
 3. Noten berechnen und prüfen.  
 4. JSON-Sicherungen und HISinOne-/PDF-Export.
 

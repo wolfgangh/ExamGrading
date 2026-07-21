@@ -139,6 +139,7 @@ export function StudentsTable({
   editable = false,
   onEditGrade,
   onEditPoints,
+  onEditTotalPoints,
   subAreaNames = {},
   showNextGrade = false,
   borderlineFilter = "off",
@@ -152,6 +153,8 @@ export function StudentsTable({
   editable?: boolean;
   onEditGrade?: (key: string) => void;
   onEditPoints?: (key: string, subAreaId: string, value: number | null) => void;
+  /** Gesamtpunkte manuell (z. B. Klausur) */
+  onEditTotalPoints?: (key: string, value: number | null) => void;
   subAreaNames?: Record<string, string>;
   showNextGrade?: boolean;
   borderlineFilter?: BorderlineFilter;
@@ -324,11 +327,34 @@ export function StudentsTable({
         id: "points",
         accessorFn: (r) => r.totalPoints ?? -1,
         header: "Punkte",
-        cell: ({ row }) => (
-          <span className="tabular-nums">
-            {formatPoints(row.original.totalPoints)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const val = row.original.totalPoints;
+          if (editable && onEditTotalPoints) {
+            return (
+              <Input
+                type="number"
+                step="0.5"
+                className="h-7 w-[4.5rem] text-center tabular-nums"
+                defaultValue={val ?? ""}
+                key={`total-${row.original.key}-${val ?? "x"}`}
+                placeholder="–"
+                title="Gesamtpunkte bearbeiten"
+                onBlur={(e) => {
+                  const raw = e.target.value.trim();
+                  const num =
+                    raw === "" ? null : Number(raw.replace(",", "."));
+                  onEditTotalPoints(
+                    row.original.key,
+                    num != null && Number.isFinite(num) ? num : null
+                  );
+                }}
+              />
+            );
+          }
+          return (
+            <span className="tabular-nums">{formatPoints(val)}</span>
+          );
+        },
       },
       {
         id: "percent",
