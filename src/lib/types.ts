@@ -351,6 +351,11 @@ export interface ExamProject {
   /** Aufgaben aus THE-Import */
   questionDefs?: QuestionDef[];
   /**
+   * THE/elektrP: Moodle-/THE-Import-Punkte auf 0,5 aufrunden
+   * (3,2→3,5). Default true wenn undefined. Manuelle Eingaben unberührt.
+   */
+  roundMoodlePointsToHalf?: boolean;
+  /**
    * Zeitpunkt der bestätigten Aufgaben→Teilgebiet-Zuordnung
    * (nur relevant bei mehreren Teilgebieten).
    */

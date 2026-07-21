@@ -12,11 +12,13 @@ import type {
 import {
   EXAM_TYPE_LABELS,
   isHisManualAssessmentExam,
+  isOnlineStyleExam,
   isPortfolioExam,
   isStaCriteriaExam,
   isStaManualExam,
   supportsStudentGroups,
 } from "@/lib/types";
+import { shouldRoundMoodlePointsToHalf } from "@/lib/grades/round-half-points";
 import {
   collapseLecturerGradesToSimple,
   defaultPortfolioComponents,
@@ -212,6 +214,43 @@ export default function SettingsPage() {
           />
         </CardContent>
       </Card>
+
+      {isOnlineStyleExam(project.examType) && (
+        <Card className="surface-panel">
+          <CardHeader>
+            <CardTitle className="text-base">Moodle- / THE-Import</CardTitle>
+            <CardDescription>
+              Optionen für den Punkteimport aus Moodle (THE / elektronische
+              Prüfung).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-0.5">
+                <Label htmlFor="round-moodle-half" className="text-sm">
+                  Punkte auf 0,5 aufrunden
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Importierte Aufgaben- und Gesamtpunkte werden auf das nächste
+                  0,5-Raster aufgerundet (z. B. 3,2→3,5 · 4,8→5,0). Standard:
+                  an. Betrifft künftige Importe; manuelle Eingaben in der
+                  Matrix bleiben unberührt.
+                </p>
+              </div>
+              <Switch
+                id="round-moodle-half"
+                checked={shouldRoundMoodlePointsToHalf(project)}
+                onCheckedChange={(on) =>
+                  setProject((prev) => ({
+                    ...prev,
+                    roundMoodlePointsToHalf: on,
+                  }))
+                }
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {showGroups && (
         <Card className="surface-panel">

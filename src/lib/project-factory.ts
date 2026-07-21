@@ -8,6 +8,7 @@ import {
 } from "@/lib/exam-catalog";
 import {
   isHisManualAssessmentExam,
+  isOnlineStyleExam,
   type ExamProject,
   type ExamType,
   type SubArea,
@@ -79,6 +80,8 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     identityMerges: [],
     identityDismissals: [],
     importLogs: [],
+    // THE/elektrP: Moodle-Punkte standardmäßig auf 0,5 aufrunden
+    roundMoodlePointsToHalf: isOnlineStyleExam(examType) ? true : undefined,
     criteria: examType === "sta_criteria" ? [] : undefined,
     portfolioComponents:
       examType === "portfolio" ? defaultPortfolioComponents(createId) : undefined,

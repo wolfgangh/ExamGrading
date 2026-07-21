@@ -32,6 +32,10 @@ import {
   clearMilestonesOnPointsReimport,
   clearWorkflowMilestonesOnImport,
 } from "@/lib/workflow-milestones";
+import {
+  applyHalfPointRoundingToPointsList,
+  shouldRoundMoodlePointsToHalf,
+} from "@/lib/grades/round-half-points";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import type {
   ImportLogEntry,
@@ -336,6 +340,11 @@ export default function ImportPage() {
         );
       }
     }
+    if (shouldRoundMoodlePointsToHalf(project)) {
+      warnings.unshift(
+        "Punkte werden auf 0,5 aufgerundet (z. B. 3,2→3,5). Unter Einstellungen abschaltbar."
+      );
+    }
     if (result.matchStats?.length) {
       const viaLogin = result.matchStats.find((m) => m.method === "login");
       if (viaLogin) {
@@ -413,6 +422,18 @@ export default function ImportPage() {
               }
             }
             nextPoints = [...byKey.values()];
+          }
+
+          const qDefs =
+            result.questionDefs?.length > 0
+              ? result.questionDefs
+              : prev.questionDefs ?? [];
+          if (shouldRoundMoodlePointsToHalf(prev)) {
+            nextPoints = applyHalfPointRoundingToPointsList(
+              nextPoints,
+              qDefs,
+              prev.subAreas
+            );
           }
 
           const next = {
