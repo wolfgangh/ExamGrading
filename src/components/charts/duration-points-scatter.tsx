@@ -96,19 +96,11 @@ export function DurationPointsScatterCard({
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
     const padX = (maxX - minX) * 0.05 || 1;
-    if (yMode === "percent") {
-      return {
-        xDomain: [minX - padX, maxX + padX] as [number, number],
-        yDomain: [0, Math.max(100, maxY * 1.05)] as [number, number],
-      };
-    }
-    const padY = (maxY - minY) * 0.08 || 1;
+    // Beide Modi: Domain am Datenbereich (mit Padding), nicht zwingend bei 0
+    const padY = (maxY - minY) * 0.08 || (yMode === "percent" ? 2 : 1);
     return {
       xDomain: [minX - padX, maxX + padX] as [number, number],
-      yDomain: [
-        Math.max(0, minY - padY),
-        maxY + padY,
-      ] as [number, number],
+      yDomain: [minY - padY, maxY + padY] as [number, number],
     };
   }, [analysis, yMode]);
 
