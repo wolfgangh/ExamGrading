@@ -11,8 +11,10 @@ import {
   isOnlineStyleExam,
   type ExamProject,
   type ExamType,
+  type MoodlePointsRoundStep,
   type SubArea,
 } from "@/lib/types";
+import { DEFAULT_MOODLE_ROUND_STEP } from "@/lib/grades/round-half-points";
 import { defaultPortfolioComponents } from "@/lib/grades/portfolio";
 
 export interface CreateExamInput {
@@ -24,6 +26,8 @@ export interface CreateExamInput {
   maxPoints?: number;
   passThreshold?: number;
   subAreas?: CatalogSubArea[];
+  /** THE/elektrP: Moodle-Import-Rundung (Default 0,5) */
+  moodlePointsRoundStep?: MoodlePointsRoundStep;
 }
 
 function toSubAreas(defs: CatalogSubArea[]): SubArea[] {
@@ -81,7 +85,9 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     identityDismissals: [],
     importLogs: [],
     // THE/elektrP: Moodle-Punkte standardmäßig auf 0,5 aufrunden
-    roundMoodlePointsToHalf: isOnlineStyleExam(examType) ? true : undefined,
+    moodlePointsRoundStep: isOnlineStyleExam(examType)
+      ? (input.moodlePointsRoundStep ?? DEFAULT_MOODLE_ROUND_STEP)
+      : undefined,
     criteria: examType === "sta_criteria" ? [] : undefined,
     portfolioComponents:
       examType === "portfolio" ? defaultPortfolioComponents(createId) : undefined,

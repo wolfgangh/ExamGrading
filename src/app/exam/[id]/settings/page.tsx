@@ -18,7 +18,11 @@ import {
   isStaManualExam,
   supportsStudentGroups,
 } from "@/lib/types";
-import { shouldRoundMoodlePointsToHalf } from "@/lib/grades/round-half-points";
+import {
+  getMoodlePointsRoundStep,
+  MOODLE_ROUND_STEP_OPTIONS,
+} from "@/lib/grades/round-half-points";
+import type { MoodlePointsRoundStep } from "@/lib/types";
 import {
   collapseLecturerGradesToSimple,
   defaultPortfolioComponents,
@@ -221,32 +225,56 @@ export default function SettingsPage() {
             <CardTitle className="text-base">Moodle- / THE-Import</CardTitle>
             <CardDescription>
               Optionen für den Punkteimport aus Moodle (THE / elektronische
-              Prüfung).
+              Prüfung). Betrifft künftige Importe; manuelle Matrix-Eingaben
+              bleiben unberührt.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0 space-y-0.5">
-                <Label htmlFor="round-moodle-half" className="text-sm">
-                  Punkte auf 0,5 aufrunden
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Importierte Aufgaben- und Gesamtpunkte werden auf das nächste
-                  0,5-Raster aufgerundet (z. B. 3,2→3,5 · 4,8→5,0). Standard:
-                  an. Betrifft künftige Importe; manuelle Eingaben in der
-                  Matrix bleiben unberührt.
-                </p>
-              </div>
-              <Switch
-                id="round-moodle-half"
-                checked={shouldRoundMoodlePointsToHalf(project)}
-                onCheckedChange={(on) =>
+          <CardContent className="space-y-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="moodle-round-step">Punkterundung beim Import</Label>
+              <Select
+                value={String(getMoodlePointsRoundStep(project))}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  const step: MoodlePointsRoundStep =
+                    v === "none" ? "none" : v === "0.25" ? 0.25 : 0.5;
                   setProject((prev) => ({
                     ...prev,
-                    roundMoodlePointsToHalf: on,
-                  }))
+                    moodlePointsRoundStep: step,
+                    // Legacy-Flag synchron halten
+                    roundMoodlePointsToHalf: step !== "none",
+                  }));
+                }}
+              >
+                <SelectTrigger id="moodle-round-step" className="w-full max-w-md">
+                  <SelectValue>
+                    {
+                      MOODLE_ROUND_STEP_OPTIONS.find(
+                        (o) =>
+                          String(o.value) ===
+                          String(getMoodlePointsRoundStep(project))
+                      )?.label
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {MOODLE_ROUND_STEP_OPTIONS.map((o) => (
+                    <SelectItem key={String(o.value)} value={String(o.value)}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Beispiel: </span>
+                {
+                  MOODLE_ROUND_STEP_OPTIONS.find(
+                    (o) =>
+                      String(o.value) ===
+                      String(getMoodlePointsRoundStep(project))
+                  )?.example
                 }
-              />
+              </p>
             </div>
           </CardContent>
         </Card>

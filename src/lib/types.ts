@@ -18,6 +18,12 @@ export type ExamType =
   | "portfolio"
   | "other";
 
+/**
+ * Aufrunden-Raster für Moodle/THE-Punkteimport (THE / elektrP).
+ * "none" = keine Rundung.
+ */
+export type MoodlePointsRoundStep = "none" | 0.25 | 0.5;
+
 /** Skala eines Bewertungskriteriums (Studienarbeit) */
 export type CriterionScale = "percent" | "points" | "grade";
 
@@ -351,8 +357,14 @@ export interface ExamProject {
   /** Aufgaben aus THE-Import */
   questionDefs?: QuestionDef[];
   /**
-   * THE/elektrP: Moodle-/THE-Import-Punkte auf 0,5 aufrunden
-   * (3,2→3,5). Default true wenn undefined. Manuelle Eingaben unberührt.
+   * THE/elektrP: Aufrunden-Raster beim Moodle-/THE-Import.
+   * Default 0,5 wenn undefined (online). "none" = aus.
+   * Manuelle Matrix-Eingaben unberührt.
+   */
+  moodlePointsRoundStep?: MoodlePointsRoundStep;
+  /**
+   * @deprecated Bitte moodlePointsRoundStep nutzen.
+   * false → none; true/undefined → 0,5 (Legacy-Migration).
    */
   roundMoodlePointsToHalf?: boolean;
   /**

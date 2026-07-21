@@ -33,8 +33,10 @@ import {
   clearWorkflowMilestonesOnImport,
 } from "@/lib/workflow-milestones";
 import {
-  applyHalfPointRoundingToPointsList,
-  shouldRoundMoodlePointsToHalf,
+  applyMoodlePointRoundingToPointsList,
+  getMoodlePointsRoundStep,
+  isMoodleRoundStepActive,
+  moodleRoundImportWarning,
 } from "@/lib/grades/round-half-points";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import type {
@@ -340,10 +342,11 @@ export default function ImportPage() {
         );
       }
     }
-    if (shouldRoundMoodlePointsToHalf(project)) {
-      warnings.unshift(
-        "Punkte werden auf 0,5 aufgerundet (z. B. 3,2→3,5). Unter Einstellungen abschaltbar."
+    {
+      const roundWarn = moodleRoundImportWarning(
+        getMoodlePointsRoundStep(project)
       );
+      if (roundWarn) warnings.unshift(roundWarn);
     }
     if (result.matchStats?.length) {
       const viaLogin = result.matchStats.find((m) => m.method === "login");
@@ -428,12 +431,16 @@ export default function ImportPage() {
             result.questionDefs?.length > 0
               ? result.questionDefs
               : prev.questionDefs ?? [];
-          if (shouldRoundMoodlePointsToHalf(prev)) {
-            nextPoints = applyHalfPointRoundingToPointsList(
-              nextPoints,
-              qDefs,
-              prev.subAreas
-            );
+          {
+            const step = getMoodlePointsRoundStep(prev);
+            if (isMoodleRoundStepActive(step)) {
+              nextPoints = applyMoodlePointRoundingToPointsList(
+                nextPoints,
+                qDefs,
+                prev.subAreas,
+                step
+              );
+            }
           }
 
           const next = {

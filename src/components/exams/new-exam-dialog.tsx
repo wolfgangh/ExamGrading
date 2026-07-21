@@ -41,7 +41,16 @@ import {
   currentSemesterLabel,
   semesterSelectOptions,
 } from "@/lib/semester";
-import { EXAM_TYPE_LABELS, type ExamType } from "@/lib/types";
+import {
+  EXAM_TYPE_LABELS,
+  isOnlineStyleExam,
+  type ExamType,
+  type MoodlePointsRoundStep,
+} from "@/lib/types";
+import {
+  DEFAULT_MOODLE_ROUND_STEP,
+  MOODLE_ROUND_STEP_OPTIONS,
+} from "@/lib/grades/round-half-points";
 
 type ExamTypeValue = ExamType;
 
@@ -58,6 +67,8 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
   const [examNumber, setExamNumber] = useState("");
   const [semester, setSemester] = useState(() => currentSemesterLabel());
   const [examType, setExamType] = useState<ExamTypeValue>("the");
+  const [moodleRoundStep, setMoodleRoundStep] =
+    useState<MoodlePointsRoundStep>(DEFAULT_MOODLE_ROUND_STEP);
   const [lecturers, setLecturers] = useState<string[]>([DEFAULT_LECTURER]);
   const [subAreas, setSubAreas] = useState<CatalogSubArea[]>([
     emptySubAreaRow(),
@@ -65,6 +76,11 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
   const [nameError, setNameError] = useState<string | null>(null);
   /** Pflicht: lokale Speicherung / Sicherungsrisiko verstanden */
   const [dataAck, setDataAck] = useState(false);
+
+  const showMoodleRound = isOnlineStyleExam(examType);
+  const moodleRoundMeta = MOODLE_ROUND_STEP_OPTIONS.find(
+    (o) => o.value === moodleRoundStep
+  );
 
   const totalMax = useMemo(
     () => subAreas.reduce((s, sa) => s + (Number(sa.maxPoints) || 0), 0),
@@ -76,6 +92,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     setExamNumber("");
     setSemester(currentSemesterLabel());
     setExamType("the");
+    setMoodleRoundStep(DEFAULT_MOODLE_ROUND_STEP);
     setLecturers([DEFAULT_LECTURER]);
     setSubAreas([emptySubAreaRow()]);
     setNameError(null);
@@ -142,6 +159,9 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
         lecturers:
           lecturers.length > 0 ? lecturers : [DEFAULT_LECTURER],
         examType,
+        moodlePointsRoundStep: isOnlineStyleExam(examType)
+          ? moodleRoundStep
+          : undefined,
         subAreas: subAreas.map((sa) => ({
           name: sa.name.trim() || "Teilgebiet",
           code: sa.code.trim() || "T",
@@ -222,7 +242,18 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
               <Label>Prüfungstyp</Label>
               <Select
                 value={examType}
-                onValueChange={(v) => v && setExamType(v as ExamTypeValue)}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  const t = v as ExamTypeValue;
+                  setExamType(t);
+                  // Beim Wechsel zu THE/elektrP Standard-Rundung setzen
+                  if (
+                    isOnlineStyleExam(t) &&
+                    !isOnlineStyleExam(examType)
+                  ) {
+                    setMoodleRoundStep(DEFAULT_MOODLE_ROUND_STEP);
+                  }
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Typ wählen">
@@ -255,6 +286,47 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
               </Select>
             </div>
           </div>
+
+          {showMoodleRound && (
+            <div className="grid gap-1.5 rounded-lg border bg-muted/30 px-3 py-3">
+              <Label htmlFor="new-moodle-round">
+                Moodle-/THE-Punkte runden
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Beim Import werden Aufgabenpunkte auf das gewählte Raster
+                aufgerundet (Standard: 0,5). Später unter Einstellungen
+                änderbar.
+              </p>
+              <Select
+                value={String(moodleRoundStep)}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  setMoodleRoundStep(
+                    v === "none" ? "none" : v === "0.25" ? 0.25 : 0.5
+                  );
+                }}
+              >
+                <SelectTrigger id="new-moodle-round" className="w-full">
+                  <SelectValue>
+                    {moodleRoundMeta?.label ?? "Rundung wählen"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {MOODLE_ROUND_STEP_OPTIONS.map((o) => (
+                    <SelectItem key={String(o.value)} value={String(o.value)}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {moodleRoundMeta && (
+                <p className="rounded-md border border-border/80 bg-background px-2.5 py-2 text-xs leading-relaxed">
+                  <span className="font-medium">Beispiel: </span>
+                  {moodleRoundMeta.example}
+                </p>
+              )}
+            </div>
+          )}
 
           <LecturerPicker
             value={lecturers}
