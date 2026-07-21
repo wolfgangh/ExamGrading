@@ -62,6 +62,17 @@ const BUCKET_ORDER: GradeBucketKey[] = [
 const TICK_FS = "0.75rem";
 const LABEL_FS = "0.8125rem";
 
+/** Achsen-Ticks: sauber runden, DE-Komma, keine Float-Artefakte */
+function formatAxisTick(value: number, decimals: number): string {
+  if (!Number.isFinite(value)) return "";
+  const f = 10 ** decimals;
+  const r = Math.round(value * f) / f;
+  if (decimals <= 0 || Number.isInteger(r)) {
+    return String(Math.round(r));
+  }
+  return r.toFixed(decimals).replace(".", ",");
+}
+
 export function DurationPointsScatterCard({
   project,
 }: {
@@ -96,11 +107,29 @@ export function DurationPointsScatterCard({
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
     const padX = (maxX - minX) * 0.05 || 1;
-    // Beide Modi: Domain am Datenbereich (mit Padding), nicht zwingend bei 0
-    const padY = (maxY - minY) * 0.08 || (yMode === "percent" ? 2 : 1);
+    const xDomain: [number, number] = [minX - padX, maxX + padX];
+
+    if (yMode === "percent") {
+      // Untergrenze am Datenbereich (mit Padding), Obergrenze fest 100 %
+      // (nur bei Werten > 100 % etwas darüber skalieren)
+      const padY = (maxY - minY) * 0.08 || 2;
+      let yMin = minY - padY;
+      if (yMin < 0) yMin = 0;
+      // wenn ohnehin nah an 0, von 0 starten
+      if (minY <= 5) yMin = 0;
+      const yMax = maxY > 100 ? Math.ceil(maxY * 10) / 10 : 100;
+      // Untergrenze nie über Obergrenze
+      if (yMin >= yMax) yMin = Math.max(0, yMax - 10);
+      return { xDomain, yDomain: [yMin, yMax] as [number, number] };
+    }
+
+    const padY = (maxY - minY) * 0.08 || 1;
     return {
-      xDomain: [minX - padX, maxX + padX] as [number, number],
-      yDomain: [minY - padY, maxY + padY] as [number, number],
+      xDomain,
+      yDomain: [
+        Math.max(0, minY - padY),
+        maxY + padY,
+      ] as [number, number],
     };
   }, [analysis, yMode]);
 
@@ -211,6 +240,9 @@ export function DurationPointsScatterCard({
                   domain={xDomain}
                   allowDataOverflow={false}
                   tick={{ fontSize: TICK_FS }}
+                  tickFormatter={(v) =>
+                    formatAxisTick(Number(v), 0)
+                  }
                   label={{
                     value: "Bearbeitungsdauer (min)",
                     position: "insideBottom",
@@ -226,9 +258,10 @@ export function DurationPointsScatterCard({
                   allowDataOverflow={false}
                   tick={{ fontSize: TICK_FS }}
                   tickFormatter={(v) =>
-                    yMode === "percent"
-                      ? `${v}`
-                      : String(v).replace(".", ",")
+                    formatAxisTick(
+                      Number(v),
+                      yMode === "percent" ? 0 : 1
+                    )
                   }
                   label={{
                     value: yAxisLabel,
