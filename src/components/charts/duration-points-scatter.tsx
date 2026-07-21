@@ -106,8 +106,9 @@ export function DurationPointsScatterCard({
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
+    // Untergrenze mit kleinem Padding, Obergrenze = max. Bearbeitungsdauer
     const padX = (maxX - minX) * 0.05 || 1;
-    const xDomain: [number, number] = [minX - padX, maxX + padX];
+    const xDomain: [number, number] = [Math.max(0, minX - padX), maxX];
 
     if (yMode === "percent") {
       // Untergrenze am Datenbereich (mit Padding), Obergrenze fest 100 %
