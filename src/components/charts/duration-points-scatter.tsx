@@ -39,13 +39,32 @@ import {
 import { chartTooltipCursor } from "@/components/charts/chart-tooltip";
 
 type ScatterPoint = {
+  /** Dauer in Minuten */
   x: number;
+  /** Punkte */
   y: number;
+  /** Nachname, Vorname */
   name: string;
+  lastName: string;
+  firstName: string;
+  matnr: string;
+  programCode: string;
   grade: number;
+  gradeLabel: string;
   bucket: GradeBucketKey;
   color: string;
+  /** Markierung für Tooltip vs. Regressionslinie */
+  kind: "student";
 };
+
+function isStudentPoint(p: unknown): p is ScatterPoint {
+  return (
+    !!p &&
+    typeof p === "object" &&
+    (p as ScatterPoint).kind === "student" &&
+    typeof (p as ScatterPoint).matnr === "string"
+  );
+}
 
 const BUCKET_ORDER: GradeBucketKey[] = [
   "sehr gut",
@@ -86,16 +105,46 @@ export function DurationPointsScatterCard({
         normalizeMatriculation(rec.matriculationNumber) ??
         rec.matriculationNumber;
       const st = project.students[key] ?? null;
-      const name = st
-        ? `${st.lastName}, ${st.firstName}`
-        : rec.matriculationNumber;
+      const lastName = st?.lastName?.trim() || "";
+      const firstName = st?.firstName?.trim() || "";
+      const name =
+        lastName || firstName
+          ? `${lastName}${lastName && firstName ? ", " : ""}${firstName}`
+          : key;
+      // Studiengang aus HIS-Zeile, falls vorhanden
+      let programCode = "";
+      for (const src of project.hisSources ?? []) {
+        const row = src.rows?.find(
+          (hr) =>
+            normalizeMatriculation(hr.matriculationNumber) === key
+        );
+        if (row && src.programCode) {
+          programCode = src.programCode;
+          break;
+        }
+      }
+      if (!programCode) {
+        const his = project.hisRows?.find(
+          (hr) => normalizeMatriculation(hr.matriculationNumber) === key
+        );
+        programCode = his?.sourceId
+          ? project.hisSources?.find((s) => s.id === his.sourceId)
+              ?.programCode ?? ""
+          : "";
+      }
       pts.push({
         x: dur,
         y: total,
         name,
+        lastName,
+        firstName,
+        matnr: key,
+        programCode: programCode || rec.manualProgramCode?.trim() || "",
         grade,
+        gradeLabel: grade.toFixed(1).replace(".", ","),
         bucket,
         color: GRADE_BUCKET_COLORS[bucket],
+        kind: "student",
       });
     }
     const reg = linearRegression(
@@ -195,42 +244,98 @@ export function DurationPointsScatterCard({
                 />
                 <Tooltip
                   cursor={chartTooltipCursor}
+                  shared={false}
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  wrapperStyle={{ zIndex: 50, outline: "none" }}
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
-                    const p = payload[0]?.payload as ScatterPoint | undefined;
-                    if (!p || p.name == null) {
-                      // regression line hover
-                      const linePt = payload[0]?.payload as {
-                        x?: number;
-                        yHat?: number;
-                      };
-                      if (linePt?.yHat != null) {
-                        return (
-                          <div className="rounded-md border bg-popover px-2 py-1.5 text-xs shadow-md">
-                            Regression:{" "}
-                            {formatDurationMinutes(linePt.x ?? null)} →{" "}
-                            {formatPoints(linePt.yHat)}
-                          </div>
-                        );
-                      }
-                      return null;
+                    // Scatter-Punkt bevorzugen (nicht Regressionslinie)
+                    const student = payload
+                      .map((item) => item.payload)
+                      .find(isStudentPoint);
+                    if (student) {
+                      return (
+                        <div className="max-w-xs rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md">
+                          <p className="font-semibold leading-tight">
+                            {student.name}
+                          </p>
+                          <dl className="mt-1.5 space-y-0.5 text-xs">
+                            <div className="flex justify-between gap-4">
+                              <dt className="text-muted-foreground">
+                                Matr.-Nr.
+                              </dt>
+                              <dd className="font-mono tabular-nums">
+                                {student.matnr}
+                              </dd>
+                            </div>
+                            {student.programCode ? (
+                              <div className="flex justify-between gap-4">
+                                <dt className="text-muted-foreground">
+                                  Studiengang
+                                </dt>
+                                <dd>{student.programCode}</dd>
+                              </div>
+                            ) : null}
+                            <div className="flex justify-between gap-4">
+                              <dt className="text-muted-foreground">Dauer</dt>
+                              <dd className="tabular-nums">
+                                {formatDurationMinutes(student.x)}
+                              </dd>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <dt className="text-muted-foreground">Punkte</dt>
+                              <dd className="tabular-nums font-medium">
+                                {formatPoints(student.y)}
+                              </dd>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <dt className="text-muted-foreground">Note</dt>
+                              <dd className="tabular-nums font-semibold">
+                                {student.gradeLabel}
+                              </dd>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 pt-0.5">
+                              <dt className="text-muted-foreground">Stufe</dt>
+                              <dd className="inline-flex items-center gap-1.5">
+                                <span
+                                  className="inline-block size-2.5 rounded-full"
+                                  style={{ backgroundColor: student.color }}
+                                />
+                                {student.bucket}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      );
                     }
-                    return (
-                      <div className="rounded-md border bg-popover px-2 py-1.5 text-xs shadow-md">
-                        <p className="font-medium">{p.name}</p>
-                        <p>
-                          Dauer: {formatDurationMinutes(p.x)} · Punkte:{" "}
-                          {formatPoints(p.y)} · Note:{" "}
-                          {p.grade.toFixed(1).replace(".", ",")}
-                        </p>
-                        <p className="text-muted-foreground">{p.bucket}</p>
-                      </div>
-                    );
+                    const linePt = payload[0]?.payload as {
+                      x?: number;
+                      yHat?: number;
+                    };
+                    if (linePt?.yHat != null && linePt.x != null) {
+                      return (
+                        <div className="rounded-md border border-border bg-popover px-2 py-1.5 text-xs text-popover-foreground shadow-md">
+                          Regression: {formatDurationMinutes(linePt.x)} →{" "}
+                          {formatPoints(linePt.yHat)} Pkt.
+                        </div>
+                      );
+                    }
+                    return null;
                   }}
                 />
-                <Scatter name="Teilnehmer" data={points} isAnimationActive={false}>
+                <Scatter
+                  name="Teilnehmer"
+                  data={points}
+                  isAnimationActive={false}
+                  fillOpacity={0.9}
+                >
                   {points.map((p, i) => (
-                    <Cell key={i} fill={p.color} />
+                    <Cell
+                      key={`${p.matnr}-${i}`}
+                      fill={p.color}
+                      stroke="var(--color-background)"
+                      strokeWidth={1}
+                    />
                   ))}
                 </Scatter>
                 {lineData.length === 2 && (
@@ -243,8 +348,11 @@ export function DurationPointsScatterCard({
                     strokeWidth={2}
                     strokeDasharray="6 4"
                     dot={false}
+                    activeDot={false}
                     isAnimationActive={false}
                     legendType="line"
+                    // Tooltip der Linie nur, wenn kein Scatter-Punkt nah ist
+                    tooltipType="none"
                   />
                 )}
               </ComposedChart>
