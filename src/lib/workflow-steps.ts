@@ -202,7 +202,11 @@ export function buildWorkflowSteps(
         : importBackupDone
           ? `Erledigt${formatMilestoneAt(
               project.workflowMilestones?.backupAfterImportAt
-            )}`
+            )}${
+              onlineStyle
+                ? " · reine Punkte-Updates erfordern keine erneute Import-Sicherung"
+                : ""
+            }`
           : "JSON-Sicherung …_nach-Import",
       critical: importsOk && !importBackupDone,
       actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",

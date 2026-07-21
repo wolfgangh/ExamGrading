@@ -1,5 +1,6 @@
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { flattenHisRows } from "@/lib/his-sources";
+import { clearStructuralBackupMilestones } from "@/lib/workflow-milestones";
 import { isOnlineStyleExam } from "@/lib/types";
 import type {
   ExamProject,
@@ -176,13 +177,13 @@ export function revertIdentityMerge(
   return {
     ok: true,
     merge: updated,
-    project: {
+    project: clearStructuralBackupMilestones({
       ...project,
       points,
       attendance,
       students,
       identityMerges: merges,
       updatedAt: new Date().toISOString(),
-    },
+    }),
   };
 }

@@ -28,7 +28,10 @@ import {
   removeHisSource,
   upsertHisSource,
 } from "@/lib/his-sources";
-import { clearWorkflowMilestonesOnImport } from "@/lib/workflow-milestones";
+import {
+  clearMilestonesOnPointsReimport,
+  clearWorkflowMilestonesOnImport,
+} from "@/lib/workflow-milestones";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import type {
   ImportLogEntry,
@@ -39,7 +42,10 @@ import type {
 import { Button } from "@/components/ui/button";
 import { exportPointsTemplate } from "@/lib/excel/export-points-template";
 import { Download, Trash2 } from "lucide-react";
-import { isHisManualAssessmentExam } from "@/lib/types";
+import {
+  isHisManualAssessmentExam,
+  isOnlineStyleExam,
+} from "@/lib/types";
 import { AddStudentForm } from "@/components/exam/add-student-form";
 
 type PreviewState = {
@@ -314,6 +320,16 @@ export default function ImportPage() {
       warnings.unshift(
         `Re-Import: bisher ${project.points.length} Punktedatensätze – Optionen im Dialog prüfen.`
       );
+      if (
+        isOnlineStyleExam(project.examType) &&
+        project.workflowMilestones?.backupAfterImportAt
+      ) {
+        warnings.unshift(
+          project.workflowMilestones?.backupAfterGradesAt
+            ? "Import-Sicherung bleibt gültig; bitte nach Noten erneut sichern (Sicherung nach Noten)."
+            : "Import-Sicherung bleibt gültig. Nach abgeschlossener Bewertung erneut „Sicherung nach Noten“."
+        );
+      }
     }
     if (result.matchStats?.length) {
       const viaLogin = result.matchStats.find((m) => m.method === "login");
@@ -394,7 +410,7 @@ export default function ImportPage() {
             nextPoints = [...byKey.values()];
           }
 
-          return clearWorkflowMilestonesOnImport({
+          const next = {
             ...prev,
             points: nextPoints,
             questionDefs:
@@ -409,7 +425,14 @@ export default function ImportPage() {
               }),
               ...prev.importLogs,
             ].slice(0, 30),
-          });
+          };
+          // THE/elektrP: reiner Punkte-Reimport invalidiert nur die
+          // Noten-Sicherung (Import-/Matching-Sicherung bleiben).
+          // Klausur u. a.: Punkte-Import strukturell → alle Meilensteine.
+          if (isOnlineStyleExam(prev.examType)) {
+            return clearMilestonesOnPointsReimport(next);
+          }
+          return clearWorkflowMilestonesOnImport(next);
         });
       },
     });

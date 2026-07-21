@@ -2,6 +2,7 @@ import { createId } from "@/lib/id";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { buildEnrichedRows } from "@/lib/matching/match";
 import { isOrphanRow } from "@/lib/matching/orphan-resolution";
+import { clearStructuralBackupMilestones } from "@/lib/workflow-milestones";
 import { isOnlineStyleExam } from "@/lib/types";
 import type { ExamProject, IdentityDismissal } from "@/lib/types";
 
@@ -97,11 +98,11 @@ export function applyIdentityDismissal(
   return {
     ok: true,
     dismissal,
-    project: {
+    project: clearStructuralBackupMilestones({
       ...project,
       identityDismissals: [...(project.identityDismissals ?? []), dismissal],
       updatedAt: new Date().toISOString(),
-    },
+    }),
   };
 }
 
@@ -183,10 +184,10 @@ export function applyIdentityDismissalBulk(
     ok: true,
     count: created.length,
     dismissals: created,
-    project: {
+    project: clearStructuralBackupMilestones({
       ...current,
       identityDismissals,
       updatedAt: new Date().toISOString(),
-    },
+    }),
   };
 }

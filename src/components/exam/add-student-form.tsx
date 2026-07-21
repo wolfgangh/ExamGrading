@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import type { ExamProject, PointsRecord, Student } from "@/lib/types";
 import { supportsStudentGroups } from "@/lib/types";
+import { clearStructuralBackupMilestones } from "@/lib/workflow-milestones";
 import { StudentGroupSelect } from "@/components/exam/student-group-select";
 import { UserPlus } from "lucide-react";
 
@@ -77,11 +78,11 @@ export function AddStudentForm({
               )
             : undefined,
       };
-      return {
+      return clearStructuralBackupMilestones({
         ...prev,
         students: { ...prev.students, [key]: student },
         points: [...prev.points, rec],
-      };
+      });
     });
     setOk(`„${student.lastName}, ${student.firstName}“ hinzugefügt.`);
     setMat("");

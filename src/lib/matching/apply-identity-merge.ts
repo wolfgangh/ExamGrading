@@ -3,6 +3,7 @@ import { flattenHisRows } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { buildEnrichedRows } from "@/lib/matching/match";
 import { computeEffectiveTotal } from "@/lib/grades/points-total";
+import { clearStructuralBackupMilestones } from "@/lib/workflow-milestones";
 import { isOnlineStyleExam } from "@/lib/types";
 import type {
   ExamProject,
@@ -315,5 +316,9 @@ export function applyIdentityMerge(
     }
   }
 
-  return { ok: true, project: next, merge };
+  return {
+    ok: true,
+    project: clearStructuralBackupMilestones(next),
+    merge,
+  };
 }

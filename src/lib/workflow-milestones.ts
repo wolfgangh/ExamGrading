@@ -135,8 +135,12 @@ export function withWorkflowMilestonesOnBackup(
   };
 }
 
-/** Nach neuem XLSX-Import: Sicherungs-Meilensteine zurücksetzen */
-export function clearWorkflowMilestonesOnImport(
+/**
+ * Strukturelle Änderungen am Personenbestand / an der Zuordnung:
+ * Antritt, HIS, manuelle Personen, Matrikel-Merge/Ablehnung.
+ * Import-, Matching- und Noten-Sicherung müssen erneut erfolgen.
+ */
+export function clearStructuralBackupMilestones(
   project: ExamProject
 ): ExamProject {
   if (
@@ -157,7 +161,27 @@ export function clearWorkflowMilestonesOnImport(
   };
 }
 
-/** Nach erneut ungeprüften Orphans: Matching-Sicherung ungültig */
+/**
+ * Nach neuem HIS-/Antritts-Import (strukturell).
+ * Alias für clearStructuralBackupMilestones.
+ */
+export function clearWorkflowMilestonesOnImport(
+  project: ExamProject
+): ExamProject {
+  return clearStructuralBackupMilestones(project);
+}
+
+/**
+ * Reiner Punkte-Reimport (Moodle/THE): Import- und Matching-Sicherung
+ * bleiben gültig; nur die Noten-Sicherung muss erneut erfolgen.
+ */
+export function clearMilestonesOnPointsReimport(
+  project: ExamProject
+): ExamProject {
+  return clearBackupAfterGradesMilestone(project);
+}
+
+/** Matching-Sicherung ungültig (ohne Import-Meilenstein) */
 export function clearBackupAfterMatchingMilestone(
   project: ExamProject
 ): ExamProject {
@@ -171,7 +195,7 @@ export function clearBackupAfterMatchingMilestone(
   };
 }
 
-/** Nach erneuter offener Bewertung: Noten-Sicherung ungültig */
+/** Noten-Sicherung ungültig (Punkte/Bewertung geändert) */
 export function clearBackupAfterGradesMilestone(
   project: ExamProject
 ): ExamProject {

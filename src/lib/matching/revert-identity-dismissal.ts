@@ -1,3 +1,4 @@
+import { clearStructuralBackupMilestones } from "@/lib/workflow-milestones";
 import { isOnlineStyleExam } from "@/lib/types";
 import type { ExamProject, IdentityDismissal } from "@/lib/types";
 
@@ -58,10 +59,10 @@ export function revertIdentityDismissal(
   return {
     ok: true,
     dismissal: updated,
-    project: {
+    project: clearStructuralBackupMilestones({
       ...project,
       identityDismissals: list,
       updatedAt: new Date().toISOString(),
-    },
+    }),
   };
 }
