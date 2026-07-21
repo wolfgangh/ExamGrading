@@ -153,7 +153,7 @@ export default function PointsPage() {
           </h1>
           <p className="text-muted-foreground">
             {isKlausur
-              ? "Gesamtpunkte und Teilgebietspunkte können hier manuell bearbeitet werden (auch ohne erneuten Vorlage-Import)."
+              ? "Gesamtpunkte und Teilgebietspunkte manuell bearbeiten (Dezimaltrenner: Komma oder Punkt, je nach Tastatur/System). Vorlage-Import bleibt optional."
               : "Gesamtpunkte sind berechnet und nicht editierbar. Detailpunkte (Aufgaben) in der Detailansicht oder per THE-Import."}
           </p>
         </div>

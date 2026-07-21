@@ -43,6 +43,45 @@ export {
   isLikelyTeamsOrIframeEmbed,
 } from "@/lib/download";
 
+/**
+ * Zahl aus Eingabe mit Komma oder Punkt als Dezimaltrenner.
+ * Akzeptiert z. B. „12,5“, „12.5“, „1.234,5“ (DE) bzw. „1,234.5“ (EN).
+ */
+export function parseLocaleNumber(raw: string): number | null {
+  let s = raw.trim().replace(/\s/g, "").replace(/\u00a0/g, "");
+  if (!s) return null;
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+  if (hasComma && hasDot) {
+    const lastComma = s.lastIndexOf(",");
+    const lastDot = s.lastIndexOf(".");
+    if (lastComma > lastDot) {
+      // 1.234,5 → Tausenderpunkt, Dezimalkomma
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      // 1,234.5 → Tausenderkomma, Dezimalpunkt
+      s = s.replace(/,/g, "");
+    }
+  } else if (hasComma) {
+    s = s.replace(",", ".");
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Anzeige mit Dezimaltrenner der Browser-Locale (Fallback: Komma). */
+export function formatEditableNumber(
+  value: number | null | undefined
+): string {
+  if (value == null || Number.isNaN(value)) return "";
+  if (Number.isInteger(value)) return String(value);
+  const sep =
+    typeof Intl !== "undefined"
+      ? (1.1).toLocaleString(undefined).replace(/\d/g, "").charAt(0) || ","
+      : ",";
+  return String(value).replace(".", sep);
+}
+
 export function formatGrade(grade: number | null | undefined): string {
   if (grade == null || Number.isNaN(grade)) return "–";
   return grade.toFixed(1).replace(".", ",");

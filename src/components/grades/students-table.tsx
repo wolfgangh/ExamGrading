@@ -40,7 +40,14 @@ import {
   type EnrichedStudentRow,
   type StudentStatus,
 } from "@/lib/types";
-import { cn, formatGrade, formatPercent, formatPoints } from "@/lib/utils";
+import {
+  cn,
+  formatEditableNumber,
+  formatGrade,
+  formatPercent,
+  formatPoints,
+  parseLocaleNumber,
+} from "@/lib/utils";
 import { ChevronDown, ClipboardCopy } from "lucide-react";
 
 /** Multi-Filter: leeres Set = alle Noten; "none" = ohne Note */
@@ -332,20 +339,19 @@ export function StudentsTable({
           if (editable && onEditTotalPoints) {
             return (
               <Input
-                type="number"
-                step="0.5"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 className="h-7 w-[4.5rem] text-center tabular-nums"
-                defaultValue={val ?? ""}
+                defaultValue={formatEditableNumber(val)}
                 key={`total-${row.original.key}-${val ?? "x"}`}
                 placeholder="–"
-                title="Gesamtpunkte bearbeiten"
+                title="Gesamtpunkte (Komma oder Punkt als Dezimaltrenner)"
                 onBlur={(e) => {
                   const raw = e.target.value.trim();
-                  const num =
-                    raw === "" ? null : Number(raw.replace(",", "."));
                   onEditTotalPoints(
                     row.original.key,
-                    num != null && Number.isFinite(num) ? num : null
+                    raw === "" ? null : parseLocaleNumber(raw)
                   );
                 }}
               />
@@ -422,17 +428,20 @@ export function StudentsTable({
           if (editable && onEditPoints) {
             return (
               <Input
-                type="number"
-                step="0.5"
-                className="h-7 w-20"
-                defaultValue={val ?? ""}
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                className="h-7 w-20 text-center tabular-nums"
+                defaultValue={formatEditableNumber(val)}
+                key={`sa-${row.original.key}-${saId}-${val ?? "x"}`}
+                placeholder="–"
+                title="Teilgebietspunkte (Komma oder Punkt als Dezimaltrenner)"
                 onBlur={(e) => {
                   const raw = e.target.value.trim();
-                  const num = raw === "" ? null : Number(raw.replace(",", "."));
                   onEditPoints(
                     row.original.key,
                     saId,
-                    num != null && Number.isFinite(num) ? num : null
+                    raw === "" ? null : parseLocaleNumber(raw)
                   );
                 }}
               />
