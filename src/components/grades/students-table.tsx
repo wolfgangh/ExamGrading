@@ -450,6 +450,7 @@ export function StudentsTable({
     editable,
     onEditGrade,
     onEditPoints,
+    onEditTotalPoints,
     subAreaNames,
     showNextGrade,
   ]);
