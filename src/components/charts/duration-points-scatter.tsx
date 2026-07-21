@@ -207,8 +207,9 @@ export function DurationPointsScatterCard({
                 <Tooltip
                   cursor={chartTooltipCursor}
                   shared={false}
-                  allowEscapeViewBox={{ x: false, y: true }}
-                  offset={14}
+                  // im Chart halten; zusätzliches Spiegeln bei Rand-Hover
+                  allowEscapeViewBox={{ x: false, y: false }}
+                  offset={12}
                   wrapperStyle={{
                     zIndex: 50,
                     outline: "none",
@@ -222,8 +223,16 @@ export function DurationPointsScatterCard({
                       .find(isStudentPoint);
 
                     const chartW = chartAreaRef.current?.clientWidth ?? 400;
+                    const chartH = chartAreaRef.current?.clientHeight ?? 320;
                     const cx = coordinate?.x ?? 0;
+                    const cy = coordinate?.y ?? 0;
+                    // rechts / unten: Tooltip zur freien Seite spiegeln
+                    // (Student-Tooltip ist hoch → früher nach oben klappen)
                     const flipLeft = cx > chartW * 0.52;
+                    const flipUp = cy > chartH * 0.42;
+                    const tipTransform = `translate(${
+                      flipLeft ? "calc(-100% - 8px)" : "0"
+                    }, ${flipUp ? "calc(-100% - 8px)" : "0"})`;
 
                     if (student) {
                       return (
@@ -231,9 +240,7 @@ export function DurationPointsScatterCard({
                           className="rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md"
                           style={{
                             maxWidth: "min(18rem, 70vw)",
-                            transform: flipLeft
-                              ? "translateX(calc(-100% - 8px))"
-                              : "translateX(0)",
+                            transform: tipTransform,
                           }}
                         >
                           <p className="font-semibold leading-tight text-[0.95em]">
@@ -303,11 +310,7 @@ export function DurationPointsScatterCard({
                       return (
                         <div
                           className="rounded-md border border-border bg-popover px-2 py-1.5 text-[0.85em] text-popover-foreground shadow-md"
-                          style={{
-                            transform: flipLeft
-                              ? "translateX(calc(-100% - 8px))"
-                              : undefined,
-                          }}
+                          style={{ transform: tipTransform }}
                         >
                           Regression: {formatDurationMinutes(linePt.x)} →{" "}
                           {yMode === "percent"
