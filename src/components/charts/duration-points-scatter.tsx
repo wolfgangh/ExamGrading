@@ -156,11 +156,11 @@ export function DurationPointsScatterCard({
           }`}
           description={`Regression Dauer → ${yAxisLabel} · Farbe nach Notenstufe`}
           filenameBase={fileBase}
-          chartClassName="h-[min(58vh,480px)]"
+          chartClassName="h-[min(58vh,520px)]"
         >
           <div
             ref={chartAreaRef}
-            className="relative h-80 w-full min-w-0 overflow-hidden"
+            className="relative h-72 w-full min-w-0 overflow-hidden sm:h-80"
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart

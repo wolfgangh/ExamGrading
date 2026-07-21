@@ -362,10 +362,14 @@ export default function DetailPointsPage() {
       </Card>
 
       {isOnlineStyleExam(project.examType) && (
-        <>
-          <DurationHistogramCard project={effectiveProject} />
-          <DurationPointsScatterCard project={effectiveProject} />
-        </>
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-5">
+          <div className="min-w-0 xl:col-span-2">
+            <DurationHistogramCard project={effectiveProject} />
+          </div>
+          <div className="min-w-0 xl:col-span-3">
+            <DurationPointsScatterCard project={effectiveProject} />
+          </div>
+        </div>
       )}
     </div>
   );

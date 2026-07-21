@@ -128,9 +128,9 @@ export function DurationHistogramCard({
           title="Histogramm Bearbeitungsdauer"
           description={`n = ${n}`}
           filenameBase={`ExamGrade_${project.name || "Pruefung"}_Dauer_Histogramm`}
-          chartClassName="h-[min(50vh,400px)]"
+          chartClassName="h-[min(48vh,380px)]"
         >
-          <div className="h-72 w-full min-w-0">
+          <div className="h-72 w-full min-w-0 sm:h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={bins}
