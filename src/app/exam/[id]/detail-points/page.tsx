@@ -8,6 +8,7 @@ import { PointsMatrix } from "@/components/points/points-matrix";
 import { QuestionSubareaMapper } from "@/components/points/question-subarea-mapper";
 import { QuestionStatsPanel } from "@/components/points/question-stats-panel";
 import { DurationPointsScatterCard } from "@/components/charts/duration-points-scatter";
+import { DurationHistogramCard } from "@/components/charts/duration-histogram-chart";
 import { isOnlineStyleExam } from "@/lib/types";
 import {
   computeQuestionStats,
@@ -361,7 +362,10 @@ export default function DetailPointsPage() {
       </Card>
 
       {isOnlineStyleExam(project.examType) && (
-        <DurationPointsScatterCard project={effectiveProject} />
+        <>
+          <DurationHistogramCard project={effectiveProject} />
+          <DurationPointsScatterCard project={effectiveProject} />
+        </>
       )}
     </div>
   );

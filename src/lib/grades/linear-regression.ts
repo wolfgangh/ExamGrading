@@ -1,9 +1,14 @@
 /**
- * Einfache OLS-Regression y = a + b·x mit t-Test und zweiseitigem p-Wert für die Steigung.
+ * Einfache OLS-Regression y = a + b·x mit t-Test und zweiseitigem p-Wert
+ * für Achsenabschnitt und Steigung.
  */
 
 export type LinearRegressionResult = {
   n: number;
+  /** Mittelwert der x-Werte */
+  meanX: number;
+  /** Mittelwert der y-Werte */
+  meanY: number;
   /** Achsenabschnitt a */
   intercept: number;
   /** Steigung b (dy/dx) */
@@ -12,12 +17,20 @@ export type LinearRegressionResult = {
   rSquared: number;
   /** Pearson r */
   r: number;
+  /** Residual-Standardfehler s = √(SSE / df) */
+  residualSe: number;
+  /** Standardfehler des Achsenabschnitts */
+  seIntercept: number;
   /** Standardfehler der Steigung */
   seSlope: number;
-  /** t-Statistik der Steigung */
+  /** t-Statistik des Achsenabschnitts (H₀: a = 0) */
+  tStatIntercept: number;
+  /** t-Statistik der Steigung (H₀: b = 0) */
   tStat: number;
   /** Freiheitsgrade n−2 */
   df: number;
+  /** zweiseitiger p-Wert des Achsenabschnitts */
+  pValueIntercept: number;
   /** zweiseitiger p-Wert der Steigung */
   pValue: number;
   /** Vorhersage ŷ = a + b·x */
@@ -156,22 +169,36 @@ export function linearRegression(
   }
   const df = m - 2;
   const mse = df > 0 ? sse / df : 0;
+  const residualSe = Math.sqrt(mse);
   const seSlope = Math.sqrt(mse / sxx);
+  const seIntercept = Math.sqrt(mse * (1 / m + (meanX * meanX) / sxx));
   const tStat = seSlope > 1e-18 ? slope / seSlope : 0;
+  const tStatIntercept =
+    seIntercept > 1e-18 ? intercept / seIntercept : 0;
   const pValue =
     df > 0 && seSlope > 1e-18
       ? studentTPvalueTwoTailed(Math.abs(tStat), df)
       : 1;
+  const pValueIntercept =
+    df > 0 && seIntercept > 1e-18
+      ? studentTPvalueTwoTailed(Math.abs(tStatIntercept), df)
+      : 1;
 
   return {
     n: m,
+    meanX,
+    meanY,
     intercept,
     slope,
     rSquared,
     r,
+    residualSe,
+    seIntercept,
     seSlope,
+    tStatIntercept,
     tStat,
     df,
+    pValueIntercept,
     pValue,
     predict: (x: number) => intercept + slope * x,
   };

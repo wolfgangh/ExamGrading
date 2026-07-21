@@ -8,6 +8,14 @@ import {
   formatShareDe,
 } from "@/lib/grades/notenspiegel";
 import { renderGradeDistributionChartPng } from "@/lib/charts/grade-distribution-export-chart";
+import { renderDurationPointsScatterPng } from "@/lib/charts/duration-points-export-chart";
+import {
+  buildDurationPointsAnalysis,
+  regressionCoefficientRows,
+  regressionFitRows,
+  regressionModelFormulaText,
+} from "@/lib/grades/duration-points-analysis";
+import { isOnlineStyleExam } from "@/lib/types";
 import {
   autoTable,
   getLastTableY,
@@ -295,6 +303,191 @@ export function exportNotenspiegelPdf(
       margin: { left: PDF_MARGIN, right: PDF_MARGIN },
     });
     y = getLastTableY(doc, y) + 10;
+  }
+
+  // Dauer / Regression (THE/Moodle mit Dauerspalte)
+  if (isOnlineStyleExam(project.examType)) {
+    const durationAnalysis = buildDurationPointsAnalysis(project, "points");
+    if (durationAnalysis.available) {
+      doc.addPage();
+      y = PDF_MARGIN + 16;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(
+        pdfText("Bearbeitungsdauer und Punkte"),
+        PDF_MARGIN,
+        y
+      );
+      y += 5;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(80);
+      doc.text(
+        pdfText(
+          `Scatterplot: Dauer (x) gegen Punkte (y), Farbe = Notenstufe. n = ${durationAnalysis.nWithDuration}`
+        ),
+        PDF_MARGIN,
+        y
+      );
+      doc.setTextColor(0);
+      y += 4;
+
+      const scatterPng = renderDurationPointsScatterPng(durationAnalysis, {
+        width: 1400,
+        height: 620,
+        scale: 2.5,
+      });
+      const scatterH = 78;
+      if (scatterPng) {
+        try {
+          doc.addImage(
+            scatterPng,
+            "PNG",
+            PDF_MARGIN,
+            y,
+            PDF_CONTENT_WIDTH,
+            scatterH
+          );
+        } catch {
+          doc.setFontSize(9);
+          doc.text(
+            pdfText("(Scatterplot konnte nicht eingebettet werden)"),
+            PDF_MARGIN,
+            y + 10
+          );
+        }
+        y += scatterH + 8;
+      }
+
+      if (durationAnalysis.regression) {
+        const reg = durationAnalysis.regression;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text(pdfText("Lineare Regression"), PDF_MARGIN, y);
+        y += 5;
+
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(9);
+        doc.setTextColor(40);
+        const formulaLines = doc.splitTextToSize(
+          pdfText(
+            regressionModelFormulaText(
+              durationAnalysis.yMode,
+              durationAnalysis.maxPoints
+            )
+          ),
+          PDF_CONTENT_WIDTH
+        ) as string[];
+        doc.text(formulaLines, PDF_MARGIN, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(0);
+        y += formulaLines.length * 4 + 3;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(pdfText("Koeffizienten"), PDF_MARGIN, y);
+        y += 2;
+
+        const coefBody = regressionCoefficientRows(reg, {
+          yUnitShort: durationAnalysis.yUnitShort,
+          slopeUnit: durationAnalysis.slopeUnit,
+          yMode: durationAnalysis.yMode,
+        }).map((r) => [
+          pdfText(r.name),
+          pdfText(r.symbol),
+          pdfText(r.value),
+          pdfText(r.unit),
+          pdfText(r.se),
+          pdfText(r.t),
+          pdfText(r.pValue),
+        ]);
+
+        autoTable(doc, {
+          startY: y,
+          head: [["Name", "Symbol", "Wert", "Einheit", "SE", "t", "p-Wert"]],
+          body: coefBody,
+          styles: { font: "helvetica", fontSize: 8, cellPadding: 1.4 },
+          headStyles: {
+            fillColor: [68, 112, 153],
+            textColor: 255,
+            fontStyle: "bold",
+          },
+          alternateRowStyles: { fillColor: [245, 247, 250] },
+          columnStyles: {
+            2: { halign: "right" },
+            4: { halign: "right" },
+            5: { halign: "right" },
+            6: { halign: "right" },
+          },
+          margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+        });
+        y = getLastTableY(doc, y) + 6;
+
+        if (y > 240) {
+          doc.addPage();
+          y = PDF_MARGIN + 16;
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(pdfText("Guetemasse und Stichprobe"), PDF_MARGIN, y);
+        y += 2;
+
+        const fitBody = regressionFitRows(reg).map((r) => [
+          pdfText(r.name),
+          pdfText(r.symbol),
+          pdfText(r.value),
+          pdfText(r.note ?? ""),
+        ]);
+
+        autoTable(doc, {
+          startY: y,
+          head: [["Name", "Symbol", "Wert", "Hinweis"]],
+          body: fitBody,
+          styles: { font: "helvetica", fontSize: 8, cellPadding: 1.4 },
+          headStyles: {
+            fillColor: [68, 112, 153],
+            textColor: 255,
+            fontStyle: "bold",
+          },
+          alternateRowStyles: { fillColor: [245, 247, 250] },
+          columnStyles: {
+            2: { halign: "right", cellWidth: 28 },
+          },
+          margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+        });
+        y = getLastTableY(doc, y) + 6;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(90);
+        const noteLines = doc.splitTextToSize(
+          pdfText(
+            "OLS-Schaetzung; p-Werte zweiseitig (Student-t, H0: Koeffizient = 0). " +
+              "SE = Standardfehler. R2 = Bestimmtheitsmass."
+          ),
+          PDF_CONTENT_WIDTH
+        ) as string[];
+        doc.text(noteLines, PDF_MARGIN, y);
+        doc.setTextColor(0);
+        y += noteLines.length * 3.2 + 4;
+      } else {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(80);
+        doc.text(
+          pdfText(
+            "Fuer die Regression werden mindestens 3 Personen mit Dauer und Punkten benoetigt."
+          ),
+          PDF_MARGIN,
+          y
+        );
+        doc.setTextColor(0);
+        y += 8;
+      }
+    }
   }
 
   const finalY = y;

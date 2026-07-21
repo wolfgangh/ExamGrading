@@ -6,11 +6,19 @@ import {
   dataUrlToUint8Array,
   renderGradeDistributionChartPng,
 } from "@/lib/charts/grade-distribution-export-chart";
+import { renderDurationPointsScatterPng } from "@/lib/charts/duration-points-export-chart";
+import {
+  buildDurationPointsAnalysis,
+  regressionCoefficientRows,
+  regressionFitRows,
+  regressionModelFormulaText,
+} from "@/lib/grades/duration-points-analysis";
 import type {
   EnrichedStudentRow,
   ExamProject,
   ExamStatistics,
 } from "@/lib/types";
+import { isOnlineStyleExam } from "@/lib/types";
 import { downloadBlob } from "@/lib/download";
 import { datedExportFilename, formatGrade } from "@/lib/utils";
 
@@ -215,6 +223,110 @@ export async function exportNotenspiegelExcel(
     wsChart.getCell(r, 4).numFmt = "0.0%";
     wsChart.getCell(r, 5).value = g.bucket;
     r++;
+  }
+
+  // Dauer / Regression (THE/Moodle)
+  if (isOnlineStyleExam(project.examType)) {
+    const durationAnalysis = buildDurationPointsAnalysis(project, "points");
+    if (durationAnalysis.available) {
+      const wsDur = wb.addWorksheet("Dauer_Regression", {
+        properties: { defaultColWidth: 16 },
+      });
+      wsDur.getColumn(1).width = 28;
+      wsDur.getColumn(2).width = 14;
+      wsDur.getColumn(3).width = 14;
+      wsDur.getColumn(4).width = 14;
+      wsDur.getColumn(5).width = 12;
+      wsDur.getColumn(6).width = 12;
+      wsDur.getColumn(7).width = 12;
+
+      let dr = 1;
+      wsDur.getCell(dr, 1).value = "Bearbeitungsdauer und Punkte";
+      wsDur.getCell(dr, 1).font = { bold: true, size: 14 };
+      dr += 1;
+      wsDur.getCell(dr, 1).value =
+        `Scatterplot: Dauer (x) gegen Punkte (y). n = ${durationAnalysis.nWithDuration}`;
+      wsDur.getCell(dr, 1).font = { italic: true, size: 10 };
+      dr += 2;
+
+      const scatterPng = renderDurationPointsScatterPng(durationAnalysis, {
+        width: 1200,
+        height: 540,
+        scale: 2,
+      });
+      if (scatterPng) {
+        const scatterBytes = dataUrlToUint8Array(scatterPng);
+        const scatterId = wb.addImage({
+          buffer: scatterBytes as unknown as ArrayBuffer,
+          extension: "png",
+        });
+        wsDur.addImage(scatterId, {
+          tl: { col: 0, row: dr - 1 },
+          ext: { width: 640, height: 300 },
+        });
+        dr += 18;
+      }
+
+      if (durationAnalysis.regression) {
+        const reg = durationAnalysis.regression;
+        wsDur.getCell(dr, 1).value = "Lineare Regression";
+        wsDur.getCell(dr, 1).font = { bold: true, size: 12 };
+        dr += 1;
+        wsDur.getCell(dr, 1).value = regressionModelFormulaText(
+          durationAnalysis.yMode,
+          durationAnalysis.maxPoints
+        );
+        wsDur.getCell(dr, 1).font = { italic: true, size: 10 };
+        dr += 2;
+
+        wsDur.getCell(dr, 1).value = "Koeffizienten";
+        wsDur.getCell(dr, 1).font = { bold: true, size: 11 };
+        dr += 1;
+        ["Name", "Symbol", "Wert", "Einheit", "SE", "t", "p-Wert"].forEach(
+          (h, i) => {
+            wsDur.getCell(dr, i + 1).value = h;
+            wsDur.getCell(dr, i + 1).font = { bold: true };
+          }
+        );
+        dr += 1;
+        for (const row of regressionCoefficientRows(reg, {
+          yUnitShort: durationAnalysis.yUnitShort,
+          slopeUnit: durationAnalysis.slopeUnit,
+          yMode: durationAnalysis.yMode,
+        })) {
+          wsDur.getCell(dr, 1).value = row.name;
+          wsDur.getCell(dr, 2).value = row.symbol;
+          wsDur.getCell(dr, 3).value = row.value;
+          wsDur.getCell(dr, 4).value = row.unit;
+          wsDur.getCell(dr, 5).value = row.se;
+          wsDur.getCell(dr, 6).value = row.t;
+          wsDur.getCell(dr, 7).value = row.pValue;
+          dr += 1;
+        }
+
+        dr += 1;
+        wsDur.getCell(dr, 1).value = "Gütemaße und Stichprobe";
+        wsDur.getCell(dr, 1).font = { bold: true, size: 11 };
+        dr += 1;
+        ["Name", "Symbol", "Wert", "Hinweis"].forEach((h, i) => {
+          wsDur.getCell(dr, i + 1).value = h;
+          wsDur.getCell(dr, i + 1).font = { bold: true };
+        });
+        dr += 1;
+        for (const row of regressionFitRows(reg)) {
+          wsDur.getCell(dr, 1).value = row.name;
+          wsDur.getCell(dr, 2).value = row.symbol;
+          wsDur.getCell(dr, 3).value = row.value;
+          wsDur.getCell(dr, 4).value = row.note ?? "";
+          dr += 1;
+        }
+
+        dr += 1;
+        wsDur.getCell(dr, 1).value =
+          "OLS-Schätzung; p-Werte zweiseitig (Student-t, H0: Koeffizient = 0).";
+        wsDur.getCell(dr, 1).font = { italic: true, size: 9, color: { argb: "FF555555" } };
+      }
+    }
   }
 
   const buffer = await wb.xlsx.writeBuffer();
