@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +63,8 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     emptySubAreaRow(),
   ]);
   const [nameError, setNameError] = useState<string | null>(null);
+  /** Pflicht: lokale Speicherung / Sicherungsrisiko verstanden */
+  const [dataAck, setDataAck] = useState(false);
 
   const totalMax = useMemo(
     () => subAreas.reduce((s, sa) => s + (Number(sa.maxPoints) || 0), 0),
@@ -76,6 +79,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     setLecturers([DEFAULT_LECTURER]);
     setSubAreas([emptySubAreaRow()]);
     setNameError(null);
+    setDataAck(false);
   };
 
   const applyNameAndSubAreas = (raw: string) => {
@@ -118,6 +122,12 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     }
     if (subAreas.length === 0 || totalMax <= 0) {
       setNameError("Bitte mindestens ein Teilgebiet mit Punkten angeben");
+      return;
+    }
+    if (!dataAck) {
+      setNameError(
+        "Bitte den Hinweis zur lokalen Speicherung bestätigen."
+      );
       return;
     }
     setNameError(null);
@@ -331,6 +341,58 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
             </div>
           </div>
 
+          <div
+            className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm"
+            role="note"
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle
+                className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400"
+                aria-hidden
+              />
+              <div className="min-w-0 space-y-1.5">
+                <p className="font-medium text-amber-950 dark:text-amber-100">
+                  Lokale Datenspeicherung
+                </p>
+                <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-amber-950/90 dark:text-amber-50/90">
+                  <li>
+                    Alle Prüfungsdaten liegen <strong>nur in diesem Browser</strong>{" "}
+                    (lokal, kein Server). Es gibt keine automatische
+                    Cloud-Sicherung.
+                  </li>
+                  <li>
+                    Bitte in den Workflow-Schritten{" "}
+                    <strong>Sicherung nach Import</strong> und{" "}
+                    <strong>Sicherung nach Noten</strong> die JSON-Projektsicherung
+                    herunterladen und sicher ablegen.
+                  </li>
+                  <li>
+                    <strong>Ohne Sicherung gehen die Daten verloren</strong>, wenn
+                    der Browser geschlossen, der Speicher geleert oder die App in
+                    einem anderen Browser bzw. auf einem anderen Gerät geöffnet
+                    wird.
+                  </li>
+                </ul>
+                <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-md border border-amber-500/30 bg-background/60 px-2.5 py-2">
+                  <Checkbox
+                    checked={dataAck}
+                    onCheckedChange={(v) => {
+                      setDataAck(v === true);
+                      if (v === true) setNameError(null);
+                    }}
+                    className="mt-0.5"
+                    aria-required
+                  />
+                  <span className="text-xs leading-snug text-foreground">
+                    Ich habe verstanden: Die Daten existieren nur lokal im
+                    Browser und müssen gesichert werden; ohne Sicherung droht
+                    Datenverlust (z. B. beim Schließen des Browsers).
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
           <DialogFooter>
             <Button
               type="button"
@@ -339,7 +401,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
             >
               Abbrechen
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || !dataAck}>
               {saving ? "Speichern…" : "Anlegen"}
             </Button>
           </DialogFooter>
