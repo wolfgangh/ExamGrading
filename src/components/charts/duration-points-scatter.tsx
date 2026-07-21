@@ -76,6 +76,42 @@ export function DurationPointsScatterCard({
     [project, yMode]
   );
 
+  // Feste Achsen-Domains aus aktuellen Daten – verhindert, dass Recharts nach
+  // Y-Modus-Wechsel Hover-Hitboxen und Skalen auseinanderlaufen.
+  const { xDomain, yDomain } = useMemo(() => {
+    const { points: pts, lineData: line } = analysis;
+    if (pts.length === 0) {
+      return {
+        xDomain: [0, 1] as [number, number],
+        yDomain: [0, 1] as [number, number],
+      };
+    }
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    for (const l of line) {
+      if (Number.isFinite(l.yHat)) ys.push(l.yHat);
+    }
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const padX = (maxX - minX) * 0.05 || 1;
+    if (yMode === "percent") {
+      return {
+        xDomain: [minX - padX, maxX + padX] as [number, number],
+        yDomain: [0, Math.max(100, maxY * 1.05)] as [number, number],
+      };
+    }
+    const padY = (maxY - minY) * 0.08 || 1;
+    return {
+      xDomain: [minX - padX, maxX + padX] as [number, number],
+      yDomain: [
+        Math.max(0, minY - padY),
+        maxY + padY,
+      ] as [number, number],
+    };
+  }, [analysis, yMode]);
+
   if (!online) return null;
 
   const {
@@ -162,8 +198,14 @@ export function DurationPointsScatterCard({
             ref={chartAreaRef}
             className="relative h-72 w-full min-w-0 overflow-hidden sm:h-80"
           >
-            <ResponsiveContainer width="100%" height="100%">
+            {/* key erzwingt Remount bei Y-Modus-Wechsel (Hover-Skala neu) */}
+            <ResponsiveContainer
+              key={`scatter-rc-${yMode}`}
+              width="100%"
+              height="100%"
+            >
               <ComposedChart
+                key={`scatter-chart-${yMode}`}
                 margin={{ top: 12, right: 20, left: 8, bottom: 28 }}
               >
                 <CartesianGrid
@@ -174,6 +216,8 @@ export function DurationPointsScatterCard({
                   type="number"
                   dataKey="x"
                   name="Dauer"
+                  domain={xDomain}
+                  allowDataOverflow={false}
                   tick={{ fontSize: TICK_FS }}
                   label={{
                     value: "Bearbeitungsdauer (min)",
@@ -186,11 +230,8 @@ export function DurationPointsScatterCard({
                   type="number"
                   dataKey="y"
                   name={yMode === "percent" ? "Prozent" : "Punkte"}
-                  domain={
-                    yMode === "percent"
-                      ? [0, (dataMax: number) => Math.max(100, dataMax)]
-                      : ["auto", "auto"]
-                  }
+                  domain={yDomain}
+                  allowDataOverflow={false}
                   tick={{ fontSize: TICK_FS }}
                   tickFormatter={(v) =>
                     yMode === "percent"
@@ -323,6 +364,7 @@ export function DurationPointsScatterCard({
                   }}
                 />
                 <Scatter
+                  key={`scatter-pts-${yMode}`}
                   name="Teilnehmer"
                   data={points}
                   isAnimationActive={false}
@@ -330,7 +372,7 @@ export function DurationPointsScatterCard({
                 >
                   {points.map((p, i) => (
                     <Cell
-                      key={`${p.matnr}-${i}`}
+                      key={`${yMode}-${p.matnr}-${i}`}
                       fill={p.color}
                       stroke="var(--color-background)"
                       strokeWidth={1}
@@ -339,6 +381,7 @@ export function DurationPointsScatterCard({
                 </Scatter>
                 {lineData.length === 2 && (
                   <Line
+                    key={`scatter-line-${yMode}`}
                     name="Regression"
                     data={lineData}
                     dataKey="yHat"
