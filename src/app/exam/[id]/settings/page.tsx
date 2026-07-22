@@ -148,18 +148,10 @@ export default function SettingsPage() {
     });
   };
 
-  return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Einstellungen
-        </h1>
-        <p className="text-muted-foreground">
-          Metadaten, Teilgebiete und Notenschema (analog Excel „Definitionen“ /
-          „Notenszenarien“).
-        </p>
-      </div>
+  const showScenariosCard =
+    !isStaManualExam(project.examType) && !isPortfolio;
 
+  const metaCard = (
       <Card className="surface-panel">
         <CardHeader>
           <CardTitle className="text-base">Prüfungsmetadaten</CardTitle>
@@ -218,6 +210,85 @@ export default function SettingsPage() {
           />
         </CardContent>
       </Card>
+  );
+
+  const scenariosCard = showScenariosCard ? (
+      <Card className="surface-panel">
+        <CardHeader>
+          <CardTitle className="text-base">Notenszenarien</CardTitle>
+          <CardDescription>
+            {isStaCrit
+              ? "Notenschlüssel für den berechneten Gesamtwert der Kriterien. "
+              : "Szenarien 45 / 40 / frei – Vergleich und aktives Szenario unter Notenszenarien. "}
+            Aktive Bestehensgrenze: {project.gradeSchema.passThreshold} Punkte.
+            {gradingLocked && (
+              <>
+                {" "}
+                Notenschlüssel derzeit gesperrt: {openGradingSummary(project)}.
+              </>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Link
+            href={`/exam/${id}/scenarios`}
+            className={cn(buttonVariants())}
+          >
+            Notenszenarien öffnen
+          </Link>
+          <div className="overflow-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Note (aktiv)</TableHead>
+                  <TableHead>ab Punkte</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...project.gradeSchema.thresholds]
+                  .sort((a, b) => a.grade - b.grade)
+                  .map((t) => (
+                    <TableRow key={t.grade}>
+                      <TableCell className="font-medium">
+                        {formatGrade(t.grade)}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {t.minPoints}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+  ) : null;
+
+  return (
+    <div
+      className={cn(
+        "mx-auto space-y-6",
+        isStaCrit || isPortfolio ? "max-w-5xl" : "max-w-3xl"
+      )}
+    >
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Einstellungen
+        </h1>
+        <p className="text-muted-foreground">
+          Metadaten, Teilgebiete und Notenschema (analog Excel „Definitionen“ /
+          „Notenszenarien“).
+        </p>
+      </div>
+
+      {isStaCrit ? (
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          {metaCard}
+          {scenariosCard}
+        </div>
+      ) : (
+        metaCard
+      )}
 
       {isOnlineStyleExam(project.examType) && (
         <Card className="surface-panel">
@@ -553,13 +624,54 @@ export default function SettingsPage() {
           <CardContent className="space-y-3">
             <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 space-y-0.5">
+                <Label htmlFor="portfolio-criteria-mode" className="text-sm">
+                  Teilleistungen über Kriterien bewerten
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Pro Teilleistung gewichtete Kriterien (Prozent, Punkte oder
+                  Note) → berechnete Teilnote. Kombinierbar mit „je Dozent“.
+                  Standard: aus (direkte Teilnote).
+                </p>
+              </div>
+              <Switch
+                id="portfolio-criteria-mode"
+                checked={project.portfolioCriteriaMode === true}
+                onCheckedChange={(on) =>
+                  setProject((prev) => ({
+                    ...prev,
+                    portfolioCriteriaMode: on,
+                    portfolioComponents: (prev.portfolioComponents ?? []).map(
+                      (pc) =>
+                        on && !(pc.criteria?.length)
+                          ? {
+                              ...pc,
+                              criteria: [
+                                {
+                                  id: createId("crit"),
+                                  name: "Inhalt",
+                                  code: "K1",
+                                  weight: 1,
+                                  scale: "percent" as CriterionScale,
+                                  maxPoints: 100,
+                                },
+                              ],
+                            }
+                          : pc
+                    ),
+                  }))
+                }
+              />
+            </div>
+            <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-0.5">
                 <Label htmlFor="portfolio-per-lecturer" className="text-sm">
                   Teilnoten je Dozent (Gleichgewichtung)
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Jeder Dozent vergibt Noten pro Teilleistung. Die Teilnote ist
-                  das Mittel über alle Dozenten; danach gewichtete Gesamtnote
-                  wie bisher. Standard: aus.
+                  {project.portfolioCriteriaMode
+                    ? "Jeder Dozent füllt die Kriterien pro Teilleistung; Teilnote = Mittel der Dozenten-Noten."
+                    : "Jeder Dozent vergibt Noten pro Teilleistung. Die Teilnote ist das Mittel über alle Dozenten."}{" "}
+                  Standard: aus.
                 </p>
                 {(project.lecturers ?? []).length === 0 && (
                   <p className="text-xs text-amber-800 dark:text-amber-200">
@@ -587,8 +699,9 @@ export default function SettingsPage() {
               (project.portfolioComponents ?? []).map((c) => (
                 <div
                   key={c.id}
-                  className="grid grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_5rem_5rem_auto]"
+                  className="space-y-3 rounded-lg border p-3"
                 >
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_5rem_5rem_auto]">
                   <div className="grid gap-1">
                     <Label className="text-xs">Bezeichnung</Label>
                     <Input
@@ -640,6 +753,247 @@ export default function SettingsPage() {
                   >
                     <Trash2 className="size-4" />
                   </Button>
+                </div>
+                {project.portfolioCriteriaMode && (
+                  <div className="space-y-2 border-t pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Kriterien für {c.code || c.name}
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setProject((prev) => ({
+                            ...prev,
+                            portfolioComponents: (
+                              prev.portfolioComponents ?? []
+                            ).map((pc) =>
+                              pc.id === c.id
+                                ? {
+                                    ...pc,
+                                    criteria: [
+                                      ...(pc.criteria ?? []),
+                                      {
+                                        id: createId("crit"),
+                                        name: "Kriterium",
+                                        code: `K${(pc.criteria?.length ?? 0) + 1}`,
+                                        weight: 1,
+                                        scale: "percent" as CriterionScale,
+                                        maxPoints: 100,
+                                      },
+                                    ],
+                                  }
+                                : pc
+                            ),
+                          }))
+                        }
+                      >
+                        <Plus className="size-3.5" />
+                        Kriterium
+                      </Button>
+                    </div>
+                    {(c.criteria ?? []).length === 0 ? (
+                      <p className="text-xs text-amber-800 dark:text-amber-200">
+                        Noch keine Kriterien – bitte hinzufügen.
+                      </p>
+                    ) : (
+                      (c.criteria ?? []).map((crit) => (
+                        <div
+                          key={crit.id}
+                          className="grid grid-cols-1 gap-2 rounded-md border bg-muted/20 p-2 sm:grid-cols-[1fr_4rem_4rem_8rem_4.5rem_auto]"
+                        >
+                          <Input
+                            value={crit.name}
+                            placeholder="Name"
+                            onChange={(e) =>
+                              setProject((prev) => ({
+                                ...prev,
+                                portfolioComponents: (
+                                  prev.portfolioComponents ?? []
+                                ).map((pc) =>
+                                  pc.id === c.id
+                                    ? {
+                                        ...pc,
+                                        criteria: (pc.criteria ?? []).map(
+                                          (k) =>
+                                            k.id === crit.id
+                                              ? {
+                                                  ...k,
+                                                  name: e.target.value,
+                                                }
+                                              : k
+                                        ),
+                                      }
+                                    : pc
+                                ),
+                              }))
+                            }
+                          />
+                          <Input
+                            value={crit.code}
+                            placeholder="Kürzel"
+                            onChange={(e) =>
+                              setProject((prev) => ({
+                                ...prev,
+                                portfolioComponents: (
+                                  prev.portfolioComponents ?? []
+                                ).map((pc) =>
+                                  pc.id === c.id
+                                    ? {
+                                        ...pc,
+                                        criteria: (pc.criteria ?? []).map(
+                                          (k) =>
+                                            k.id === crit.id
+                                              ? {
+                                                  ...k,
+                                                  code: e.target.value,
+                                                }
+                                              : k
+                                        ),
+                                      }
+                                    : pc
+                                ),
+                              }))
+                            }
+                          />
+                          <Input
+                            type="number"
+                            step="0.5"
+                            value={crit.weight}
+                            title="Gewicht"
+                            onChange={(e) =>
+                              setProject((prev) => ({
+                                ...prev,
+                                portfolioComponents: (
+                                  prev.portfolioComponents ?? []
+                                ).map((pc) =>
+                                  pc.id === c.id
+                                    ? {
+                                        ...pc,
+                                        criteria: (pc.criteria ?? []).map(
+                                          (k) =>
+                                            k.id === crit.id
+                                              ? {
+                                                  ...k,
+                                                  weight:
+                                                    Number(e.target.value) ||
+                                                    0,
+                                                }
+                                              : k
+                                        ),
+                                      }
+                                    : pc
+                                ),
+                              }))
+                            }
+                          />
+                          <Select
+                            value={crit.scale}
+                            onValueChange={(v) => {
+                              if (!v) return;
+                              setProject((prev) => ({
+                                ...prev,
+                                portfolioComponents: (
+                                  prev.portfolioComponents ?? []
+                                ).map((pc) =>
+                                  pc.id === c.id
+                                    ? {
+                                        ...pc,
+                                        criteria: (pc.criteria ?? []).map(
+                                          (k) =>
+                                            k.id === crit.id
+                                              ? {
+                                                  ...k,
+                                                  scale: v as CriterionScale,
+                                                }
+                                              : k
+                                        ),
+                                      }
+                                    : pc
+                                ),
+                              }));
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue>
+                                {CRITERION_SCALE_LABELS[crit.scale]}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(
+                                Object.keys(
+                                  CRITERION_SCALE_LABELS
+                                ) as CriterionScale[]
+                              ).map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  {CRITERION_SCALE_LABELS[s]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            value={crit.maxPoints ?? ""}
+                            placeholder="Max"
+                            disabled={crit.scale !== "points"}
+                            title="Max. Punkte (nur bei Skala Punkte)"
+                            onChange={(e) =>
+                              setProject((prev) => ({
+                                ...prev,
+                                portfolioComponents: (
+                                  prev.portfolioComponents ?? []
+                                ).map((pc) =>
+                                  pc.id === c.id
+                                    ? {
+                                        ...pc,
+                                        criteria: (pc.criteria ?? []).map(
+                                          (k) =>
+                                            k.id === crit.id
+                                              ? {
+                                                  ...k,
+                                                  maxPoints:
+                                                    Number(e.target.value) ||
+                                                    0,
+                                                }
+                                              : k
+                                        ),
+                                      }
+                                    : pc
+                                ),
+                              }))
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() =>
+                              setProject((prev) => ({
+                                ...prev,
+                                portfolioComponents: (
+                                  prev.portfolioComponents ?? []
+                                ).map((pc) =>
+                                  pc.id === c.id
+                                    ? {
+                                        ...pc,
+                                        criteria: (pc.criteria ?? []).filter(
+                                          (k) => k.id !== crit.id
+                                        ),
+                                      }
+                                    : pc
+                                ),
+                              }))
+                            }
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
                 </div>
               ))
             )}
@@ -741,57 +1095,8 @@ export default function SettingsPage() {
       </Card>
       )}
 
-      {!isStaManualExam(project.examType) && !isPortfolio && (
-      <Card className="surface-panel">
-        <CardHeader>
-          <CardTitle className="text-base">Notenszenarien</CardTitle>
-          <CardDescription>
-            {isStaCrit
-              ? "Notenschlüssel für den berechneten Gesamtwert der Kriterien. "
-              : "Szenarien 45 / 40 / frei – Vergleich und aktives Szenario unter Notenszenarien. "}
-            Aktive Bestehensgrenze: {project.gradeSchema.passThreshold} Punkte.
-            {gradingLocked && (
-              <>
-                {" "}
-                Notenschlüssel derzeit gesperrt: {openGradingSummary(project)}.
-              </>
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Link
-            href={`/exam/${id}/scenarios`}
-            className={cn(buttonVariants())}
-          >
-            Notenszenarien öffnen
-          </Link>
-          <div className="overflow-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Note (aktiv)</TableHead>
-                  <TableHead>ab Punkte</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[...project.gradeSchema.thresholds]
-                  .sort((a, b) => a.grade - b.grade)
-                  .map((t) => (
-                    <TableRow key={t.grade}>
-                      <TableCell className="font-medium">
-                        {formatGrade(t.grade)}
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {t.minPoints}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-      )}
+      {/* THE/Klausur: Szenarien unterhalb; bei STA bereits neben Metadaten */}
+      {!isStaCrit && scenariosCard}
     </div>
   );
 }

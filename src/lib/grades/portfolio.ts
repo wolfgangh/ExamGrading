@@ -1,9 +1,14 @@
 import type {
+  AssessmentCriterion,
   ExamProject,
   PointsRecord,
   PortfolioComponent,
 } from "@/lib/types";
 import { GERMAN_GRADES } from "@/lib/types";
+import {
+  countMissingCriteria,
+  normalizeCriterionValue,
+} from "@/lib/grades/sta-criteria";
 
 /** Nächste zulässige deutsche Note (1,0 … 5,0) */
 export function roundToNearestGermanGrade(raw: number): number {
@@ -76,19 +81,92 @@ export function averageLecturerGradesForComponent(
 }
 
 /**
- * Effektive Teilnoten pro Teilleistung (einfach oder Dozenten-Mittel).
+ * Gewichtete Kriterien → deutsche Note (1,0 best … 5,0).
+ * Alle Kriterien müssen gesetzt sein.
+ */
+export function gradeFromCriterionValues(
+  values: Record<string, number | null | undefined> | undefined,
+  criteria: AssessmentCriterion[] | undefined | null
+): number | null {
+  const list = criteria ?? [];
+  if (!list.length) return null;
+  const vals = values ?? {};
+  let wSum = 0;
+  let acc = 0;
+  for (const c of list) {
+    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 0;
+    if (w <= 0) continue;
+    const unit = normalizeCriterionValue(vals[c.id], c);
+    if (unit == null) return null;
+    wSum += w;
+    acc += unit * w;
+  }
+  if (wSum <= 0) return null;
+  const unitAvg = acc / wSum;
+  // unit 1 = best → Note 1,0; unit 0 → Note 5,0
+  return roundToNearestGermanGrade(5 - 4 * unitAvg);
+}
+
+export type PortfolioProjectSlice = Pick<
+  ExamProject,
+  | "portfolioPerLecturerGrading"
+  | "portfolioCriteriaMode"
+  | "lecturers"
+  | "portfolioComponents"
+>;
+
+/**
+ * Effektive Teilnoten pro Teilleistung
+ * (Note direkt, Dozenten-Mittel, oder aus Kriterien).
  */
 export function effectivePortfolioGrades(
-  project: Pick<
-    ExamProject,
-    "portfolioPerLecturerGrading" | "lecturers" | "portfolioComponents"
-  >,
+  project: PortfolioProjectSlice,
   rec: PointsRecord | undefined | null
 ): Record<string, number | null> {
   const components = project.portfolioComponents ?? [];
+  const criteriaMode = project.portfolioCriteriaMode === true;
+  const out: Record<string, number | null> = {};
+
+  if (criteriaMode) {
+    if (!project.portfolioPerLecturerGrading) {
+      for (const c of components) {
+        out[c.id] = gradeFromCriterionValues(
+          rec?.portfolioCriterionValues?.[c.id],
+          c.criteria
+        );
+      }
+      return out;
+    }
+    const lecturers = (project.lecturers ?? [])
+      .map((l) => l.trim())
+      .filter(Boolean);
+    for (const c of components) {
+      if (!lecturers.length || !(c.criteria?.length)) {
+        out[c.id] = null;
+        continue;
+      }
+      let acc = 0;
+      let ok = true;
+      for (const name of lecturers) {
+        const g = gradeFromCriterionValues(
+          rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name],
+          c.criteria
+        );
+        if (g == null) {
+          ok = false;
+          break;
+        }
+        acc += g;
+      }
+      out[c.id] = ok
+        ? Math.round((acc / lecturers.length) * 1000) / 1000
+        : null;
+    }
+    return out;
+  }
+
   if (!project.portfolioPerLecturerGrading) {
     const src = rec?.portfolioGrades ?? {};
-    const out: Record<string, number | null> = {};
     for (const c of components) {
       const g = src[c.id];
       out[c.id] = g != null && Number.isFinite(g) ? g : null;
@@ -97,7 +175,6 @@ export function effectivePortfolioGrades(
   }
   const lecturers = project.lecturers ?? [];
   const byL = rec?.portfolioGradesByLecturer;
-  const out: Record<string, number | null> = {};
   for (const c of components) {
     out[c.id] = averageLecturerGradesForComponent(byL, c.id, lecturers);
   }
@@ -116,26 +193,53 @@ export function countMissingPortfolioGrades(
   }).length;
 }
 
-/** Fehlende Zellen: Teilleistungen oder (Dozent × Teilleistung) */
+/** Fehlende Zellen: Noten oder Kriterien (× Dozent) */
 export function countMissingPortfolioCells(
-  project: Pick<
-    ExamProject,
-    | "portfolioPerLecturerGrading"
-    | "lecturers"
-    | "portfolioComponents"
-  >,
+  project: PortfolioProjectSlice,
   rec: PointsRecord | undefined | null
 ): number {
   const components = project.portfolioComponents ?? [];
   if (!components.length) return 0;
 
+  const criteriaMode = project.portfolioCriteriaMode === true;
+  const lecturers = (project.lecturers ?? [])
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (criteriaMode) {
+    let missing = 0;
+    for (const c of components) {
+      const crits = c.criteria ?? [];
+      if (!crits.length) {
+        missing += 1; // TL ohne Kriterien = unvollständig
+        continue;
+      }
+      if (!project.portfolioPerLecturerGrading) {
+        missing += countMissingCriteria(
+          rec?.portfolioCriterionValues?.[c.id],
+          crits
+        );
+      } else {
+        if (!lecturers.length) {
+          missing += crits.length;
+          continue;
+        }
+        for (const name of lecturers) {
+          missing += countMissingCriteria(
+            rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name],
+            crits
+          );
+        }
+      }
+    }
+    return missing;
+  }
+
   if (!project.portfolioPerLecturerGrading) {
     return countMissingPortfolioGrades(rec?.portfolioGrades, components);
   }
 
-  const lecturers = (project.lecturers ?? []).map((l) => l.trim()).filter(Boolean);
   if (lecturers.length === 0) {
-    // Keine Dozenten → alle Teilleistungen unvollständig
     return components.length;
   }
   const byL = rec?.portfolioGradesByLecturer ?? {};
@@ -151,12 +255,7 @@ export function countMissingPortfolioCells(
 }
 
 export function computePortfolioGradeForProject(
-  project: Pick<
-    ExamProject,
-    | "portfolioPerLecturerGrading"
-    | "lecturers"
-    | "portfolioComponents"
-  >,
+  project: PortfolioProjectSlice,
   rec: PointsRecord | undefined | null
 ): number | null {
   return computePortfolioGrade(
@@ -166,18 +265,21 @@ export function computePortfolioGradeForProject(
 }
 
 export function computePortfolioRawAverageForProject(
-  project: Pick<
-    ExamProject,
-    | "portfolioPerLecturerGrading"
-    | "lecturers"
-    | "portfolioComponents"
-  >,
+  project: PortfolioProjectSlice,
   rec: PointsRecord | undefined | null
 ): number | null {
   return computePortfolioRawAverage(
     effectivePortfolioGrades(project, rec),
     project.portfolioComponents ?? []
   );
+}
+
+/** Teilnote einer TL aus Kriterien (ein Bewerter-Set) */
+export function componentGradeFromCriteria(
+  component: PortfolioComponent,
+  values: Record<string, number | null | undefined> | undefined
+): number | null {
+  return gradeFromCriterionValues(values, component.criteria);
 }
 
 export function recomputePortfolioRecord(rec: PointsRecord): PointsRecord {

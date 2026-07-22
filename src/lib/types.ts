@@ -39,13 +39,21 @@ export interface AssessmentCriterion {
   maxPoints?: number;
 }
 
-/** Teilleistung einer Portfolioprüfung (immer Note) */
+/**
+ * Teilleistung einer Portfolioprüfung.
+ * Standard: eine Note 1,0–5,0. Optional: Kriterien → berechnete Teilnote.
+ */
 export interface PortfolioComponent {
   id: string;
   name: string;
   code: string;
   /** Relatives Gewicht (z. B. 1 und 1 = je 50 %) */
   weight: number;
+  /**
+   * Optional: Bewertungskriterien dieser Teilleistung
+   * (wenn project.portfolioCriteriaMode aktiv).
+   */
+  criteria?: AssessmentCriterion[];
 }
 
 export type StudentStatus =
@@ -181,6 +189,21 @@ export interface PointsRecord {
   portfolioGradesByLecturer?: Record<
     string,
     Record<string, number | null>
+  >;
+  /**
+   * Portfolio-Kriterienmodus: Teilleistungs-Id → Kriterium-Id → Rohwert.
+   */
+  portfolioCriterionValues?: Record<
+    string,
+    Record<string, number | null>
+  >;
+  /**
+   * Portfolio-Kriterien + Dozenten:
+   * Teilleistungs-Id → Dozentenname → Kriterium-Id → Rohwert.
+   */
+  portfolioCriterionValuesByLecturer?: Record<
+    string,
+    Record<string, Record<string, number | null>>
   >;
 }
 
@@ -381,6 +404,11 @@ export interface ExamProject {
    * Default false / undefined = eine Note pro Teilleistung.
    */
   portfolioPerLecturerGrading?: boolean;
+  /**
+   * Portfolio: Teilleistungen über Kriterien bewerten (statt direkter Note).
+   * Default false. Kombinierbar mit portfolioPerLecturerGrading.
+   */
+  portfolioCriteriaMode?: boolean;
   /** Studentengruppen (StA / Portfolio) */
   studentGroups?: StudentGroup[];
 

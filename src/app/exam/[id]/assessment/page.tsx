@@ -9,6 +9,14 @@ import { Input } from "@/components/ui/input";
 import { ClearableInput } from "@/components/ui/clearable-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Card,
   CardContent,
@@ -37,8 +45,10 @@ import {
 } from "@/components/ui/tooltip";
 import {
   averageLecturerGradesForComponent,
+  componentGradeFromCriteria,
   computePortfolioRawAverageForProject,
   effectivePortfolioGrades,
+  gradeFromCriterionValues,
   shortLecturerLabel,
 } from "@/lib/grades/portfolio";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
@@ -90,9 +100,12 @@ export default function AssessmentPage() {
   const [groupFilter, setGroupFilter] = useState<GroupFilterId>("all");
   const [nameQuery, setNameQuery] = useState("");
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  /** Bei Portfolio-Kriterien × Dozenten: aktiver Bewerter */
+  const [lecturerFilter, setLecturerFilter] = useState<string>("");
 
   const criteria = project?.criteria ?? [];
   const components = project?.portfolioComponents ?? [];
+  const portfolioCriteriaMode = project?.portfolioCriteriaMode === true;
   const sortedRows = useMemo(
     () =>
       [...rows].sort((a, b) =>
@@ -294,20 +307,88 @@ export default function AssessmentPage() {
     });
   };
 
+  const setPortfolioCriterionValue = (
+    matKey: string,
+    componentId: string,
+    criterionId: string,
+    raw: string,
+    lecturerName?: string | null
+  ) => {
+    const num =
+      raw.trim() === "" ? null : Number(raw.trim().replace(",", "."));
+    const value = num != null && Number.isFinite(num) ? num : null;
+    setProject((prev) => {
+      const idx = prev.points.findIndex(
+        (p) => normalizeMatriculation(p.matriculationNumber) === matKey
+      );
+      const base =
+        idx >= 0
+          ? prev.points[idx]
+          : {
+              matriculationNumber: matKey,
+              bySubArea: Object.fromEntries(
+                prev.subAreas.map((s) => [s.id, null])
+              ),
+              totalPoints: null as number | null,
+              source: "manual" as const,
+            };
+      let next = { ...base, source: "manual" as const };
+      if (lecturerName) {
+        const byL = { ...(base.portfolioCriterionValuesByLecturer ?? {}) };
+        const perComp = { ...(byL[componentId] ?? {}) };
+        const perLec = { ...(perComp[lecturerName] ?? {}) };
+        perLec[criterionId] = value;
+        perComp[lecturerName] = perLec;
+        byL[componentId] = perComp;
+        next = { ...next, portfolioCriterionValuesByLecturer: byL };
+      } else {
+        const byC = { ...(base.portfolioCriterionValues ?? {}) };
+        const per = { ...(byC[componentId] ?? {}) };
+        per[criterionId] = value;
+        byC[componentId] = per;
+        next = { ...next, portfolioCriterionValues: byC };
+      }
+      const points = [...prev.points];
+      if (idx >= 0) points[idx] = next;
+      else points.push(next);
+      return { ...prev, points };
+    });
+  };
+
   const perLecturer =
     isPortfolio && project?.portfolioPerLecturerGrading === true;
   const lecturers = (project?.lecturers ?? [])
     .map((l) => l.trim())
     .filter(Boolean);
+  const activeLecturer =
+    perLecturer && portfolioCriteriaMode
+      ? lecturerFilter && lecturers.includes(lecturerFilter)
+        ? lecturerFilter
+        : lecturers[0] ?? ""
+      : "";
   const cols = isPortfolio ? components : criteria;
+  /** Flache Kriterien-Spalten (Portfolio-Kriterienmodus) */
+  const portfolioCritColumns = portfolioCriteriaMode
+    ? components.flatMap((c) =>
+        (c.criteria ?? []).map((k) => ({
+          componentId: c.id,
+          componentCode: c.code || c.name,
+          criterion: k,
+        }))
+      )
+    : [];
   /** Anzahl Noten-/Werte-Spalten (ohne Name/Matr/Gruppe/Note) */
   const valueColCount = isPortfolio
-    ? perLecturer
-      ? components.length * (Math.max(lecturers.length, 0) + 1)
-      : components.length
+    ? portfolioCriteriaMode
+      ? portfolioCritColumns.length + components.length // Kriterien + TL-Note je TL
+      : perLecturer
+        ? components.length * (Math.max(lecturers.length, 0) + 1)
+        : components.length
     : criteria.length;
   const emptyMsg = isPortfolio
-    ? "Noch keine Teilleistungen – unter Einstellungen festlegen (Standard: 2)."
+    ? portfolioCriteriaMode
+      ? "Kriterien pro Teilleistung unter Einstellungen festlegen."
+      : "Noch keine Teilleistungen – unter Einstellungen festlegen (Standard: 2)."
     : "Noch keine Kriterien – unter Einstellungen anlegen.";
 
   return (
@@ -319,9 +400,13 @@ export default function AssessmentPage() {
           </h1>
           <p className="text-muted-foreground">
             {isPortfolio
-              ? perLecturer
-                ? "Jeder Dozent vergibt Teilnoten; Teilnote = Mittel der Dozenten (gleichgewichtet). Gesamtnote = gewichteter Mittelwert der Teilleistungen (nächste deutsche Note)."
-                : "Teilnoten je Teilleistung eintragen. Gesamtnote = gewichteter Mittelwert, gerundet auf die nächste deutsche Note (1,0 … 5,0)."
+              ? portfolioCriteriaMode
+                ? perLecturer
+                  ? "Kriterien je Teilleistung und Dozent; Teilnote = Mittel der Dozenten-Noten; Gesamtnote gewichtet."
+                  : "Kriterien je Teilleistung → berechnete Teilnote; Gesamtnote = gewichteter Mittelwert."
+                : perLecturer
+                  ? "Jeder Dozent vergibt Teilnoten; Teilnote = Mittel der Dozenten (gleichgewichtet). Gesamtnote = gewichteter Mittelwert der Teilleistungen (nächste deutsche Note)."
+                  : "Teilnoten je Teilleistung eintragen. Gesamtnote = gewichteter Mittelwert, gerundet auf die nächste deutsche Note (1,0 … 5,0)."
               : "Werte je Kriterium eintragen (Skala pro Spalte: % / Note / Punkte). Gesamtwert und Note werden gewichtet berechnet (Notenschlüssel unter Szenarien). Hover auf ⓘ im Spaltenkopf für Details."}
           </p>
         </div>
@@ -333,6 +418,45 @@ export default function AssessmentPage() {
           {isPortfolio ? "Teilleistungen / Gruppen" : "Kriterien / Gruppen"}
         </Link>
       </div>
+
+      {isPortfolio && portfolioCriteriaMode && perLecturer && (
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Bewerter wählen</CardTitle>
+            <CardDescription>
+              Kriterien werden je Dozent erfasst. Bitte Dozenten wechseln, um
+              alle Bewertungen einzutragen.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {lecturers.length === 0 ? (
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                Keine Dozenten in den Stammdaten – bitte unter Einstellungen
+                eintragen.
+              </p>
+            ) : (
+              <div className="grid max-w-sm gap-1.5">
+                <Label htmlFor="portfolio-lecturer-filter">Dozent</Label>
+                <Select
+                  value={activeLecturer || lecturers[0]}
+                  onValueChange={(v) => v && setLecturerFilter(v)}
+                >
+                  <SelectTrigger id="portfolio-lecturer-filter" className="w-full">
+                    <SelectValue>{activeLecturer || lecturers[0]}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lecturers.map((l) => (
+                      <SelectItem key={l} value={l}>
+                        {l}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="surface-panel">
         <CardHeader className="pb-2">
@@ -505,49 +629,87 @@ export default function AssessmentPage() {
                     <TableHead className="min-w-[88px]">Matr.</TableHead>
                     <TableHead className="min-w-[7.5rem]">Gruppe</TableHead>
                     {isPortfolio
-                      ? perLecturer
-                        ? components.flatMap((c) => [
-                            ...lecturers.map((lec) => (
+                      ? portfolioCriteriaMode
+                        ? [
+                            ...portfolioCritColumns.map((col) => (
                               <TableHead
-                                key={`${c.id}::${lec}`}
-                                className="min-w-[88px] text-center"
-                                title={`${c.name} · ${lec} · Gewicht ${c.weight}`}
+                                key={`${col.componentId}::${col.criterion.id}`}
+                                className="min-w-[7rem] text-center"
+                                title={`${col.componentCode} · ${col.criterion.name}`}
                               >
-                                <div className="font-semibold text-[11px] leading-tight">
-                                  {c.code || c.name}
-                                </div>
                                 <div className="text-[10px] font-normal text-muted-foreground">
-                                  {shortLecturerLabel(lec)}
+                                  {col.componentCode}
+                                  {activeLecturer
+                                    ? ` · ${shortLecturerLabel(activeLecturer)}`
+                                    : ""}
+                                </div>
+                                <div className="font-semibold text-[11px] leading-tight">
+                                  {col.criterion.code || col.criterion.name}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  {criterionScaleShort(col.criterion)} · w
+                                  {col.criterion.weight}
                                 </div>
                               </TableHead>
                             )),
-                            <TableHead
-                              key={`${c.id}::avg`}
-                              className="min-w-[64px] text-center bg-muted/30"
-                              title={`Mittel ${c.name} (Dozenten gleichgewichtet)`}
-                            >
-                              <div className="font-semibold text-[11px]">
-                                {c.code || c.name}
-                              </div>
-                              <div className="text-[10px] font-normal text-muted-foreground">
-                                Ø · w{c.weight}
-                              </div>
-                            </TableHead>,
-                          ])
-                        : components.map((c) => (
-                            <TableHead
-                              key={c.id}
-                              className="min-w-[100px] text-center"
-                              title={`${c.name} · Gewicht ${c.weight}`}
-                            >
-                              <div className="font-semibold">
-                                {c.code || c.name}
-                              </div>
-                              <div className="text-[10px] font-normal text-muted-foreground">
-                                Note · w{c.weight}
-                              </div>
-                            </TableHead>
-                          ))
+                            ...components.map((c) => (
+                              <TableHead
+                                key={`${c.id}::note`}
+                                className="min-w-[64px] text-center bg-muted/30"
+                                title={`Berechnete Teilnote ${c.name}`}
+                              >
+                                <div className="font-semibold text-[11px]">
+                                  {c.code || c.name}
+                                </div>
+                                <div className="text-[10px] font-normal text-muted-foreground">
+                                  Note · w{c.weight}
+                                </div>
+                              </TableHead>
+                            )),
+                          ]
+                        : perLecturer
+                          ? components.flatMap((c) => [
+                              ...lecturers.map((lec) => (
+                                <TableHead
+                                  key={`${c.id}::${lec}`}
+                                  className="min-w-[88px] text-center"
+                                  title={`${c.name} · ${lec} · Gewicht ${c.weight}`}
+                                >
+                                  <div className="font-semibold text-[11px] leading-tight">
+                                    {c.code || c.name}
+                                  </div>
+                                  <div className="text-[10px] font-normal text-muted-foreground">
+                                    {shortLecturerLabel(lec)}
+                                  </div>
+                                </TableHead>
+                              )),
+                              <TableHead
+                                key={`${c.id}::avg`}
+                                className="min-w-[64px] text-center bg-muted/30"
+                                title={`Mittel ${c.name} (Dozenten gleichgewichtet)`}
+                              >
+                                <div className="font-semibold text-[11px]">
+                                  {c.code || c.name}
+                                </div>
+                                <div className="text-[10px] font-normal text-muted-foreground">
+                                  Ø · w{c.weight}
+                                </div>
+                              </TableHead>,
+                            ])
+                          : components.map((c) => (
+                              <TableHead
+                                key={c.id}
+                                className="min-w-[100px] text-center"
+                                title={`${c.name} · Gewicht ${c.weight}`}
+                              >
+                                <div className="font-semibold">
+                                  {c.code || c.name}
+                                </div>
+                                <div className="text-[10px] font-normal text-muted-foreground">
+                                  Note · w{c.weight}
+                                </div>
+                              </TableHead>
+                            ))
                       : criteria.map((c) => (
                           <TableHead
                             key={c.id}
@@ -712,86 +874,167 @@ export default function AssessmentPage() {
                             />
                           </TableCell>
                           {isPortfolio
-                            ? perLecturer
-                              ? components.flatMap((c) => [
-                                  ...lecturers.map((lec) => {
-                                    const v =
-                                      rec?.portfolioGradesByLecturer?.[c.id]?.[
-                                        lec
-                                      ];
+                            ? portfolioCriteriaMode
+                              ? [
+                                  ...portfolioCritColumns.map((col) => {
+                                    const v = activeLecturer
+                                      ? rec
+                                          ?.portfolioCriterionValuesByLecturer?.[
+                                          col.componentId
+                                        ]?.[activeLecturer]?.[
+                                          col.criterion.id
+                                        ]
+                                      : rec?.portfolioCriterionValues?.[
+                                          col.componentId
+                                        ]?.[col.criterion.id];
                                     return (
                                       <TableCell
-                                        key={`${c.id}::${lec}`}
-                                        className={cn("p-1 text-center", rowBg)}
+                                        key={`${col.componentId}::${col.criterion.id}`}
+                                        className={cn(
+                                          "p-1 text-center",
+                                          rowBg
+                                        )}
                                       >
                                         <Input
-                                          className="mx-auto h-8 w-[4.25rem] text-center text-sm"
+                                          className="mx-auto h-8 w-[4.5rem] text-center text-sm"
                                           defaultValue={
                                             v != null
                                               ? String(v).replace(".", ",")
                                               : ""
                                           }
-                                          key={`${r.key}-${c.id}-${lec}-${project.updatedAt}`}
-                                          placeholder="–"
-                                          title={`${c.name} · ${lec}`}
+                                          key={`${r.key}-${col.componentId}-${col.criterion.id}-${activeLecturer}-${project.updatedAt}`}
+                                          placeholder={criterionPlaceholder(
+                                            col.criterion
+                                          )}
+                                          title={criterionScaleHint(
+                                            col.criterion
+                                          )}
+                                          inputMode="decimal"
                                           onBlur={(e) =>
-                                            setPortfolioLecturerGrade(
+                                            setPortfolioCriterionValue(
                                               r.key,
-                                              c.id,
-                                              lec,
-                                              e.target.value
+                                              col.componentId,
+                                              col.criterion.id,
+                                              e.target.value,
+                                              activeLecturer || null
                                             )
                                           }
                                         />
                                       </TableCell>
                                     );
                                   }),
-                                  <TableCell
-                                    key={`${c.id}::avg`}
-                                    className={cn(
-                                      "text-center tabular-nums text-sm bg-muted/25",
-                                      ungrouped &&
-                                        "bg-amber-100/40 dark:bg-amber-950/20"
-                                    )}
-                                  >
-                                    {formatGrade(
-                                      averageLecturerGradesForComponent(
-                                        rec?.portfolioGradesByLecturer,
-                                        c.id,
-                                        lecturers
-                                      )
-                                    )}
-                                  </TableCell>,
-                                ])
-                              : components.map((c) => {
-                                  const v =
-                                    rec?.portfolioGrades?.[c.id] ??
-                                    effGrades?.[c.id];
-                                  return (
+                                  ...components.map((c) => {
+                                    const note = activeLecturer
+                                      ? gradeFromCriterionValues(
+                                          rec
+                                            ?.portfolioCriterionValuesByLecturer?.[
+                                            c.id
+                                          ]?.[activeLecturer],
+                                          c.criteria
+                                        )
+                                      : componentGradeFromCriteria(
+                                          c,
+                                          rec?.portfolioCriterionValues?.[c.id]
+                                        );
+                                    return (
+                                      <TableCell
+                                        key={`${c.id}::note`}
+                                        className={cn(
+                                          "text-center tabular-nums text-sm font-medium bg-muted/25",
+                                          rowBg
+                                        )}
+                                      >
+                                        {formatGrade(note)}
+                                      </TableCell>
+                                    );
+                                  }),
+                                ]
+                              : perLecturer
+                                ? components.flatMap((c) => [
+                                    ...lecturers.map((lec) => {
+                                      const v =
+                                        rec?.portfolioGradesByLecturer?.[
+                                          c.id
+                                        ]?.[lec];
+                                      return (
+                                        <TableCell
+                                          key={`${c.id}::${lec}`}
+                                          className={cn(
+                                            "p-1 text-center",
+                                            rowBg
+                                          )}
+                                        >
+                                          <Input
+                                            className="mx-auto h-8 w-[4.25rem] text-center text-sm"
+                                            defaultValue={
+                                              v != null
+                                                ? String(v).replace(".", ",")
+                                                : ""
+                                            }
+                                            key={`${r.key}-${c.id}-${lec}-${project.updatedAt}`}
+                                            placeholder="–"
+                                            title={`${c.name} · ${lec}`}
+                                            onBlur={(e) =>
+                                              setPortfolioLecturerGrade(
+                                                r.key,
+                                                c.id,
+                                                lec,
+                                                e.target.value
+                                              )
+                                            }
+                                          />
+                                        </TableCell>
+                                      );
+                                    }),
                                     <TableCell
-                                      key={c.id}
-                                      className={cn("p-1 text-center", rowBg)}
+                                      key={`${c.id}::avg`}
+                                      className={cn(
+                                        "text-center tabular-nums text-sm bg-muted/25",
+                                        ungrouped &&
+                                          "bg-amber-100/40 dark:bg-amber-950/20"
+                                      )}
                                     >
-                                      <Input
-                                        className="mx-auto h-8 w-[4.5rem] text-center text-sm"
-                                        defaultValue={
-                                          v != null
-                                            ? String(v).replace(".", ",")
-                                            : ""
-                                        }
-                                        key={`${r.key}-${c.id}-${project.updatedAt}`}
-                                        placeholder="–"
-                                        onBlur={(e) =>
-                                          setPortfolioGrade(
-                                            r.key,
-                                            c.id,
-                                            e.target.value
-                                          )
-                                        }
-                                      />
-                                    </TableCell>
-                                  );
-                                })
+                                      {formatGrade(
+                                        averageLecturerGradesForComponent(
+                                          rec?.portfolioGradesByLecturer,
+                                          c.id,
+                                          lecturers
+                                        )
+                                      )}
+                                    </TableCell>,
+                                  ])
+                                : components.map((c) => {
+                                    const v =
+                                      rec?.portfolioGrades?.[c.id] ??
+                                      effGrades?.[c.id];
+                                    return (
+                                      <TableCell
+                                        key={c.id}
+                                        className={cn(
+                                          "p-1 text-center",
+                                          rowBg
+                                        )}
+                                      >
+                                        <Input
+                                          className="mx-auto h-8 w-[4.5rem] text-center text-sm"
+                                          defaultValue={
+                                            v != null
+                                              ? String(v).replace(".", ",")
+                                              : ""
+                                          }
+                                          key={`${r.key}-${c.id}-${project.updatedAt}`}
+                                          placeholder="–"
+                                          onBlur={(e) =>
+                                            setPortfolioGrade(
+                                              r.key,
+                                              c.id,
+                                              e.target.value
+                                            )
+                                          }
+                                        />
+                                      </TableCell>
+                                    );
+                                  })
                             : criteria.map((c) => {
                                 const v = rec?.criterionValues?.[c.id];
                                 const hint = criterionScaleHint(c);
