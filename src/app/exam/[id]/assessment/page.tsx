@@ -434,117 +434,139 @@ export default function AssessmentPage() {
         </Link>
       </div>
 
-      {isPortfolio && portfolioCriteriaMode && (
+      {isPortfolio && portfolioCriteriaMode ? (
+        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+          <Card className="surface-panel min-w-0">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Gruppe wählen</CardTitle>
+              <CardDescription>
+                Nur Studierende der gewählten Gruppe in der Matrix – schnell
+                wechseln mit den Schaltflächen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <GroupFilterBar
+                project={project}
+                rows={sortedRows}
+                value={groupFilter}
+                onChange={setGroupFilter}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="surface-panel min-w-0">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                Teilleistung
+                {perLecturer ? " und Bewerter" : ""}
+              </CardTitle>
+              <CardDescription>
+                Kriterien einer Teilleistung in der Matrix anzeigen
+                {perLecturer
+                  ? "; Dozent wechseln, um alle Bewertungen zu erfassen"
+                  : ""}
+                .
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {components.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Keine Teilleistungen – bitte unter Einstellungen anlegen.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">
+                    Teilleistung
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {components.map((c) => {
+                      const active = c.id === activeComponentId;
+                      const nCrit = c.criteria?.length ?? 0;
+                      return (
+                        <Button
+                          key={c.id}
+                          type="button"
+                          size="sm"
+                          variant={active ? "default" : "outline"}
+                          className="h-auto min-h-9 flex-col items-start gap-0 px-3 py-1.5"
+                          onClick={() => setComponentFilter(c.id)}
+                        >
+                          <span className="font-semibold">
+                            {c.code || c.name}
+                          </span>
+                          <span
+                            className={cn(
+                              "text-[10px] font-normal",
+                              active
+                                ? "text-primary-foreground/80"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {c.name !== c.code ? `${c.name} · ` : ""}
+                            {nCrit} Krit. · w{c.weight}
+                          </span>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {perLecturer && (
+                <div className="grid max-w-full gap-1.5 border-t pt-3 sm:max-w-sm">
+                  <Label htmlFor="portfolio-lecturer-filter">
+                    Dozent / Bewerter
+                  </Label>
+                  {lecturers.length === 0 ? (
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      Keine Dozenten in den Stammdaten – bitte unter
+                      Einstellungen eintragen.
+                    </p>
+                  ) : (
+                    <Select
+                      value={activeLecturer || lecturers[0]}
+                      onValueChange={(v) => v && setLecturerFilter(v)}
+                    >
+                      <SelectTrigger
+                        id="portfolio-lecturer-filter"
+                        className="w-full"
+                      >
+                        <SelectValue>
+                          {activeLecturer || lecturers[0]}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lecturers.map((l) => (
+                          <SelectItem key={l} value={l}>
+                            {l}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
         <Card className="surface-panel">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              Teilleistung
-              {perLecturer ? " und Bewerter" : ""}
-            </CardTitle>
+            <CardTitle className="text-base">Gruppe wählen</CardTitle>
             <CardDescription>
-              Kriterien einer Teilleistung in der Matrix anzeigen
-              {perLecturer
-                ? "; Dozent wechseln, um alle Bewertungen zu erfassen"
-                : ""}
-              .
+              Nur Studierende der gewählten Gruppe in der Matrix – schnell
+              wechseln mit den Schaltflächen.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {components.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Keine Teilleistungen – bitte unter Einstellungen anlegen.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">
-                  Teilleistung
-                </Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {components.map((c) => {
-                    const active = c.id === activeComponentId;
-                    const nCrit = c.criteria?.length ?? 0;
-                    return (
-                      <Button
-                        key={c.id}
-                        type="button"
-                        size="sm"
-                        variant={active ? "default" : "outline"}
-                        className="h-auto min-h-9 flex-col items-start gap-0 px-3 py-1.5"
-                        onClick={() => setComponentFilter(c.id)}
-                      >
-                        <span className="font-semibold">
-                          {c.code || c.name}
-                        </span>
-                        <span
-                          className={cn(
-                            "text-[10px] font-normal",
-                            active
-                              ? "text-primary-foreground/80"
-                              : "text-muted-foreground"
-                          )}
-                        >
-                          {c.name !== c.code ? `${c.name} · ` : ""}
-                          {nCrit} Krit. · w{c.weight}
-                        </span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            {perLecturer && (
-              <div className="grid max-w-sm gap-1.5 border-t pt-3">
-                <Label htmlFor="portfolio-lecturer-filter">Dozent / Bewerter</Label>
-                {lecturers.length === 0 ? (
-                  <p className="text-sm text-amber-800 dark:text-amber-200">
-                    Keine Dozenten in den Stammdaten – bitte unter
-                    Einstellungen eintragen.
-                  </p>
-                ) : (
-                  <Select
-                    value={activeLecturer || lecturers[0]}
-                    onValueChange={(v) => v && setLecturerFilter(v)}
-                  >
-                    <SelectTrigger
-                      id="portfolio-lecturer-filter"
-                      className="w-full"
-                    >
-                      <SelectValue>
-                        {activeLecturer || lecturers[0]}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {lecturers.map((l) => (
-                        <SelectItem key={l} value={l}>
-                          {l}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            )}
+          <CardContent>
+            <GroupFilterBar
+              project={project}
+              rows={sortedRows}
+              value={groupFilter}
+              onChange={setGroupFilter}
+            />
           </CardContent>
         </Card>
       )}
-
-      <Card className="surface-panel">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Gruppe wählen</CardTitle>
-          <CardDescription>
-            Nur Studierende der gewählten Gruppe in der Matrix – schnell
-            wechseln mit den Schaltflächen.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <GroupFilterBar
-            project={project}
-            rows={sortedRows}
-            value={groupFilter}
-            onChange={setGroupFilter}
-          />
-        </CardContent>
-      </Card>
 
       {perLecturer && lecturers.length === 0 && (
         <Card className="surface-panel border-amber-400">
