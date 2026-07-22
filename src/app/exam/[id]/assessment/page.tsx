@@ -102,6 +102,8 @@ export default function AssessmentPage() {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   /** Bei Portfolio-Kriterien × Dozenten: aktiver Bewerter */
   const [lecturerFilter, setLecturerFilter] = useState<string>("");
+  /** Portfolio-Kriterienmodus: eine Teilleistung in der Matrix */
+  const [componentFilter, setComponentFilter] = useState<string>("");
 
   const criteria = project?.criteria ?? [];
   const components = project?.portfolioComponents ?? [];
@@ -366,10 +368,23 @@ export default function AssessmentPage() {
         ? lecturerFilter
         : lecturers[0] ?? ""
       : "";
+  const activeComponentId =
+    portfolioCriteriaMode && components.length > 0
+      ? componentFilter && components.some((c) => c.id === componentFilter)
+        ? componentFilter
+        : components[0].id
+      : "";
+  const activeComponent =
+    components.find((c) => c.id === activeComponentId) ?? null;
+  /** Im Kriterienmodus nur die gewählte Teilleistung */
+  const matrixComponents =
+    portfolioCriteriaMode && activeComponent
+      ? [activeComponent]
+      : components;
   const cols = isPortfolio ? components : criteria;
-  /** Flache Kriterien-Spalten (Portfolio-Kriterienmodus) */
+  /** Flache Kriterien-Spalten (Portfolio-Kriterienmodus, aktuelle TL) */
   const portfolioCritColumns = portfolioCriteriaMode
-    ? components.flatMap((c) =>
+    ? matrixComponents.flatMap((c) =>
         (c.criteria ?? []).map((k) => ({
           componentId: c.id,
           componentCode: c.code || c.name,
@@ -380,7 +395,7 @@ export default function AssessmentPage() {
   /** Anzahl Noten-/Werte-Spalten (ohne Name/Matr/Gruppe/Note) */
   const valueColCount = isPortfolio
     ? portfolioCriteriaMode
-      ? portfolioCritColumns.length + components.length // Kriterien + TL-Note je TL
+      ? portfolioCritColumns.length + matrixComponents.length // Kriterien + TL-Note
       : perLecturer
         ? components.length * (Math.max(lecturers.length, 0) + 1)
         : components.length
@@ -419,39 +434,94 @@ export default function AssessmentPage() {
         </Link>
       </div>
 
-      {isPortfolio && portfolioCriteriaMode && perLecturer && (
+      {isPortfolio && portfolioCriteriaMode && (
         <Card className="surface-panel">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Bewerter wählen</CardTitle>
+            <CardTitle className="text-base">
+              Teilleistung
+              {perLecturer ? " und Bewerter" : ""}
+            </CardTitle>
             <CardDescription>
-              Kriterien werden je Dozent erfasst. Bitte Dozenten wechseln, um
-              alle Bewertungen einzutragen.
+              Kriterien einer Teilleistung in der Matrix anzeigen
+              {perLecturer
+                ? "; Dozent wechseln, um alle Bewertungen zu erfassen"
+                : ""}
+              .
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            {lecturers.length === 0 ? (
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                Keine Dozenten in den Stammdaten – bitte unter Einstellungen
-                eintragen.
+          <CardContent className="space-y-3">
+            {components.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine Teilleistungen – bitte unter Einstellungen anlegen.
               </p>
             ) : (
-              <div className="grid max-w-sm gap-1.5">
-                <Label htmlFor="portfolio-lecturer-filter">Dozent</Label>
-                <Select
-                  value={activeLecturer || lecturers[0]}
-                  onValueChange={(v) => v && setLecturerFilter(v)}
-                >
-                  <SelectTrigger id="portfolio-lecturer-filter" className="w-full">
-                    <SelectValue>{activeLecturer || lecturers[0]}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {lecturers.map((l) => (
-                      <SelectItem key={l} value={l}>
-                        {l}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">
+                  Teilleistung
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {components.map((c) => {
+                    const active = c.id === activeComponentId;
+                    const nCrit = c.criteria?.length ?? 0;
+                    return (
+                      <Button
+                        key={c.id}
+                        type="button"
+                        size="sm"
+                        variant={active ? "default" : "outline"}
+                        className="h-auto min-h-9 flex-col items-start gap-0 px-3 py-1.5"
+                        onClick={() => setComponentFilter(c.id)}
+                      >
+                        <span className="font-semibold">
+                          {c.code || c.name}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[10px] font-normal",
+                            active
+                              ? "text-primary-foreground/80"
+                              : "text-muted-foreground"
+                          )}
+                        >
+                          {c.name !== c.code ? `${c.name} · ` : ""}
+                          {nCrit} Krit. · w{c.weight}
+                        </span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {perLecturer && (
+              <div className="grid max-w-sm gap-1.5 border-t pt-3">
+                <Label htmlFor="portfolio-lecturer-filter">Dozent / Bewerter</Label>
+                {lecturers.length === 0 ? (
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    Keine Dozenten in den Stammdaten – bitte unter
+                    Einstellungen eintragen.
+                  </p>
+                ) : (
+                  <Select
+                    value={activeLecturer || lecturers[0]}
+                    onValueChange={(v) => v && setLecturerFilter(v)}
+                  >
+                    <SelectTrigger
+                      id="portfolio-lecturer-filter"
+                      className="w-full"
+                    >
+                      <SelectValue>
+                        {activeLecturer || lecturers[0]}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lecturers.map((l) => (
+                        <SelectItem key={l} value={l}>
+                          {l}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             )}
           </CardContent>
@@ -515,9 +585,15 @@ export default function AssessmentPage() {
                 <CardTitle className="text-base">Bewertungsmatrix</CardTitle>
                 <CardDescription>
                   {isPortfolio
-                    ? perLecturer
-                      ? `${components.length} Teilleistungen · ${lecturers.length} Dozent(en) · Gleichgewichtung`
-                      : `${components.length} Teilleistungen · Gewichte relativ`
+                    ? portfolioCriteriaMode
+                      ? `${activeComponent?.code || activeComponent?.name || "TL"} · ${(activeComponent?.criteria ?? []).length} Krit.${
+                          perLecturer && activeLecturer
+                            ? ` · ${shortLecturerLabel(activeLecturer)}`
+                            : ""
+                        } · ${components.length} TL gesamt`
+                      : perLecturer
+                        ? `${components.length} Teilleistungen · ${lecturers.length} Dozent(en) · Gleichgewichtung`
+                        : `${components.length} Teilleistungen · Gewichte relativ`
                     : `${criteria.length} Kriterien · Gewichte relativ · Max. Gesamtwert ${project.gradeSchema.maxPoints}`}
                   {" · "}
                   {filteredRows.length} von {sortedRows.length} Person(en)
@@ -652,7 +728,7 @@ export default function AssessmentPage() {
                                 </div>
                               </TableHead>
                             )),
-                            ...components.map((c) => (
+                            ...matrixComponents.map((c) => (
                               <TableHead
                                 key={`${c.id}::note`}
                                 className="min-w-[64px] text-center bg-muted/30"
@@ -923,7 +999,7 @@ export default function AssessmentPage() {
                                       </TableCell>
                                     );
                                   }),
-                                  ...components.map((c) => {
+                                  ...matrixComponents.map((c) => {
                                     const note = activeLecturer
                                       ? gradeFromCriterionValues(
                                           rec
