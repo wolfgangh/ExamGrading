@@ -62,6 +62,14 @@ export function SummaryPanel({
       value: formatGrade(stats.medianGrade),
     },
     {
+      label: "25%-Quantil",
+      value: formatGrade(stats.q25Grade),
+    },
+    {
+      label: "75%-Quantil",
+      value: formatGrade(stats.q75Grade),
+    },
+    {
       label: "Stabw. Note",
       value: formatStat(stats.stdDevGrade, 2),
     },

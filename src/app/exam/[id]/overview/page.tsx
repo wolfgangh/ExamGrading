@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { cn, formatGrade, formatPercent, formatStat } from "@/lib/utils";
+import { cn, formatGrade, formatPercent } from "@/lib/utils";
 import { orphanCount } from "@/lib/matching/merge-candidates";
 import { listUnresolvedOrphans } from "@/lib/matching/orphan-resolution";
 import { HISINONE_LABEL, isOnlineStyleExam } from "@/lib/types";
@@ -108,20 +108,132 @@ export default function OverviewPage() {
     </div>
   );
 
+  const examNumberChips = (project.examNumber || "")
+    .split(/[,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const lecturers = (project.lecturers ?? []).map((l) => l.trim()).filter(Boolean);
+  const activeScenario = (project.gradeScenarios ?? []).find(
+    (s) => s.id === project.activeScenarioId
+  );
+  const scenarioLabel =
+    activeScenario?.name?.replace(/\s*\(Standard\)\s*/i, "").trim() ||
+    "Aktives Szenario";
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Übersicht</h1>
         <p className="text-muted-foreground">
-          {project.examNumber && `${project.examNumber} · `}
-          {project.semester || "ohne Semester"} ·{" "}
-          {project.lecturers.join(", ") || "ohne Dozenten"}
-          {" · "}
-          Szenario Bestehen {project.gradeSchema.passThreshold} Pkt.
-          {stats.failCount > 0 && (
-            <> · {stats.failCount} Durchfaller</>
-          )}
+          Status und Kennzahlen zur Prüfung
         </p>
+      </div>
+
+      {/* Prüfungsinfos | Notenverteilung */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Prüfungsdaten</CardTitle>
+            <CardDescription>
+              Stammdaten und aktives Notenszenario
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid gap-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Prüfung
+              </p>
+              <p className="text-base font-semibold leading-snug">
+                {project.name || "–"}
+              </p>
+            </div>
+
+            <dl className="space-y-2.5">
+              <div className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:items-start sm:gap-3">
+                <dt className="text-muted-foreground">Prüfungsnr.</dt>
+                <dd className="min-w-0">
+                  {examNumberChips.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {examNumberChips.map((num) => (
+                        <Badge
+                          key={num}
+                          variant="secondary"
+                          className="max-w-full whitespace-normal font-normal tabular-nums"
+                        >
+                          {num}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">–</span>
+                  )}
+                </dd>
+              </div>
+              <div className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:items-start sm:gap-3">
+                <dt className="text-muted-foreground">Semester</dt>
+                <dd className="font-medium">
+                  {project.semester?.trim() || "–"}
+                </dd>
+              </div>
+              <div className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:items-start sm:gap-3">
+                <dt className="text-muted-foreground">Dozent(en)</dt>
+                <dd className="min-w-0">
+                  {lecturers.length > 0 ? (
+                    <ul className="space-y-0.5">
+                      {lecturers.map((name) => (
+                        <li key={name} className="leading-snug">
+                          {name}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span className="text-muted-foreground">–</span>
+                  )}
+                </dd>
+              </div>
+              <div className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:items-start sm:gap-3">
+                <dt className="text-muted-foreground">Szenario</dt>
+                <dd>
+                  <span className="font-medium">{scenarioLabel}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · Bestehen ab {project.gradeSchema.passThreshold} Pkt.
+                  </span>
+                </dd>
+              </div>
+              {stats.failCount > 0 && (
+                <div className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:items-start sm:gap-3">
+                  <dt className="text-muted-foreground">Durchfaller</dt>
+                  <dd className="font-semibold tabular-nums text-rose-700 dark:text-rose-300">
+                    {stats.failCount}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </CardContent>
+        </Card>
+
+        <Card className="surface-panel min-w-0">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Notenverteilung</CardTitle>
+            <CardDescription>
+              Ø {formatGrade(stats.averageGrade)} · Med{" "}
+              {formatGrade(stats.medianGrade)} · Q25{" "}
+              {formatGrade(stats.q25Grade)} · Q75{" "}
+              {formatGrade(stats.q75Grade)} · Bestehen{" "}
+              {formatPercent(stats.passRate)}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <ExpandableChart
+              title="Notenverteilung"
+              description={`Ø ${formatGrade(stats.averageGrade)} · Med ${formatGrade(stats.medianGrade)} · Q25 ${formatGrade(stats.q25Grade)} · Q75 ${formatGrade(stats.q75Grade)} · Bestehen ${formatPercent(stats.passRate)}`}
+              filenameBase={`ExamGrade_${project.name || "Pruefung"}_Notenverteilung`}
+            >
+              <GradeDistributionChart stats={stats} className="h-56 w-full" />
+            </ExpandableChart>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-12">
@@ -345,27 +457,6 @@ export default function OverviewPage() {
               <CardTitle className="text-base">Schnellaktionen</CardTitle>
             </CardHeader>
             <CardContent>{quickLinks}</CardContent>
-          </Card>
-
-          <Card className="surface-panel">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Notenverteilung</CardTitle>
-              <CardDescription>
-                Ø {formatGrade(stats.averageGrade)} · Med{" "}
-                {formatGrade(stats.medianGrade)} · s{" "}
-                {formatStat(stats.stdDevGrade, 2)} · Bestehen{" "}
-                {formatPercent(stats.passRate)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <ExpandableChart
-                title="Notenverteilung"
-                description={`Ø ${formatGrade(stats.averageGrade)} · Bestehen ${formatPercent(stats.passRate)}`}
-                filenameBase={`ExamGrade_${project.name || "Pruefung"}_Notenverteilung`}
-              >
-                <GradeDistributionChart stats={stats} className="h-52 w-full" />
-              </ExpandableChart>
-            </CardContent>
           </Card>
 
           <Card className="surface-panel">
