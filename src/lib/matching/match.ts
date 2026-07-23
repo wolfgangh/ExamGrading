@@ -41,10 +41,11 @@ function calculatedGradeForRecord(
   project: ExamProject,
   pointsRec: PointsRecord | undefined,
   totalPoints: number | null,
-  gradeSchema: GradeSchema
+  gradeSchema: GradeSchema,
+  groupId?: string | null
 ): number | null {
   if (isPortfolioExam(project.examType)) {
-    return computePortfolioGradeForProject(project, pointsRec);
+    return computePortfolioGradeForProject(project, pointsRec, { groupId });
   }
   if (totalPoints != null) {
     return calculateGrade(totalPoints, gradeSchema);
@@ -210,7 +211,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       project,
       pointsRec,
       totalPoints,
-      gradeSchema
+      gradeSchema,
+      student.groupId
     );
     const finalGrade =
       gradeOverride != null ? gradeOverride : calculatedGrade;
@@ -226,7 +228,9 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     const missingPortfolio =
       isPortfolioExam(project.examType) &&
       (project.portfolioComponents?.length ?? 0) > 0
-        ? countMissingPortfolioCells(project, pointsRec)
+        ? countMissingPortfolioCells(project, pointsRec, {
+            groupId: student.groupId,
+          })
         : 0;
     const hasOpenGrading =
       needsGradingCount > 0 || missingCriteria > 0 || missingPortfolio > 0;
@@ -353,7 +357,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       project,
       pointsRec,
       totalPoints,
-      gradeSchema
+      gradeSchema,
+      student.groupId
     );
     const finalGrade =
       gradeOverride != null ? gradeOverride : calculatedGrade;
@@ -409,7 +414,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       project,
       pointsRec,
       totalPoints,
-      gradeSchema
+      gradeSchema,
+      student.groupId
     );
     const finalGrade =
       gradeOverride != null ? gradeOverride : calculatedGrade;
@@ -468,7 +474,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       project,
       pointsRec,
       totalPoints,
-      gradeSchema
+      gradeSchema,
+      stored.groupId
     );
     const finalGrade =
       gradeOverride != null ? gradeOverride : calculatedGrade;
@@ -479,7 +486,9 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     const missingPortfolio =
       isPortfolioExam(project.examType) &&
       (project.portfolioComponents?.length ?? 0) > 0
-        ? countMissingPortfolioCells(project, pointsRec)
+        ? countMissingPortfolioCells(project, pointsRec, {
+            groupId: stored.groupId,
+          })
         : 0;
     const warnings = ["Manuell hinzugefügt – nicht in HISinOne-Masterliste"];
     if (missingCriteria > 0) {

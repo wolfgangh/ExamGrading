@@ -135,7 +135,11 @@ export function validateForExport(
         const rec = project.points.find(
           (p) => normalizeMatriculation(p.matriculationNumber) === r.key
         );
-        return countMissingPortfolioCells(project, rec) > 0;
+        return (
+          countMissingPortfolioCells(project, rec, {
+            groupId: r.student.groupId,
+          }) > 0
+        );
       });
       if (incomplete.length > 0) {
         items.push({

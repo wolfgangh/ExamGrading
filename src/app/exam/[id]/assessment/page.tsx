@@ -48,6 +48,7 @@ import {
   averageLecturerGradesForComponent,
   componentGradeFromCriteria,
   computePortfolioRawAverageForProject,
+  disabledCriteriaForGroup,
   effectivePortfolioGrades,
   gradeFromCriterionValues,
   shortLecturerLabel,
@@ -66,6 +67,8 @@ import { StudentGroupSelect } from "@/components/exam/student-group-select";
 import {
   countInGroup,
   filterRowsByGroup,
+  getGroupDisabledPortfolioCriteria,
+  setGroupPortfolioCriterionDisabled,
   setStudentGroupId,
   setStudentGroupIds,
   sortedStudentGroups,
@@ -146,7 +149,18 @@ export default function AssessmentPage() {
     if (groupFilter === "all" || groupFilter === "none") return [] as string[];
     return filterRowsByGroup(sortedRows, groupFilter).map((r) => r.key);
   }, [sortedRows, groupFilter]);
-  const concreteGroupSelected = groupMemberKeys.length > 0;
+  const concreteGroupSelected =
+    groupFilter !== "all" &&
+    groupFilter !== "none" &&
+    groupMemberKeys.length > 0;
+  /** Konkrete Gruppen-ID (Filter), für gruppenweise Kriterien-Deaktivierung */
+  const selectedGroupId =
+    groupFilter !== "all" && groupFilter !== "none" ? groupFilter : null;
+  const selectedGroupName =
+    selectedGroupId && project
+      ? sortedStudentGroups(project).find((g) => g.id === selectedGroupId)
+          ?.name
+      : null;
   const groupPerformanceActive =
     isPortfolio && groupPerformance && concreteGroupSelected;
 
@@ -482,6 +496,19 @@ export default function AssessmentPage() {
         }))
       )
     : [];
+  /** Bei Gruppenfilter: deaktivierte Kriterien der gewählten Gruppe (aktive TL) */
+  const groupDisabledCritIds =
+    selectedGroupId && activeComponentId
+      ? new Set(
+          getGroupDisabledPortfolioCriteria(
+            project,
+            selectedGroupId,
+            activeComponentId
+          )
+        )
+      : new Set<string>();
+  /** Kriterien der aktiven TL für Toggle-UI */
+  const activeTlCriteria = activeComponent?.criteria ?? [];
   /** Anzahl Noten-/Werte-Spalten (ohne Name/Matr/Gruppe/Note) */
   const valueColCount = isPortfolio
     ? portfolioCriteriaMode
@@ -496,6 +523,23 @@ export default function AssessmentPage() {
       : "Noch keine Teilleistungen – unter Einstellungen festlegen (Standard: 2)."
     : "Noch keine Kriterien – unter Einstellungen anlegen.";
 
+  const toggleGroupCriterion = (
+    componentId: string,
+    criterionId: string,
+    disabled: boolean
+  ) => {
+    if (!selectedGroupId) return;
+    setProject((prev) =>
+      setGroupPortfolioCriterionDisabled(
+        prev,
+        selectedGroupId,
+        componentId,
+        criterionId,
+        disabled
+      )
+    );
+  };
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -507,8 +551,8 @@ export default function AssessmentPage() {
             {isPortfolio
               ? portfolioCriteriaMode
                 ? perLecturer
-                  ? "Kriterien je Teilleistung und Dozent; Teilnote = Mittel der Dozenten-Noten; Gesamtnote gewichtet."
-                  : "Kriterien je Teilleistung → berechnete Teilnote; Gesamtnote = gewichteter Mittelwert."
+                  ? "Kriterien je Teilleistung und Dozent; Teilnote = Mittel der Dozenten-Noten; Gesamtnote gewichtet. Pro Gruppe können Kriterien deaktiviert werden."
+                  : "Kriterien je Teilleistung → berechnete Teilnote; Gesamtnote gewichtet. Pro Gruppe können einzelne Kriterien deaktiviert werden (zählen dann nicht)."
                 : perLecturer
                   ? "Jeder Dozent vergibt Teilnoten; Teilnote = Mittel der Dozenten (gleichgewichtet). Gesamtnote = gewichteter Mittelwert der Teilleistungen (nächste deutsche Note)."
                   : "Teilnoten je Teilleistung eintragen. Gesamtnote = gewichteter Mittelwert, gerundet auf die nächste deutsche Note (1,0 … 5,0)."
@@ -612,6 +656,14 @@ export default function AssessmentPage() {
                     {components.map((c) => {
                       const active = c.id === activeComponentId;
                       const nCrit = c.criteria?.length ?? 0;
+                      const nDis =
+                        selectedGroupId != null
+                          ? getGroupDisabledPortfolioCriteria(
+                              project,
+                              selectedGroupId,
+                              c.id
+                            ).length
+                          : 0;
                       return (
                         <Button
                           key={c.id}
@@ -633,7 +685,8 @@ export default function AssessmentPage() {
                             )}
                           >
                             {c.name !== c.code ? `${c.name} · ` : ""}
-                            {nCrit} Krit. · w{c.weight}
+                            {nCrit} Krit.
+                            {nDis > 0 ? ` · ${nDis} aus` : ""} · w{c.weight}
                           </span>
                         </Button>
                       );
@@ -674,6 +727,96 @@ export default function AssessmentPage() {
                     </Select>
                   )}
                 </div>
+              )}
+              {selectedGroupId &&
+                activeComponent &&
+                activeTlCriteria.length > 0 && (
+                  <div className="space-y-2 rounded-lg border border-dashed bg-background/60 px-3 py-2.5">
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-sm font-medium">
+                        Kriterien für{" "}
+                        <span className="text-primary">
+                          {selectedGroupName ?? "Gruppe"}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Deaktivierte Kriterien fließen nur bei dieser Gruppe
+                        nicht in die Note ein (keine Gruppenleistung). Andere
+                        Gruppen bleiben unverändert.
+                      </p>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {activeTlCriteria.map((k) => {
+                        const off = groupDisabledCritIds.has(k.id);
+                        const switchId = `crit-off-${activeComponent.id}-${k.id}`;
+                        return (
+                          <li
+                            key={k.id}
+                            className={cn(
+                              "flex items-center justify-between gap-3 rounded-md border px-2.5 py-1.5",
+                              off
+                                ? "border-muted bg-muted/40 opacity-80"
+                                : "bg-card"
+                            )}
+                          >
+                            <Label
+                              htmlFor={switchId}
+                              className="min-w-0 cursor-pointer text-sm font-normal"
+                            >
+                              <span
+                                className={cn(
+                                  "font-medium",
+                                  off && "line-through text-muted-foreground"
+                                )}
+                              >
+                                {k.code || k.name}
+                              </span>
+                              {k.code && k.name !== k.code && (
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  {k.name}
+                                </span>
+                              )}
+                              <span className="ml-1.5 text-[10px] text-muted-foreground tabular-nums">
+                                w{k.weight}
+                              </span>
+                            </Label>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="text-[10px] text-muted-foreground">
+                                {off ? "aus" : "an"}
+                              </span>
+                              <Switch
+                                id={switchId}
+                                checked={!off}
+                                onCheckedChange={(on) =>
+                                  toggleGroupCriterion(
+                                    activeComponent.id,
+                                    k.id,
+                                    !on
+                                  )
+                                }
+                                aria-label={`${k.code || k.name} für Gruppe ${
+                                  off ? "aktivieren" : "deaktivieren"
+                                }`}
+                              />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              {selectedGroupId &&
+                activeComponent &&
+                activeTlCriteria.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Keine Kriterien für diese TL – unter Einstellungen anlegen.
+                  </p>
+                )}
+              {!selectedGroupId && activeTlCriteria.length > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  Gruppe wählen, um Kriterien nur für diese Gruppe zu
+                  deaktivieren.
+                </p>
               )}
             </CardContent>
           </Card>
@@ -895,11 +1038,22 @@ export default function AssessmentPage() {
                     {isPortfolio
                       ? portfolioCriteriaMode
                         ? [
-                            ...portfolioCritColumns.map((col) => (
+                            ...portfolioCritColumns.map((col) => {
+                              const headerDisabled =
+                                selectedGroupId != null &&
+                                groupDisabledCritIds.has(col.criterion.id);
+                              return (
                               <TableHead
                                 key={`${col.componentId}::${col.criterion.id}`}
-                                className="min-w-[7rem] text-center"
-                                title={`${col.componentCode} · ${col.criterion.name}`}
+                                className={cn(
+                                  "min-w-[7rem] text-center",
+                                  headerDisabled && "opacity-50"
+                                )}
+                                title={
+                                  headerDisabled
+                                    ? `${col.componentCode} · ${col.criterion.name} · für diese Gruppe deaktiviert`
+                                    : `${col.componentCode} · ${col.criterion.name}`
+                                }
                               >
                                 <div className="text-[10px] font-normal text-muted-foreground">
                                   {col.componentCode}
@@ -907,15 +1061,22 @@ export default function AssessmentPage() {
                                     ? ` · ${shortLecturerLabel(activeLecturer)}`
                                     : ""}
                                 </div>
-                                <div className="font-semibold text-[11px] leading-tight">
+                                <div
+                                  className={cn(
+                                    "font-semibold text-[11px] leading-tight",
+                                    headerDisabled && "line-through"
+                                  )}
+                                >
                                   {col.criterion.code || col.criterion.name}
                                 </div>
                                 <div className="text-[10px] text-muted-foreground">
-                                  {criterionScaleShort(col.criterion)} · w
-                                  {col.criterion.weight}
+                                  {headerDisabled
+                                    ? "deaktiviert"
+                                    : `${criterionScaleShort(col.criterion)} · w${col.criterion.weight}`}
                                 </div>
                               </TableHead>
-                            )),
+                              );
+                            }),
                             ...matrixComponents.map((c) => (
                               <TableHead
                                 key={`${c.id}::note`}
@@ -1059,11 +1220,26 @@ export default function AssessmentPage() {
                           normalizeMatriculation(p.matriculationNumber) ===
                           r.key
                       );
+                      const rowGroupId = r.student.groupId ?? null;
+                      const rowDisabledCrit = isPortfolio
+                        ? new Set(
+                            disabledCriteriaForGroup(
+                              project,
+                              rowGroupId,
+                              activeComponentId
+                            )
+                          )
+                        : new Set<string>();
+                      const gradeCtx = { groupId: rowGroupId };
                       const effGrades = isPortfolio
-                        ? effectivePortfolioGrades(project, rec)
+                        ? effectivePortfolioGrades(project, rec, gradeCtx)
                         : null;
                       const rawAvg = isPortfolio
-                        ? computePortfolioRawAverageForProject(project, rec)
+                        ? computePortfolioRawAverageForProject(
+                            project,
+                            rec,
+                            gradeCtx
+                          )
                         : null;
                       const ungrouped =
                         hasGroups && !r.student.groupId;
@@ -1141,6 +1317,9 @@ export default function AssessmentPage() {
                             ? portfolioCriteriaMode
                               ? [
                                   ...portfolioCritColumns.map((col) => {
+                                    const critDisabled = rowDisabledCrit.has(
+                                      col.criterion.id
+                                    );
                                     const v = activeLecturer
                                       ? rec
                                           ?.portfolioCriterionValuesByLecturer?.[
@@ -1156,49 +1335,71 @@ export default function AssessmentPage() {
                                         key={`${col.componentId}::${col.criterion.id}`}
                                         className={cn(
                                           "p-1 text-center",
-                                          rowBg
+                                          rowBg,
+                                          critDisabled && "opacity-50"
                                         )}
                                       >
-                                        <Input
-                                          className="mx-auto h-8 w-[4.5rem] text-center text-sm"
-                                          defaultValue={
-                                            v != null
-                                              ? String(v).replace(".", ",")
-                                              : ""
-                                          }
-                                          key={`${r.key}-${col.componentId}-${col.criterion.id}-${activeLecturer}-${project.updatedAt}`}
-                                          placeholder={criterionPlaceholder(
-                                            col.criterion
-                                          )}
-                                          title={criterionScaleHint(
-                                            col.criterion
-                                          )}
-                                          inputMode="decimal"
-                                          onBlur={(e) =>
-                                            setPortfolioCriterionValue(
-                                              r.key,
-                                              col.componentId,
-                                              col.criterion.id,
-                                              e.target.value,
-                                              activeLecturer || null
-                                            )
-                                          }
-                                        />
+                                        {critDisabled ? (
+                                          <span
+                                            className="mx-auto inline-flex h-8 w-[4.5rem] items-center justify-center rounded-md border border-dashed text-[10px] text-muted-foreground"
+                                            title="Kriterium für die Gruppe dieser Person deaktiviert – zählt nicht zur Note"
+                                          >
+                                            aus
+                                          </span>
+                                        ) : (
+                                          <Input
+                                            className="mx-auto h-8 w-[4.5rem] text-center text-sm"
+                                            defaultValue={
+                                              v != null
+                                                ? String(v).replace(".", ",")
+                                                : ""
+                                            }
+                                            key={`${r.key}-${col.componentId}-${col.criterion.id}-${activeLecturer}-${project.updatedAt}`}
+                                            placeholder={criterionPlaceholder(
+                                              col.criterion
+                                            )}
+                                            title={criterionScaleHint(
+                                              col.criterion
+                                            )}
+                                            inputMode="decimal"
+                                            onBlur={(e) =>
+                                              setPortfolioCriterionValue(
+                                                r.key,
+                                                col.componentId,
+                                                col.criterion.id,
+                                                e.target.value,
+                                                activeLecturer || null
+                                              )
+                                            }
+                                          />
+                                        )}
                                       </TableCell>
                                     );
                                   }),
                                   ...matrixComponents.map((c) => {
+                                    const disabledIds =
+                                      disabledCriteriaForGroup(
+                                        project,
+                                        rowGroupId,
+                                        c.id
+                                      );
                                     const note = activeLecturer
                                       ? gradeFromCriterionValues(
                                           rec
                                             ?.portfolioCriterionValuesByLecturer?.[
                                             c.id
                                           ]?.[activeLecturer],
-                                          c.criteria
+                                          c.criteria,
+                                          {
+                                            disabledCriterionIds: disabledIds,
+                                          }
                                         )
                                       : componentGradeFromCriteria(
                                           c,
-                                          rec?.portfolioCriterionValues?.[c.id]
+                                          rec?.portfolioCriterionValues?.[c.id],
+                                          {
+                                            disabledCriterionIds: disabledIds,
+                                          }
                                         );
                                     return (
                                       <TableCell

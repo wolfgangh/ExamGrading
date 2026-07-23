@@ -65,6 +65,47 @@ export function setStudentGroupId(
 }
 
 /** Mehrere Matrikelnummern in einem Update einer Gruppe (oder keiner) zuordnen */
+/**
+ * Portfolio-Kriterium für eine Gruppe aktivieren/deaktivieren.
+ * Deaktivierte Kriterien zählen nicht für die Notenberechnung dieser Gruppe.
+ */
+export function setGroupPortfolioCriterionDisabled(
+  project: ExamProject,
+  groupId: string,
+  componentId: string,
+  criterionId: string,
+  disabled: boolean
+): ExamProject {
+  const groups = [...(project.studentGroups ?? [])];
+  const idx = groups.findIndex((g) => g.id === groupId);
+  if (idx < 0) return project;
+  const g = groups[idx];
+  const map: Record<string, string[]> = {
+    ...(g.disabledPortfolioCriteria ?? {}),
+  };
+  const prev = new Set(map[componentId] ?? []);
+  if (disabled) prev.add(criterionId);
+  else prev.delete(criterionId);
+  if (prev.size === 0) delete map[componentId];
+  else map[componentId] = [...prev];
+  groups[idx] = {
+    ...g,
+    disabledPortfolioCriteria:
+      Object.keys(map).length > 0 ? map : undefined,
+  };
+  return { ...project, studentGroups: groups };
+}
+
+export function getGroupDisabledPortfolioCriteria(
+  project: ExamProject,
+  groupId: string | null | undefined,
+  componentId: string
+): string[] {
+  if (!groupId) return [];
+  const g = (project.studentGroups ?? []).find((x) => x.id === groupId);
+  return g?.disabledPortfolioCriteria?.[componentId] ?? [];
+}
+
 export function setStudentGroupIds(
   project: ExamProject,
   matKeys: string[],

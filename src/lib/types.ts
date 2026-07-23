@@ -128,6 +128,12 @@ export interface StudentGroup {
   id: string;
   name: string;
   orderIndex: number;
+  /**
+   * Portfolio-Kriterienmodus: deaktivierte Kriterien je Teilleistung.
+   * componentId → criterionId[]
+   * Gilt nur für diese Gruppe; fließt nicht in die Notenberechnung ein.
+   */
+  disabledPortfolioCriteria?: Record<string, string[]>;
 }
 
 export interface AttendanceRecord {

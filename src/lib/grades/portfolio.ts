@@ -80,15 +80,26 @@ export function averageLecturerGradesForComponent(
   return Math.round((acc / names.length) * 1000) / 1000;
 }
 
+export type GradeFromCriteriaOptions = {
+  /** Kriterium-IDs, die nicht in die Berechnung einfließen */
+  disabledCriterionIds?: readonly string[] | Set<string>;
+};
+
 /**
  * Gewichtete Kriterien → deutsche Note (1,0 best … 5,0).
- * Alle Kriterien müssen gesetzt sein.
+ * Alle *aktiven* Kriterien müssen gesetzt sein.
  */
 export function gradeFromCriterionValues(
   values: Record<string, number | null | undefined> | undefined,
-  criteria: AssessmentCriterion[] | undefined | null
+  criteria: AssessmentCriterion[] | undefined | null,
+  options?: GradeFromCriteriaOptions
 ): number | null {
-  const list = criteria ?? [];
+  const disabled = options?.disabledCriterionIds
+    ? options.disabledCriterionIds instanceof Set
+      ? options.disabledCriterionIds
+      : new Set(options.disabledCriterionIds)
+    : null;
+  const list = (criteria ?? []).filter((c) => !disabled?.has(c.id));
   if (!list.length) return null;
   const vals = values ?? {};
   let wSum = 0;
@@ -113,7 +124,24 @@ export type PortfolioProjectSlice = Pick<
   | "portfolioCriteriaMode"
   | "lecturers"
   | "portfolioComponents"
+  | "studentGroups"
 >;
+
+export type PortfolioGradeContext = {
+  /** Gruppe des Studierenden (für gruppenweise deaktivierte Kriterien) */
+  groupId?: string | null;
+};
+
+/** Deaktivierte Kriterien einer TL für eine Gruppe */
+export function disabledCriteriaForGroup(
+  project: Pick<ExamProject, "studentGroups">,
+  groupId: string | null | undefined,
+  componentId: string
+): string[] {
+  if (!groupId) return [];
+  const g = (project.studentGroups ?? []).find((x) => x.id === groupId);
+  return g?.disabledPortfolioCriteria?.[componentId] ?? [];
+}
 
 /**
  * Effektive Teilnoten pro Teilleistung
@@ -121,10 +149,12 @@ export type PortfolioProjectSlice = Pick<
  */
 export function effectivePortfolioGrades(
   project: PortfolioProjectSlice,
-  rec: PointsRecord | undefined | null
+  rec: PointsRecord | undefined | null,
+  ctx?: PortfolioGradeContext
 ): Record<string, number | null> {
   const components = project.portfolioComponents ?? [];
   const criteriaMode = project.portfolioCriteriaMode === true;
+  const groupId = ctx?.groupId;
   const out: Record<string, number | null> = {};
 
   if (criteriaMode) {
@@ -132,7 +162,14 @@ export function effectivePortfolioGrades(
       for (const c of components) {
         out[c.id] = gradeFromCriterionValues(
           rec?.portfolioCriterionValues?.[c.id],
-          c.criteria
+          c.criteria,
+          {
+            disabledCriterionIds: disabledCriteriaForGroup(
+              project,
+              groupId,
+              c.id
+            ),
+          }
         );
       }
       return out;
@@ -141,7 +178,11 @@ export function effectivePortfolioGrades(
       .map((l) => l.trim())
       .filter(Boolean);
     for (const c of components) {
-      if (!lecturers.length || !(c.criteria?.length)) {
+      const disabled = disabledCriteriaForGroup(project, groupId, c.id);
+      const activeCrits = (c.criteria ?? []).filter(
+        (k) => !disabled.includes(k.id)
+      );
+      if (!lecturers.length || !activeCrits.length) {
         out[c.id] = null;
         continue;
       }
@@ -150,7 +191,8 @@ export function effectivePortfolioGrades(
       for (const name of lecturers) {
         const g = gradeFromCriterionValues(
           rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name],
-          c.criteria
+          c.criteria,
+          { disabledCriterionIds: disabled }
         );
         if (g == null) {
           ok = false;
@@ -193,10 +235,11 @@ export function countMissingPortfolioGrades(
   }).length;
 }
 
-/** Fehlende Zellen: Noten oder Kriterien (× Dozent) */
+/** Fehlende Zellen: Noten oder Kriterien (× Dozent); deaktivierte Kriterien ignorieren */
 export function countMissingPortfolioCells(
   project: PortfolioProjectSlice,
-  rec: PointsRecord | undefined | null
+  rec: PointsRecord | undefined | null,
+  ctx?: PortfolioGradeContext
 ): number {
   const components = project.portfolioComponents ?? [];
   if (!components.length) return 0;
@@ -205,13 +248,17 @@ export function countMissingPortfolioCells(
   const lecturers = (project.lecturers ?? [])
     .map((l) => l.trim())
     .filter(Boolean);
+  const groupId = ctx?.groupId;
 
   if (criteriaMode) {
     let missing = 0;
     for (const c of components) {
-      const crits = c.criteria ?? [];
+      const disabled = new Set(
+        disabledCriteriaForGroup(project, groupId, c.id)
+      );
+      const crits = (c.criteria ?? []).filter((k) => !disabled.has(k.id));
       if (!crits.length) {
-        missing += 1; // TL ohne Kriterien = unvollständig
+        missing += 1; // TL ohne aktive Kriterien = unvollständig
         continue;
       }
       if (!project.portfolioPerLecturerGrading) {
@@ -256,20 +303,22 @@ export function countMissingPortfolioCells(
 
 export function computePortfolioGradeForProject(
   project: PortfolioProjectSlice,
-  rec: PointsRecord | undefined | null
+  rec: PointsRecord | undefined | null,
+  ctx?: PortfolioGradeContext
 ): number | null {
   return computePortfolioGrade(
-    effectivePortfolioGrades(project, rec),
+    effectivePortfolioGrades(project, rec, ctx),
     project.portfolioComponents ?? []
   );
 }
 
 export function computePortfolioRawAverageForProject(
   project: PortfolioProjectSlice,
-  rec: PointsRecord | undefined | null
+  rec: PointsRecord | undefined | null,
+  ctx?: PortfolioGradeContext
 ): number | null {
   return computePortfolioRawAverage(
-    effectivePortfolioGrades(project, rec),
+    effectivePortfolioGrades(project, rec, ctx),
     project.portfolioComponents ?? []
   );
 }
@@ -277,9 +326,10 @@ export function computePortfolioRawAverageForProject(
 /** Teilnote einer TL aus Kriterien (ein Bewerter-Set) */
 export function componentGradeFromCriteria(
   component: PortfolioComponent,
-  values: Record<string, number | null | undefined> | undefined
+  values: Record<string, number | null | undefined> | undefined,
+  options?: GradeFromCriteriaOptions
 ): number | null {
-  return gradeFromCriterionValues(values, component.criteria);
+  return gradeFromCriterionValues(values, component.criteria, options);
 }
 
 export function recomputePortfolioRecord(rec: PointsRecord): PointsRecord {
