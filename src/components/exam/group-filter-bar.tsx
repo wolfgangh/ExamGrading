@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
+import type { PortfolioFillStatus } from "@/lib/grades/portfolio";
 import {
   countInGroup,
   sortedStudentGroups,
@@ -10,16 +11,36 @@ import {
 } from "@/lib/student-groups";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+export type GroupFillStatusMap = Record<
+  string,
+  Exclude<PortfolioFillStatus, "empty">
+>;
+
+const FILL_LABEL: Record<Exclude<PortfolioFillStatus, "empty">, string> = {
+  complete: "vollständig bewertet",
+  partial: "teilweise bewertet",
+  none: "noch keine Einträge",
+};
+
 export function GroupFilterBar({
   project,
   rows,
   value,
   onChange,
+  groupFillStatus,
+  showFillLegend = false,
+  fillScopeLabel,
 }: {
   project: ExamProject;
   rows: EnrichedStudentRow[];
   value: GroupFilterId;
   onChange: (id: GroupFilterId) => void;
+  /** Füllstand je Gruppen-ID (nur echte Gruppen) */
+  groupFillStatus?: GroupFillStatusMap;
+  /** Legende für vollständig / teilweise / keine Einträge */
+  showFillLegend?: boolean;
+  /** z. B. „TL1“ für Tooltip */
+  fillScopeLabel?: string;
 }) {
   const groups = sortedStudentGroups(project);
   if (groups.length === 0) {
@@ -63,6 +84,8 @@ export function GroupFilterBar({
     onChange(next);
   };
 
+  const scopeHint = fillScopeLabel ? ` (${fillScopeLabel})` : "";
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -91,11 +114,19 @@ export function GroupFilterBar({
             const active = value === p.id;
             const emptyGroup = p.kind === "group" && p.count === 0;
             const needsAssign = p.kind === "none" && p.count > 0;
-            const title = emptyGroup
-              ? "Noch unbefüllt – darf absichtlich leer bleiben"
-              : needsAssign
-                ? `${p.count} Person(en) ohne Gruppe`
+            const fill =
+              p.kind === "group" && p.count > 0
+                ? groupFillStatus?.[p.id]
                 : undefined;
+
+            let title: string | undefined;
+            if (emptyGroup) {
+              title = "Noch unbefüllt – darf absichtlich leer bleiben";
+            } else if (needsAssign) {
+              title = `${p.count} Person(en) ohne Gruppe`;
+            } else if (fill) {
+              title = `${FILL_LABEL[fill]}${scopeHint}`;
+            }
 
             return (
               <Button
@@ -107,18 +138,39 @@ export function GroupFilterBar({
                 className={cn(
                   "h-8 gap-1.5 tabular-nums",
                   active && "shadow-sm",
+                  // Leere Gruppe (keine Mitglieder)
                   !active &&
                     emptyGroup &&
                     "border-dashed border-amber-500/70 text-amber-950 dark:border-amber-600 dark:text-amber-100",
+                  // Ohne Gruppe mit Personen
                   !active &&
                     needsAssign &&
                     "border-amber-500 bg-amber-50 text-amber-950 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-50",
+                  // Füllstand
+                  !active &&
+                    fill === "complete" &&
+                    "border-emerald-500/80 bg-emerald-50 text-emerald-950 dark:border-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-50",
+                  !active &&
+                    fill === "partial" &&
+                    "border-amber-500/80 bg-amber-50 text-amber-950 dark:border-amber-600 dark:bg-amber-950/35 dark:text-amber-50",
+                  !active &&
+                    fill === "none" &&
+                    "border-slate-400/70 bg-slate-50 text-slate-800 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-100",
                   active &&
                     emptyGroup &&
                     "ring-1 ring-amber-300 dark:ring-amber-700",
                   active &&
                     needsAssign &&
-                    "ring-1 ring-amber-300 dark:ring-amber-700"
+                    "ring-1 ring-amber-300 dark:ring-amber-700",
+                  active &&
+                    fill === "complete" &&
+                    "ring-1 ring-emerald-300 dark:ring-emerald-700",
+                  active &&
+                    fill === "partial" &&
+                    "ring-1 ring-amber-300 dark:ring-amber-700",
+                  active &&
+                    fill === "none" &&
+                    "ring-1 ring-slate-300 dark:ring-slate-600"
                 )}
                 onClick={() => onChange(p.id)}
               >
@@ -128,9 +180,13 @@ export function GroupFilterBar({
                     "rounded-full px-1.5 text-[10px] font-semibold",
                     active
                       ? "bg-primary-foreground/20"
-                      : emptyGroup || needsAssign
+                      : emptyGroup || needsAssign || fill === "partial"
                         ? "bg-amber-200/80 text-amber-950 dark:bg-amber-900 dark:text-amber-50"
-                        : "bg-muted text-muted-foreground"
+                        : fill === "complete"
+                          ? "bg-emerald-200/80 text-emerald-950 dark:bg-emerald-900 dark:text-emerald-50"
+                          : fill === "none"
+                            ? "bg-slate-200/90 text-slate-800 dark:bg-slate-800 dark:text-slate-100"
+                            : "bg-muted text-muted-foreground"
                   )}
                 >
                   {p.count}
@@ -140,6 +196,36 @@ export function GroupFilterBar({
           })}
         </div>
       </div>
+      {showFillLegend && groupFillStatus && (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-block size-2 rounded-full bg-emerald-500"
+              aria-hidden
+            />
+            vollständig
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-block size-2 rounded-full bg-amber-500"
+              aria-hidden
+            />
+            teilweise
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-block size-2 rounded-full bg-slate-400"
+              aria-hidden
+            />
+            keine Einträge
+          </span>
+          {fillScopeLabel && (
+            <span className="text-muted-foreground/80">
+              · bezogen auf {fillScopeLabel}
+            </span>
+          )}
+        </p>
+      )}
       {(emptyGroupCount > 0 || unassignedCount > 0) && (
         <p className="text-[11px] text-muted-foreground">
           {unassignedCount > 0 && (

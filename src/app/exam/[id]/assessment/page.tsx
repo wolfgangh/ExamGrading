@@ -51,6 +51,7 @@ import {
   disabledCriteriaForGroup,
   effectivePortfolioGrades,
   gradeFromCriterionValues,
+  groupPortfolioFillStatus,
   shortLecturerLabel,
 } from "@/lib/grades/portfolio";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
@@ -69,7 +70,10 @@ import {
   Settings,
   Users,
 } from "lucide-react";
-import { GroupFilterBar } from "@/components/exam/group-filter-bar";
+import {
+  GroupFilterBar,
+  type GroupFillStatusMap,
+} from "@/components/exam/group-filter-bar";
 import { StudentGroupSelect } from "@/components/exam/student-group-select";
 import {
   countInGroup,
@@ -207,6 +211,53 @@ export default function AssessmentPage() {
     if (id === "all" || id === "none") setGroupPerformance(false);
     setCriteriaDisableOpen(false);
   };
+
+  /** Kriterienmodus: Füllstand nur für gewählte TL; sonst alle TLs */
+  const fillScopeComponentId =
+    isPortfolio && portfolioCriteriaMode && components.length > 0
+      ? componentFilter && components.some((c) => c.id === componentFilter)
+        ? componentFilter
+        : components[0].id
+      : null;
+  const fillScopeLabel =
+    isPortfolio && fillScopeComponentId
+      ? (() => {
+          const c = components.find((x) => x.id === fillScopeComponentId);
+          return c ? c.code || c.name : undefined;
+        })()
+      : isPortfolio
+        ? "alle Teilleistungen"
+        : undefined;
+
+  const groupFillStatus = useMemo((): GroupFillStatusMap | undefined => {
+    if (!project || !isPortfolio || !hasGroups) return undefined;
+    const pointsByKey = new Map(
+      project.points.map((p) => [
+        normalizeMatriculation(p.matriculationNumber),
+        p,
+      ])
+    );
+    const map: GroupFillStatusMap = {};
+    for (const g of sortedStudentGroups(project)) {
+      const memberKeys = sortedRows
+        .filter((r) => r.student.groupId === g.id)
+        .map((r) => r.key);
+      const st = groupPortfolioFillStatus(
+        project,
+        memberKeys,
+        (key) => pointsByKey.get(key),
+        { groupId: g.id, componentId: fillScopeComponentId }
+      );
+      if (st !== "empty") map[g.id] = st;
+    }
+    return map;
+  }, [
+    project,
+    isPortfolio,
+    hasGroups,
+    sortedRows,
+    fillScopeComponentId,
+  ]);
 
   if (!project) return null;
 
@@ -584,8 +635,12 @@ export default function AssessmentPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Gruppe wählen</CardTitle>
               <CardDescription>
-                Nur Studierende der gewählten Gruppe in der Matrix – schnell
-                wechseln mit den Schaltflächen.
+                Nur Studierende der gewählten Gruppe in der Matrix – Farben
+                zeigen den Füllstand
+                {portfolioCriteriaMode
+                  ? " der gewählten Teilleistung"
+                  : " aller Teilleistungen"}
+                .
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -594,6 +649,9 @@ export default function AssessmentPage() {
                 rows={sortedRows}
                 value={groupFilter}
                 onChange={setGroupFilterSafe}
+                groupFillStatus={groupFillStatus}
+                showFillLegend
+                fillScopeLabel={fillScopeLabel}
               />
               {concreteGroupSelected && (
                 <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2.5">
@@ -658,83 +716,93 @@ export default function AssessmentPage() {
                   Keine Teilleistungen – bitte unter Einstellungen anlegen.
                 </p>
               ) : (
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">
-                    Teilleistung
-                  </Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {components.map((c) => {
-                      const active = c.id === activeComponentId;
-                      const nCrit = c.criteria?.length ?? 0;
-                      const nDis =
-                        selectedGroupId != null
-                          ? getGroupDisabledPortfolioCriteria(
-                              project,
-                              selectedGroupId,
-                              c.id
-                            ).length
-                          : 0;
-                      return (
-                        <Button
-                          key={c.id}
-                          type="button"
-                          size="sm"
-                          variant={active ? "default" : "outline"}
-                          className="h-auto min-h-9 flex-col items-start gap-0 px-3 py-1.5"
-                          onClick={() => setComponentFilter(c.id)}
-                        >
-                          <span className="font-semibold">
-                            {c.code || c.name}
-                          </span>
-                          <span
-                            className={cn(
-                              "text-[10px] font-normal",
-                              active
-                                ? "text-primary-foreground/80"
-                                : "text-muted-foreground"
-                            )}
+                <div
+                  className={cn(
+                    "grid grid-cols-1 items-start gap-4",
+                    perLecturer && "md:grid-cols-2"
+                  )}
+                >
+                  <div className="min-w-0 space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Teilleistung
+                    </Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {components.map((c) => {
+                        const active = c.id === activeComponentId;
+                        const nCrit = c.criteria?.length ?? 0;
+                        const nDis =
+                          selectedGroupId != null
+                            ? getGroupDisabledPortfolioCriteria(
+                                project,
+                                selectedGroupId,
+                                c.id
+                              ).length
+                            : 0;
+                        return (
+                          <Button
+                            key={c.id}
+                            type="button"
+                            size="sm"
+                            variant={active ? "default" : "outline"}
+                            className="h-auto min-h-9 flex-col items-start gap-0 px-3 py-1.5"
+                            onClick={() => setComponentFilter(c.id)}
                           >
-                            {c.name !== c.code ? `${c.name} · ` : ""}
-                            {nCrit} Krit.
-                            {nDis > 0 ? ` · ${nDis} aus` : ""} · w{c.weight}
-                          </span>
-                        </Button>
-                      );
-                    })}
+                            <span className="font-semibold">
+                              {c.code || c.name}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-[10px] font-normal",
+                                active
+                                  ? "text-primary-foreground/80"
+                                  : "text-muted-foreground"
+                              )}
+                            >
+                              {c.name !== c.code ? `${c.name} · ` : ""}
+                              {nCrit} Krit.
+                              {nDis > 0 ? ` · ${nDis} aus` : ""} · w{c.weight}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
-              {perLecturer && (
-                <div className="grid max-w-full gap-1.5 border-t pt-3 sm:max-w-sm">
-                  <Label htmlFor="portfolio-lecturer-filter">
-                    Dozent / Bewerter
-                  </Label>
-                  {lecturers.length === 0 ? (
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
-                      Keine Dozenten in den Stammdaten – bitte unter
-                      Einstellungen eintragen.
-                    </p>
-                  ) : (
-                    <Select
-                      value={activeLecturer || lecturers[0]}
-                      onValueChange={(v) => v && setLecturerFilter(v)}
-                    >
-                      <SelectTrigger
-                        id="portfolio-lecturer-filter"
-                        className="w-full"
+                  {perLecturer && (
+                    <div className="min-w-0 space-y-2">
+                      <Label
+                        htmlFor="portfolio-lecturer-filter"
+                        className="text-xs text-muted-foreground"
                       >
-                        <SelectValue>
-                          {activeLecturer || lecturers[0]}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {lecturers.map((l) => (
-                          <SelectItem key={l} value={l}>
-                            {l}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                        Dozent / Bewerter
+                      </Label>
+                      {lecturers.length === 0 ? (
+                        <p className="text-sm text-amber-800 dark:text-amber-200">
+                          Keine Dozenten in den Stammdaten – bitte unter
+                          Einstellungen eintragen.
+                        </p>
+                      ) : (
+                        <Select
+                          value={activeLecturer || lecturers[0]}
+                          onValueChange={(v) => v && setLecturerFilter(v)}
+                        >
+                          <SelectTrigger
+                            id="portfolio-lecturer-filter"
+                            className="w-full"
+                          >
+                            <SelectValue>
+                              {activeLecturer || lecturers[0]}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {lecturers.map((l) => (
+                              <SelectItem key={l} value={l}>
+                                {l}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -862,8 +930,9 @@ export default function AssessmentPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Gruppe wählen</CardTitle>
             <CardDescription>
-              Nur Studierende der gewählten Gruppe in der Matrix – schnell
-              wechseln mit den Schaltflächen.
+              {isPortfolio
+                ? "Nur Studierende der gewählten Gruppe – Farben zeigen den Füllstand aller Teilleistungen."
+                : "Nur Studierende der gewählten Gruppe in der Matrix – schnell wechseln mit den Schaltflächen."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -872,6 +941,9 @@ export default function AssessmentPage() {
               rows={sortedRows}
               value={groupFilter}
               onChange={setGroupFilterSafe}
+              groupFillStatus={isPortfolio ? groupFillStatus : undefined}
+              showFillLegend={isPortfolio}
+              fillScopeLabel={isPortfolio ? fillScopeLabel : undefined}
             />
             {isPortfolio && concreteGroupSelected && (
               <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2.5">

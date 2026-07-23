@@ -130,7 +130,12 @@ export type PortfolioProjectSlice = Pick<
 export type PortfolioGradeContext = {
   /** Gruppe des Studierenden (für gruppenweise deaktivierte Kriterien) */
   groupId?: string | null;
+  /** Optional: nur diese Teilleistung (Füllstand / Missing) */
+  componentId?: string | null;
 };
+
+/** Füllstand einer Gruppe / Person im Bewertungs-Scope */
+export type PortfolioFillStatus = "empty" | "none" | "partial" | "complete";
 
 /** Deaktivierte Kriterien einer TL für eine Gruppe */
 export function disabledCriteriaForGroup(
@@ -235,13 +240,65 @@ export function countMissingPortfolioGrades(
   }).length;
 }
 
+function portfolioComponentsForScope(
+  project: PortfolioProjectSlice,
+  componentId?: string | null
+): PortfolioComponent[] {
+  const all = project.portfolioComponents ?? [];
+  if (!componentId) return all;
+  return all.filter((c) => c.id === componentId);
+}
+
+/**
+ * Pflichtzellen im Scope (für Füllstand: required − missing = filled).
+ * Deaktivierte Kriterien der Gruppe zählen nicht.
+ */
+export function countRequiredPortfolioCells(
+  project: PortfolioProjectSlice,
+  ctx?: PortfolioGradeContext
+): number {
+  const components = portfolioComponentsForScope(project, ctx?.componentId);
+  if (!components.length) return 0;
+
+  const criteriaMode = project.portfolioCriteriaMode === true;
+  const lecturers = (project.lecturers ?? [])
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const groupId = ctx?.groupId;
+
+  if (criteriaMode) {
+    let required = 0;
+    for (const c of components) {
+      const disabled = new Set(
+        disabledCriteriaForGroup(project, groupId, c.id)
+      );
+      const crits = (c.criteria ?? []).filter((k) => !disabled.has(k.id));
+      if (!crits.length) {
+        required += 1; // TL ohne aktive Kriterien = 1 „Pflicht“ (unvollständig)
+        continue;
+      }
+      if (!project.portfolioPerLecturerGrading) {
+        required += crits.length;
+      } else {
+        required += Math.max(lecturers.length, 1) * crits.length;
+      }
+    }
+    return required;
+  }
+
+  if (!project.portfolioPerLecturerGrading) {
+    return components.length;
+  }
+  return components.length * Math.max(lecturers.length, 1);
+}
+
 /** Fehlende Zellen: Noten oder Kriterien (× Dozent); deaktivierte Kriterien ignorieren */
 export function countMissingPortfolioCells(
   project: PortfolioProjectSlice,
   rec: PointsRecord | undefined | null,
   ctx?: PortfolioGradeContext
 ): number {
-  const components = project.portfolioComponents ?? [];
+  const components = portfolioComponentsForScope(project, ctx?.componentId);
   if (!components.length) return 0;
 
   const criteriaMode = project.portfolioCriteriaMode === true;
@@ -299,6 +356,48 @@ export function countMissingPortfolioCells(
     }
   }
   return missing;
+}
+
+/** Füllstand einer Person im Scope (eine TL oder alle TLs) */
+export function personPortfolioFillStatus(
+  project: PortfolioProjectSlice,
+  rec: PointsRecord | undefined | null,
+  ctx?: PortfolioGradeContext
+): Exclude<PortfolioFillStatus, "empty"> {
+  const required = countRequiredPortfolioCells(project, ctx);
+  if (required <= 0) return "none";
+  const missing = countMissingPortfolioCells(project, rec, ctx);
+  if (missing <= 0) return "complete";
+  if (missing >= required) return "none";
+  return "partial";
+}
+
+/**
+ * Aggregierter Füllstand einer Gruppe im Scope.
+ * `memberKeys`: Matrikelnummern der Gruppenmitglieder.
+ */
+export function groupPortfolioFillStatus(
+  project: PortfolioProjectSlice,
+  memberKeys: readonly string[],
+  getRecord: (matKey: string) => PointsRecord | undefined | null,
+  ctx?: Omit<PortfolioGradeContext, "groupId"> & { groupId?: string | null }
+): PortfolioFillStatus {
+  if (memberKeys.length === 0) return "empty";
+  let anyNone = false;
+  let anyPartial = false;
+  let anyComplete = false;
+  for (const key of memberKeys) {
+    const st = personPortfolioFillStatus(project, getRecord(key), {
+      groupId: ctx?.groupId,
+      componentId: ctx?.componentId,
+    });
+    if (st === "none") anyNone = true;
+    else if (st === "partial") anyPartial = true;
+    else anyComplete = true;
+  }
+  if (anyComplete && !anyNone && !anyPartial) return "complete";
+  if (anyNone && !anyPartial && !anyComplete) return "none";
+  return "partial";
 }
 
 export function computePortfolioGradeForProject(
