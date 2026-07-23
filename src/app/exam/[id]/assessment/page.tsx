@@ -10,6 +10,7 @@ import { ClearableInput } from "@/components/ui/clearable-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -56,6 +57,7 @@ import {
   isPortfolioExam,
   isStaCriteriaExam,
   type EnrichedStudentRow,
+  type PointsRecord,
 } from "@/lib/types";
 import { cn, formatGrade, formatPoints } from "@/lib/utils";
 import { CircleHelp, Search, Settings, Users } from "lucide-react";
@@ -104,6 +106,8 @@ export default function AssessmentPage() {
   const [lecturerFilter, setLecturerFilter] = useState<string>("");
   /** Portfolio-Kriterienmodus: eine Teilleistung in der Matrix */
   const [componentFilter, setComponentFilter] = useState<string>("");
+  /** Gleiche Werte für alle Mitglieder der gefilterten Gruppe */
+  const [groupPerformance, setGroupPerformance] = useState(false);
 
   const criteria = project?.criteria ?? [];
   const components = project?.portfolioComponents ?? [];
@@ -137,6 +141,15 @@ export default function AssessmentPage() {
     () => filteredRows.map((r) => r.key),
     [filteredRows]
   );
+  /** Mitglieder der konkret gewählten Gruppe (nicht Alle / Ohne Gruppe) */
+  const groupMemberKeys = useMemo(() => {
+    if (groupFilter === "all" || groupFilter === "none") return [] as string[];
+    return filterRowsByGroup(sortedRows, groupFilter).map((r) => r.key);
+  }, [sortedRows, groupFilter]);
+  const concreteGroupSelected = groupMemberKeys.length > 0;
+  const groupPerformanceActive =
+    isPortfolio && groupPerformance && concreteGroupSelected;
+
   const allVisibleSelected =
     visibleKeys.length > 0 &&
     visibleKeys.every((k) => selectedKeys.includes(k));
@@ -164,6 +177,11 @@ export default function AssessmentPage() {
     if (selectedKeys.length === 0) return;
     setProject((prev) => setStudentGroupIds(prev, selectedKeys, groupId));
     setSelectedKeys([]);
+  };
+
+  const setGroupFilterSafe = (id: GroupFilterId) => {
+    setGroupFilter(id);
+    if (id === "all" || id === "none") setGroupPerformance(false);
   };
 
   if (!project) return null;
@@ -228,6 +246,45 @@ export default function AssessmentPage() {
     });
   };
 
+  const emptyPointsBase = (matKey: string): PointsRecord => ({
+    matriculationNumber: matKey,
+    bySubArea: Object.fromEntries(
+      (project?.subAreas ?? []).map((s) => [s.id, null])
+    ),
+    totalPoints: null,
+    source: "manual",
+  });
+
+  const targetKeysForEdit = (matKey: string): string[] => {
+    if (
+      groupPerformanceActive &&
+      groupMemberKeys.length > 0 &&
+      groupMemberKeys.includes(matKey)
+    ) {
+      return groupMemberKeys;
+    }
+    return [matKey];
+  };
+
+  const mapPointsForKeys = (
+    prev: typeof project,
+    keys: string[],
+    apply: (rec: PointsRecord) => PointsRecord
+  ) => {
+    if (!prev) return prev;
+    const points = [...prev.points];
+    for (const matKey of keys) {
+      const idx = points.findIndex(
+        (p) => normalizeMatriculation(p.matriculationNumber) === matKey
+      );
+      const base = idx >= 0 ? points[idx] : emptyPointsBase(matKey);
+      const next = apply(base);
+      if (idx >= 0) points[idx] = next;
+      else points.push(next);
+    }
+    return { ...prev, points };
+  };
+
   const setPortfolioGrade = (
     matKey: string,
     componentId: string,
@@ -238,32 +295,17 @@ export default function AssessmentPage() {
     let value: number | null =
       num != null && Number.isFinite(num) ? num : null;
     if (value != null) value = Math.min(5, Math.max(1, value));
-    setProject((prev) => {
-      const idx = prev.points.findIndex(
-        (p) => normalizeMatriculation(p.matriculationNumber) === matKey
-      );
-      const base =
-        idx >= 0
-          ? prev.points[idx]
-          : {
-              matriculationNumber: matKey,
-              bySubArea: Object.fromEntries(
-                prev.subAreas.map((s) => [s.id, null])
-              ),
-              totalPoints: null as number | null,
-              source: "manual" as const,
-              portfolioGrades: {},
-            };
-      const portfolioGrades = {
-        ...(base.portfolioGrades ?? {}),
-        [componentId]: value,
-      };
-      const next = { ...base, portfolioGrades, source: "manual" as const };
-      const points = [...prev.points];
-      if (idx >= 0) points[idx] = next;
-      else points.push(next);
-      return { ...prev, points };
-    });
+    const keys = targetKeysForEdit(matKey);
+    setProject((prev) =>
+      mapPointsForKeys(prev, keys, (base) => ({
+        ...base,
+        portfolioGrades: {
+          ...(base.portfolioGrades ?? {}),
+          [componentId]: value,
+        },
+        source: "manual" as const,
+      }))
+    );
   };
 
   const setPortfolioLecturerGrade = (
@@ -277,36 +319,20 @@ export default function AssessmentPage() {
     let value: number | null =
       num != null && Number.isFinite(num) ? num : null;
     if (value != null) value = Math.min(5, Math.max(1, value));
-    setProject((prev) => {
-      const idx = prev.points.findIndex(
-        (p) => normalizeMatriculation(p.matriculationNumber) === matKey
-      );
-      const base =
-        idx >= 0
-          ? prev.points[idx]
-          : {
-              matriculationNumber: matKey,
-              bySubArea: Object.fromEntries(
-                prev.subAreas.map((s) => [s.id, null])
-              ),
-              totalPoints: null as number | null,
-              source: "manual" as const,
-              portfolioGradesByLecturer: {},
-            };
-      const byL = { ...(base.portfolioGradesByLecturer ?? {}) };
-      const perComp = { ...(byL[componentId] ?? {}) };
-      perComp[lecturerName] = value;
-      byL[componentId] = perComp;
-      const next = {
-        ...base,
-        portfolioGradesByLecturer: byL,
-        source: "manual" as const,
-      };
-      const points = [...prev.points];
-      if (idx >= 0) points[idx] = next;
-      else points.push(next);
-      return { ...prev, points };
-    });
+    const keys = targetKeysForEdit(matKey);
+    setProject((prev) =>
+      mapPointsForKeys(prev, keys, (base) => {
+        const byL = { ...(base.portfolioGradesByLecturer ?? {}) };
+        const perComp = { ...(byL[componentId] ?? {}) };
+        perComp[lecturerName] = value;
+        byL[componentId] = perComp;
+        return {
+          ...base,
+          portfolioGradesByLecturer: byL,
+          source: "manual" as const,
+        };
+      })
+    );
   };
 
   const setPortfolioCriterionValue = (
@@ -319,41 +345,105 @@ export default function AssessmentPage() {
     const num =
       raw.trim() === "" ? null : Number(raw.trim().replace(",", "."));
     const value = num != null && Number.isFinite(num) ? num : null;
-    setProject((prev) => {
-      const idx = prev.points.findIndex(
-        (p) => normalizeMatriculation(p.matriculationNumber) === matKey
-      );
-      const base =
-        idx >= 0
-          ? prev.points[idx]
-          : {
-              matriculationNumber: matKey,
-              bySubArea: Object.fromEntries(
-                prev.subAreas.map((s) => [s.id, null])
-              ),
-              totalPoints: null as number | null,
-              source: "manual" as const,
-            };
-      let next = { ...base, source: "manual" as const };
-      if (lecturerName) {
-        const byL = { ...(base.portfolioCriterionValuesByLecturer ?? {}) };
-        const perComp = { ...(byL[componentId] ?? {}) };
-        const perLec = { ...(perComp[lecturerName] ?? {}) };
-        perLec[criterionId] = value;
-        perComp[lecturerName] = perLec;
-        byL[componentId] = perComp;
-        next = { ...next, portfolioCriterionValuesByLecturer: byL };
-      } else {
+    const keys = targetKeysForEdit(matKey);
+    setProject((prev) =>
+      mapPointsForKeys(prev, keys, (base) => {
+        if (lecturerName) {
+          const byL = { ...(base.portfolioCriterionValuesByLecturer ?? {}) };
+          const perComp = { ...(byL[componentId] ?? {}) };
+          const perLec = { ...(perComp[lecturerName] ?? {}) };
+          perLec[criterionId] = value;
+          perComp[lecturerName] = perLec;
+          byL[componentId] = perComp;
+          return {
+            ...base,
+            portfolioCriterionValuesByLecturer: byL,
+            source: "manual" as const,
+          };
+        }
         const byC = { ...(base.portfolioCriterionValues ?? {}) };
         const per = { ...(byC[componentId] ?? {}) };
         per[criterionId] = value;
         byC[componentId] = per;
-        next = { ...next, portfolioCriterionValues: byC };
+        return {
+          ...base,
+          portfolioCriterionValues: byC,
+          source: "manual" as const,
+        };
+      })
+    );
+  };
+
+  /** Alle Werte der aktuellen TL von einer Person auf die Gruppe kopieren */
+  const copyActiveTlToGroup = () => {
+    if (!project || groupMemberKeys.length === 0) return;
+    const sourceKey =
+      selectedKeys.find((k) => groupMemberKeys.includes(k)) ??
+      groupMemberKeys[0];
+    const sourceRec = project.points.find(
+      (p) => normalizeMatriculation(p.matriculationNumber) === sourceKey
+    );
+    if (!sourceRec) return;
+
+    const tlIds = portfolioCriteriaMode
+      ? activeComponentId
+        ? [activeComponentId]
+        : []
+      : components.map((c) => c.id);
+    if (tlIds.length === 0) return;
+
+    setProject((prev) => {
+      if (!prev) return prev;
+      let next = prev;
+      for (const matKey of groupMemberKeys) {
+        if (matKey === sourceKey) continue;
+        next = mapPointsForKeys(next, [matKey], (base) => {
+          let rec = { ...base, source: "manual" as const };
+          for (const tlId of tlIds) {
+            if (portfolioCriteriaMode) {
+              if (perLecturer && activeLecturer) {
+                const srcVals =
+                  sourceRec.portfolioCriterionValuesByLecturer?.[tlId]?.[
+                    activeLecturer
+                  ] ?? {};
+                const byL = {
+                  ...(rec.portfolioCriterionValuesByLecturer ?? {}),
+                };
+                const perComp = { ...(byL[tlId] ?? {}) };
+                perComp[activeLecturer] = { ...srcVals };
+                byL[tlId] = perComp;
+                rec = {
+                  ...rec,
+                  portfolioCriterionValuesByLecturer: byL,
+                };
+              } else {
+                const srcVals =
+                  sourceRec.portfolioCriterionValues?.[tlId] ?? {};
+                const byC = { ...(rec.portfolioCriterionValues ?? {}) };
+                byC[tlId] = { ...srcVals };
+                rec = { ...rec, portfolioCriterionValues: byC };
+              }
+            } else if (perLecturer) {
+              const byL = { ...(rec.portfolioGradesByLecturer ?? {}) };
+              const perComp = { ...(byL[tlId] ?? {}) };
+              const srcPer = sourceRec.portfolioGradesByLecturer?.[tlId] ?? {};
+              byL[tlId] = { ...perComp, ...srcPer };
+              rec = { ...rec, portfolioGradesByLecturer: byL };
+            } else {
+              const g = sourceRec.portfolioGrades?.[tlId] ?? null;
+              rec = {
+                ...rec,
+                portfolioGrades: {
+                  ...(rec.portfolioGrades ?? {}),
+                  [tlId]: g,
+                },
+              };
+            }
+          }
+          return rec;
+        })!;
       }
-      const points = [...prev.points];
-      if (idx >= 0) points[idx] = next;
-      else points.push(next);
-      return { ...prev, points };
+      return next;
     });
   };
 
@@ -444,13 +534,53 @@ export default function AssessmentPage() {
                 wechseln mit den Schaltflächen.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <GroupFilterBar
                 project={project}
                 rows={sortedRows}
                 value={groupFilter}
-                onChange={setGroupFilter}
+                onChange={setGroupFilterSafe}
               />
+              {concreteGroupSelected && (
+                <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-0.5">
+                      <Label
+                        htmlFor="group-performance"
+                        className="text-sm font-medium"
+                      >
+                        Gruppenleistung
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Änderungen an Teilnote/Kriterien gelten für alle{" "}
+                        <span className="font-medium text-foreground tabular-nums">
+                          {groupMemberKeys.length}
+                        </span>{" "}
+                        Mitglieder dieser Gruppe.
+                      </p>
+                    </div>
+                    <Switch
+                      id="group-performance"
+                      checked={groupPerformance}
+                      onCheckedChange={setGroupPerformance}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    disabled={groupMemberKeys.length < 2}
+                    onClick={() => copyActiveTlToGroup()}
+                  >
+                    Aktuelle TL-Werte auf Gruppe übernehmen
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">
+                    Quelle: zuerst ausgewählte Person, sonst erstes
+                    Gruppenmitglied.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -557,13 +687,49 @@ export default function AssessmentPage() {
               wechseln mit den Schaltflächen.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <GroupFilterBar
               project={project}
               rows={sortedRows}
               value={groupFilter}
-              onChange={setGroupFilter}
+              onChange={setGroupFilterSafe}
             />
+            {isPortfolio && concreteGroupSelected && (
+              <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-0.5">
+                    <Label
+                      htmlFor="group-performance-simple"
+                      className="text-sm font-medium"
+                    >
+                      Gruppenleistung
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Änderungen an Teilnoten gelten für alle{" "}
+                      <span className="font-medium text-foreground tabular-nums">
+                        {groupMemberKeys.length}
+                      </span>{" "}
+                      Mitglieder dieser Gruppe.
+                    </p>
+                  </div>
+                  <Switch
+                    id="group-performance-simple"
+                    checked={groupPerformance}
+                    onCheckedChange={setGroupPerformance}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={groupMemberKeys.length < 2}
+                  onClick={() => copyActiveTlToGroup()}
+                >
+                  Aktuelle TL-Werte auf Gruppe übernehmen
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
