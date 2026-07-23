@@ -61,7 +61,14 @@ import {
   type PointsRecord,
 } from "@/lib/types";
 import { cn, formatGrade, formatPoints } from "@/lib/utils";
-import { CircleHelp, Search, Settings, Users } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
+  Search,
+  Settings,
+  Users,
+} from "lucide-react";
 import { GroupFilterBar } from "@/components/exam/group-filter-bar";
 import { StudentGroupSelect } from "@/components/exam/student-group-select";
 import {
@@ -111,6 +118,8 @@ export default function AssessmentPage() {
   const [componentFilter, setComponentFilter] = useState<string>("");
   /** Gleiche Werte für alle Mitglieder der gefilterten Gruppe */
   const [groupPerformance, setGroupPerformance] = useState(false);
+  /** Kriterien-Deaktivierung pro Gruppe: Panel standardmäßig zu */
+  const [criteriaDisableOpen, setCriteriaDisableOpen] = useState(false);
 
   const criteria = project?.criteria ?? [];
   const components = project?.portfolioComponents ?? [];
@@ -196,6 +205,7 @@ export default function AssessmentPage() {
   const setGroupFilterSafe = (id: GroupFilterId) => {
     setGroupFilter(id);
     if (id === "all" || id === "none") setGroupPerformance(false);
+    setCriteriaDisableOpen(false);
   };
 
   if (!project) return null;
@@ -731,78 +741,104 @@ export default function AssessmentPage() {
               {selectedGroupId &&
                 activeComponent &&
                 activeTlCriteria.length > 0 && (
-                  <div className="space-y-2 rounded-lg border border-dashed bg-background/60 px-3 py-2.5">
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="text-sm font-medium">
-                        Kriterien für{" "}
-                        <span className="text-primary">
-                          {selectedGroupName ?? "Gruppe"}
-                        </span>
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Deaktivierte Kriterien fließen nur bei dieser Gruppe
-                        nicht in die Note ein (keine Gruppenleistung). Andere
-                        Gruppen bleiben unverändert.
-                      </p>
-                    </div>
-                    <ul className="space-y-1.5">
-                      {activeTlCriteria.map((k) => {
-                        const off = groupDisabledCritIds.has(k.id);
-                        const switchId = `crit-off-${activeComponent.id}-${k.id}`;
-                        return (
-                          <li
-                            key={k.id}
-                            className={cn(
-                              "flex items-center justify-between gap-3 rounded-md border px-2.5 py-1.5",
-                              off
-                                ? "border-muted bg-muted/40 opacity-80"
-                                : "bg-card"
-                            )}
-                          >
-                            <Label
-                              htmlFor={switchId}
-                              className="min-w-0 cursor-pointer text-sm font-normal"
-                            >
-                              <span
+                  <div className="rounded-lg border border-dashed bg-background/60">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/40"
+                      aria-expanded={criteriaDisableOpen}
+                      onClick={() =>
+                        setCriteriaDisableOpen((open) => !open)
+                      }
+                    >
+                      {criteriaDisableOpen ? (
+                        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          Kriterien für{" "}
+                          <span className="text-primary">
+                            {selectedGroupName ?? "Gruppe"}
+                          </span>
+                        </p>
+                        {!criteriaDisableOpen && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {groupDisabledCritIds.size > 0
+                              ? `${groupDisabledCritIds.size} deaktiviert · zum Anpassen aufklappen`
+                              : "alle aktiv · zum Deaktivieren aufklappen"}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                    {criteriaDisableOpen && (
+                      <div className="space-y-2 border-t px-3 py-2.5">
+                        <p className="text-xs text-muted-foreground">
+                          Deaktivierte Kriterien fließen nur bei dieser Gruppe
+                          nicht in die Note ein (keine Gruppenleistung). Andere
+                          Gruppen bleiben unverändert.
+                        </p>
+                        <ul className="space-y-1.5">
+                          {activeTlCriteria.map((k) => {
+                            const off = groupDisabledCritIds.has(k.id);
+                            const switchId = `crit-off-${activeComponent.id}-${k.id}`;
+                            return (
+                              <li
+                                key={k.id}
                                 className={cn(
-                                  "font-medium",
-                                  off && "line-through text-muted-foreground"
+                                  "flex items-center justify-between gap-3 rounded-md border px-2.5 py-1.5",
+                                  off
+                                    ? "border-muted bg-muted/40 opacity-80"
+                                    : "bg-card"
                                 )}
                               >
-                                {k.code || k.name}
-                              </span>
-                              {k.code && k.name !== k.code && (
-                                <span className="ml-1 text-xs text-muted-foreground">
-                                  {k.name}
-                                </span>
-                              )}
-                              <span className="ml-1.5 text-[10px] text-muted-foreground tabular-nums">
-                                w{k.weight}
-                              </span>
-                            </Label>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <span className="text-[10px] text-muted-foreground">
-                                {off ? "aus" : "an"}
-                              </span>
-                              <Switch
-                                id={switchId}
-                                checked={!off}
-                                onCheckedChange={(on) =>
-                                  toggleGroupCriterion(
-                                    activeComponent.id,
-                                    k.id,
-                                    !on
-                                  )
-                                }
-                                aria-label={`${k.code || k.name} für Gruppe ${
-                                  off ? "aktivieren" : "deaktivieren"
-                                }`}
-                              />
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                                <Label
+                                  htmlFor={switchId}
+                                  className="min-w-0 cursor-pointer text-sm font-normal"
+                                >
+                                  <span
+                                    className={cn(
+                                      "font-medium",
+                                      off &&
+                                        "line-through text-muted-foreground"
+                                    )}
+                                  >
+                                    {k.code || k.name}
+                                  </span>
+                                  {k.code && k.name !== k.code && (
+                                    <span className="ml-1 text-xs text-muted-foreground">
+                                      {k.name}
+                                    </span>
+                                  )}
+                                  <span className="ml-1.5 text-[10px] text-muted-foreground tabular-nums">
+                                    w{k.weight}
+                                  </span>
+                                </Label>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {off ? "aus" : "an"}
+                                  </span>
+                                  <Switch
+                                    id={switchId}
+                                    checked={!off}
+                                    onCheckedChange={(on) =>
+                                      toggleGroupCriterion(
+                                        activeComponent.id,
+                                        k.id,
+                                        !on
+                                      )
+                                    }
+                                    aria-label={`${k.code || k.name} für Gruppe ${
+                                      off ? "aktivieren" : "deaktivieren"
+                                    }`}
+                                  />
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
               {selectedGroupId &&
