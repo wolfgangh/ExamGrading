@@ -34,8 +34,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  criterionDetailTooltip,
   criterionPlaceholder,
-  criterionScaleHint,
   criterionScaleShort,
   recomputeStaCriteriaRecord,
 } from "@/lib/grades/sta-criteria";
@@ -1162,6 +1162,12 @@ export default function AssessmentPage() {
                               const headerDisabled =
                                 selectedGroupId != null &&
                                 groupDisabledCritIds.has(col.criterion.id);
+                              const detailTip = criterionDetailTooltip(
+                                col.criterion
+                              );
+                              const headerTitle = headerDisabled
+                                ? `${col.componentCode} · ${col.criterion.name} · für diese Gruppe deaktiviert`
+                                : detailTip;
                               return (
                               <TableHead
                                 key={`${col.componentId}::${col.criterion.id}`}
@@ -1169,30 +1175,48 @@ export default function AssessmentPage() {
                                   "min-w-[7rem] text-center",
                                   headerDisabled && "opacity-50"
                                 )}
-                                title={
-                                  headerDisabled
-                                    ? `${col.componentCode} · ${col.criterion.name} · für diese Gruppe deaktiviert`
-                                    : `${col.componentCode} · ${col.criterion.name}`
-                                }
+                                title={headerTitle}
                               >
-                                <div className="text-[10px] font-normal text-muted-foreground">
-                                  {col.componentCode}
-                                  {activeLecturer
-                                    ? ` · ${shortLecturerLabel(activeLecturer)}`
-                                    : ""}
-                                </div>
-                                <div
-                                  className={cn(
-                                    "font-semibold text-[11px] leading-tight",
-                                    headerDisabled && "line-through"
-                                  )}
-                                >
-                                  {col.criterion.code || col.criterion.name}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground">
-                                  {headerDisabled
-                                    ? "deaktiviert"
-                                    : `${criterionScaleShort(col.criterion)} · w${col.criterion.weight}`}
+                                <div className="flex items-start justify-center gap-0.5">
+                                  <div className="min-w-0">
+                                    <div className="text-[10px] font-normal text-muted-foreground">
+                                      {col.componentCode}
+                                      {activeLecturer
+                                        ? ` · ${shortLecturerLabel(activeLecturer)}`
+                                        : ""}
+                                    </div>
+                                    <div
+                                      className={cn(
+                                        "font-semibold text-[11px] leading-tight",
+                                        headerDisabled && "line-through"
+                                      )}
+                                    >
+                                      {col.criterion.code ||
+                                        col.criterion.name}
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground">
+                                      {headerDisabled
+                                        ? "deaktiviert"
+                                        : `${criterionScaleShort(col.criterion)} · w${col.criterion.weight}`}
+                                    </div>
+                                  </div>
+                                  <Tooltip>
+                                    <TooltipTrigger
+                                      type="button"
+                                      className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                                      aria-label={`Beschreibung: ${col.criterion.name || col.criterion.code}`}
+                                    >
+                                      <CircleHelp className="size-3.5" />
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="bottom"
+                                      className="max-w-[18rem] whitespace-pre-wrap text-left leading-snug"
+                                    >
+                                      {headerDisabled
+                                        ? `${col.criterion.name || col.criterion.code}\n\nFür diese Gruppe deaktiviert – zählt nicht zur Note.`
+                                        : detailTip}
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </div>
                               </TableHead>
                               );
@@ -1290,9 +1314,9 @@ export default function AssessmentPage() {
                                 </TooltipTrigger>
                                 <TooltipContent
                                   side="bottom"
-                                  className="max-w-[16rem] text-left leading-snug"
+                                  className="max-w-[18rem] whitespace-pre-wrap text-left leading-snug"
                                 >
-                                  {criterionScaleHint(c)}
+                                  {criterionDetailTooltip(c)}
                                 </TooltipContent>
                               </Tooltip>
                             </div>
@@ -1478,7 +1502,7 @@ export default function AssessmentPage() {
                                             placeholder={criterionPlaceholder(
                                               col.criterion
                                             )}
-                                            title={criterionScaleHint(
+                                            title={criterionDetailTooltip(
                                               col.criterion
                                             )}
                                             inputMode="decimal"
@@ -1622,7 +1646,7 @@ export default function AssessmentPage() {
                                   })
                             : criteria.map((c) => {
                                 const v = rec?.criterionValues?.[c.id];
-                                const hint = criterionScaleHint(c);
+                                const hint = criterionDetailTooltip(c);
                                 return (
                                   <TableCell
                                     key={c.id}

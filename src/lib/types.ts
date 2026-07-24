@@ -37,6 +37,11 @@ export interface AssessmentCriterion {
   scale: CriterionScale;
   /** Bei scale === "points" */
   maxPoints?: number;
+  /**
+   * Ausführliche Erläuterung des Kriteriums.
+   * Wird in der Bewertung als Hover-Tooltip angezeigt.
+   */
+  description?: string;
 }
 
 /**

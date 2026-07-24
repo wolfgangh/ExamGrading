@@ -67,6 +67,36 @@ export function criterionScaleHint(c: AssessmentCriterion): string {
   ].join(" · ");
 }
 
+/**
+ * Hover-Text für Bewertung: ausführliche Beschreibung + technische Hinweise.
+ * Mehrzeilig (TooltipContent mit whitespace-pre-wrap).
+ */
+export function criterionDetailTooltip(c: AssessmentCriterion): string {
+  const name = c.name?.trim() || c.code || "Kriterium";
+  const desc = c.description?.trim() ?? "";
+  const scaleLine =
+    c.scale === "points" && c.maxPoints != null && c.maxPoints > 0
+      ? `Punkte 0–${c.maxPoints}`
+      : CRITERION_SCALE_LABELS[c.scale];
+  const weight =
+    Number.isFinite(c.weight) && c.weight > 0
+      ? `Gewicht ${c.weight}`
+      : "Gewicht –";
+  const meta = `${name} · ${scaleLine} · ${weight}`;
+  if (!desc) {
+    return [
+      meta,
+      "Dezimalzahlen mit Komma oder Punkt (z. B. 1,3 oder 12,5).",
+    ].join("\n");
+  }
+  return [
+    name,
+    desc,
+    `${scaleLine} · ${weight}`,
+    "Dezimalzahlen mit Komma oder Punkt.",
+  ].join("\n\n");
+}
+
 /** Note → 0…1 (1,0 = best, 5,0 = 0) */
 export function gradeToUnit(grade: number): number {
   if (!Number.isFinite(grade)) return 0;

@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -480,98 +481,118 @@ export default function SettingsPage() {
               (project.criteria ?? []).map((c) => (
                 <div
                   key={c.id}
-                  className="grid grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_5rem_5rem_9rem_5rem_auto]"
+                  className="space-y-2 rounded-lg border p-3"
                 >
-                  <div className="grid gap-1">
-                    <Label className="text-xs">Name</Label>
-                    <Input
-                      value={c.name}
-                      onChange={(e) =>
-                        updateCriterion(c.id, { name: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label className="text-xs">Kürzel</Label>
-                    <Input
-                      value={c.code}
-                      onChange={(e) =>
-                        updateCriterion(c.id, { code: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label className="text-xs">Gewicht</Label>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      value={c.weight}
-                      onChange={(e) =>
-                        updateCriterion(c.id, {
-                          weight: Number(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label className="text-xs">Skala</Label>
-                    <Select
-                      value={c.scale}
-                      onValueChange={(v) =>
-                        v &&
-                        updateCriterion(c.id, {
-                          scale: v as CriterionScale,
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_5rem_5rem_9rem_5rem_auto]">
+                    <div className="grid gap-1">
+                      <Label className="text-xs">Name</Label>
+                      <Input
+                        value={c.name}
+                        onChange={(e) =>
+                          updateCriterion(c.id, { name: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">Kürzel</Label>
+                      <Input
+                        value={c.code}
+                        onChange={(e) =>
+                          updateCriterion(c.id, { code: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">Gewicht</Label>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        value={c.weight}
+                        onChange={(e) =>
+                          updateCriterion(c.id, {
+                            weight: Number(e.target.value) || 0,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">Skala</Label>
+                      <Select
+                        value={c.scale}
+                        onValueChange={(v) =>
+                          v &&
+                          updateCriterion(c.id, {
+                            scale: v as CriterionScale,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue>
+                            {CRITERION_SCALE_LABELS[c.scale]}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(
+                            Object.keys(
+                              CRITERION_SCALE_LABELS
+                            ) as CriterionScale[]
+                          ).map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {CRITERION_SCALE_LABELS[s]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">Max Pkte</Label>
+                      <Input
+                        type="number"
+                        disabled={c.scale !== "points"}
+                        value={c.maxPoints ?? ""}
+                        onChange={(e) =>
+                          updateCriterion(c.id, {
+                            maxPoints: Number(e.target.value) || 0,
+                          })
+                        }
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="self-end"
+                      onClick={() =>
+                        setProject((prev) => {
+                          const criteria = (prev.criteria ?? []).filter(
+                            (x) => x.id !== c.id
+                          );
+                          const max = prev.gradeSchema.maxPoints;
+                          const points = prev.points.map((p) =>
+                            recomputeStaCriteriaRecord(p, criteria, max)
+                          );
+                          return { ...prev, criteria, points };
                         })
                       }
                     >
-                      <SelectTrigger className="w-full">
-                        <SelectValue>
-                          {CRITERION_SCALE_LABELS[c.scale]}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(
-                          Object.keys(CRITERION_SCALE_LABELS) as CriterionScale[]
-                        ).map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {CRITERION_SCALE_LABELS[s]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
                   <div className="grid gap-1">
-                    <Label className="text-xs">Max Pkte</Label>
-                    <Input
-                      type="number"
-                      disabled={c.scale !== "points"}
-                      value={c.maxPoints ?? ""}
+                    <Label className="text-xs">
+                      Beschreibung (Tooltip in der Bewertung)
+                    </Label>
+                    <Textarea
+                      value={c.description ?? ""}
+                      placeholder="Detaillierte Erläuterung des Kriteriums …"
+                      rows={2}
+                      className="min-h-[3.5rem] resize-y text-sm"
                       onChange={(e) =>
                         updateCriterion(c.id, {
-                          maxPoints: Number(e.target.value) || 0,
+                          description: e.target.value || undefined,
                         })
                       }
                     />
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="self-end"
-                    onClick={() =>
-                      setProject((prev) => {
-                        const criteria = (prev.criteria ?? []).filter(
-                          (x) => x.id !== c.id
-                        );
-                        const max = prev.gradeSchema.maxPoints;
-                        const points = prev.points.map((p) =>
-                          recomputeStaCriteriaRecord(p, criteria, max)
-                        );
-                        return { ...prev, criteria, points };
-                      })
-                    }
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
                 </div>
               ))
             )}
@@ -802,193 +823,231 @@ export default function SettingsPage() {
                       (c.criteria ?? []).map((crit) => (
                         <div
                           key={crit.id}
-                          className="grid grid-cols-1 gap-2 rounded-md border bg-muted/20 p-2 sm:grid-cols-[1fr_4rem_4rem_8rem_4.5rem_auto]"
+                          className="space-y-2 rounded-md border bg-muted/20 p-2"
                         >
-                          <Input
-                            value={crit.name}
-                            placeholder="Name"
-                            onChange={(e) =>
-                              setProject((prev) => ({
-                                ...prev,
-                                portfolioComponents: (
-                                  prev.portfolioComponents ?? []
-                                ).map((pc) =>
-                                  pc.id === c.id
-                                    ? {
-                                        ...pc,
-                                        criteria: (pc.criteria ?? []).map(
-                                          (k) =>
-                                            k.id === crit.id
-                                              ? {
-                                                  ...k,
-                                                  name: e.target.value,
-                                                }
-                                              : k
-                                        ),
-                                      }
-                                    : pc
-                                ),
-                              }))
-                            }
-                          />
-                          <Input
-                            value={crit.code}
-                            placeholder="Kürzel"
-                            onChange={(e) =>
-                              setProject((prev) => ({
-                                ...prev,
-                                portfolioComponents: (
-                                  prev.portfolioComponents ?? []
-                                ).map((pc) =>
-                                  pc.id === c.id
-                                    ? {
-                                        ...pc,
-                                        criteria: (pc.criteria ?? []).map(
-                                          (k) =>
-                                            k.id === crit.id
-                                              ? {
-                                                  ...k,
-                                                  code: e.target.value,
-                                                }
-                                              : k
-                                        ),
-                                      }
-                                    : pc
-                                ),
-                              }))
-                            }
-                          />
-                          <Input
-                            type="number"
-                            step="0.5"
-                            value={crit.weight}
-                            title="Gewicht"
-                            onChange={(e) =>
-                              setProject((prev) => ({
-                                ...prev,
-                                portfolioComponents: (
-                                  prev.portfolioComponents ?? []
-                                ).map((pc) =>
-                                  pc.id === c.id
-                                    ? {
-                                        ...pc,
-                                        criteria: (pc.criteria ?? []).map(
-                                          (k) =>
-                                            k.id === crit.id
-                                              ? {
-                                                  ...k,
-                                                  weight:
-                                                    Number(e.target.value) ||
-                                                    0,
-                                                }
-                                              : k
-                                        ),
-                                      }
-                                    : pc
-                                ),
-                              }))
-                            }
-                          />
-                          <Select
-                            value={crit.scale}
-                            onValueChange={(v) => {
-                              if (!v) return;
-                              setProject((prev) => ({
-                                ...prev,
-                                portfolioComponents: (
-                                  prev.portfolioComponents ?? []
-                                ).map((pc) =>
-                                  pc.id === c.id
-                                    ? {
-                                        ...pc,
-                                        criteria: (pc.criteria ?? []).map(
-                                          (k) =>
-                                            k.id === crit.id
-                                              ? {
-                                                  ...k,
-                                                  scale: v as CriterionScale,
-                                                }
-                                              : k
-                                        ),
-                                      }
-                                    : pc
-                                ),
-                              }));
-                            }}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue>
-                                {CRITERION_SCALE_LABELS[crit.scale]}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(
-                                Object.keys(
-                                  CRITERION_SCALE_LABELS
-                                ) as CriterionScale[]
-                              ).map((s) => (
-                                <SelectItem key={s} value={s}>
-                                  {CRITERION_SCALE_LABELS[s]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            type="number"
-                            value={crit.maxPoints ?? ""}
-                            placeholder="Max"
-                            disabled={crit.scale !== "points"}
-                            title="Max. Punkte (nur bei Skala Punkte)"
-                            onChange={(e) =>
-                              setProject((prev) => ({
-                                ...prev,
-                                portfolioComponents: (
-                                  prev.portfolioComponents ?? []
-                                ).map((pc) =>
-                                  pc.id === c.id
-                                    ? {
-                                        ...pc,
-                                        criteria: (pc.criteria ?? []).map(
-                                          (k) =>
-                                            k.id === crit.id
-                                              ? {
-                                                  ...k,
-                                                  maxPoints:
-                                                    Number(e.target.value) ||
-                                                    0,
-                                                }
-                                              : k
-                                        ),
-                                      }
-                                    : pc
-                                ),
-                              }))
-                            }
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() =>
-                              setProject((prev) => ({
-                                ...prev,
-                                portfolioComponents: (
-                                  prev.portfolioComponents ?? []
-                                ).map((pc) =>
-                                  pc.id === c.id
-                                    ? {
-                                        ...pc,
-                                        criteria: (pc.criteria ?? []).filter(
-                                          (k) => k.id !== crit.id
-                                        ),
-                                      }
-                                    : pc
-                                ),
-                              }))
-                            }
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_4rem_4rem_8rem_4.5rem_auto]">
+                            <Input
+                              value={crit.name}
+                              placeholder="Name"
+                              onChange={(e) =>
+                                setProject((prev) => ({
+                                  ...prev,
+                                  portfolioComponents: (
+                                    prev.portfolioComponents ?? []
+                                  ).map((pc) =>
+                                    pc.id === c.id
+                                      ? {
+                                          ...pc,
+                                          criteria: (pc.criteria ?? []).map(
+                                            (k) =>
+                                              k.id === crit.id
+                                                ? {
+                                                    ...k,
+                                                    name: e.target.value,
+                                                  }
+                                                : k
+                                          ),
+                                        }
+                                      : pc
+                                  ),
+                                }))
+                              }
+                            />
+                            <Input
+                              value={crit.code}
+                              placeholder="Kürzel"
+                              onChange={(e) =>
+                                setProject((prev) => ({
+                                  ...prev,
+                                  portfolioComponents: (
+                                    prev.portfolioComponents ?? []
+                                  ).map((pc) =>
+                                    pc.id === c.id
+                                      ? {
+                                          ...pc,
+                                          criteria: (pc.criteria ?? []).map(
+                                            (k) =>
+                                              k.id === crit.id
+                                                ? {
+                                                    ...k,
+                                                    code: e.target.value,
+                                                  }
+                                                : k
+                                          ),
+                                        }
+                                      : pc
+                                  ),
+                                }))
+                              }
+                            />
+                            <Input
+                              type="number"
+                              step="0.5"
+                              value={crit.weight}
+                              title="Gewicht"
+                              onChange={(e) =>
+                                setProject((prev) => ({
+                                  ...prev,
+                                  portfolioComponents: (
+                                    prev.portfolioComponents ?? []
+                                  ).map((pc) =>
+                                    pc.id === c.id
+                                      ? {
+                                          ...pc,
+                                          criteria: (pc.criteria ?? []).map(
+                                            (k) =>
+                                              k.id === crit.id
+                                                ? {
+                                                    ...k,
+                                                    weight:
+                                                      Number(e.target.value) ||
+                                                      0,
+                                                  }
+                                                : k
+                                          ),
+                                        }
+                                      : pc
+                                  ),
+                                }))
+                              }
+                            />
+                            <Select
+                              value={crit.scale}
+                              onValueChange={(v) => {
+                                if (!v) return;
+                                setProject((prev) => ({
+                                  ...prev,
+                                  portfolioComponents: (
+                                    prev.portfolioComponents ?? []
+                                  ).map((pc) =>
+                                    pc.id === c.id
+                                      ? {
+                                          ...pc,
+                                          criteria: (pc.criteria ?? []).map(
+                                            (k) =>
+                                              k.id === crit.id
+                                                ? {
+                                                    ...k,
+                                                    scale: v as CriterionScale,
+                                                  }
+                                                : k
+                                          ),
+                                        }
+                                      : pc
+                                  ),
+                                }));
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue>
+                                  {CRITERION_SCALE_LABELS[crit.scale]}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(
+                                  Object.keys(
+                                    CRITERION_SCALE_LABELS
+                                  ) as CriterionScale[]
+                                ).map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    {CRITERION_SCALE_LABELS[s]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              value={crit.maxPoints ?? ""}
+                              placeholder="Max"
+                              disabled={crit.scale !== "points"}
+                              title="Max. Punkte (nur bei Skala Punkte)"
+                              onChange={(e) =>
+                                setProject((prev) => ({
+                                  ...prev,
+                                  portfolioComponents: (
+                                    prev.portfolioComponents ?? []
+                                  ).map((pc) =>
+                                    pc.id === c.id
+                                      ? {
+                                          ...pc,
+                                          criteria: (pc.criteria ?? []).map(
+                                            (k) =>
+                                              k.id === crit.id
+                                                ? {
+                                                    ...k,
+                                                    maxPoints:
+                                                      Number(e.target.value) ||
+                                                      0,
+                                                  }
+                                                : k
+                                          ),
+                                        }
+                                      : pc
+                                  ),
+                                }))
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() =>
+                                setProject((prev) => ({
+                                  ...prev,
+                                  portfolioComponents: (
+                                    prev.portfolioComponents ?? []
+                                  ).map((pc) =>
+                                    pc.id === c.id
+                                      ? {
+                                          ...pc,
+                                          criteria: (
+                                            pc.criteria ?? []
+                                          ).filter((k) => k.id !== crit.id),
+                                        }
+                                      : pc
+                                  ),
+                                }))
+                              }
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                          <div className="grid gap-1">
+                            <Label className="text-[11px] text-muted-foreground">
+                              Beschreibung (Tooltip)
+                            </Label>
+                            <Textarea
+                              value={crit.description ?? ""}
+                              placeholder="Detaillierte Erläuterung dieses Teilkriteriums …"
+                              rows={2}
+                              className="min-h-[3rem] resize-y text-sm"
+                              onChange={(e) =>
+                                setProject((prev) => ({
+                                  ...prev,
+                                  portfolioComponents: (
+                                    prev.portfolioComponents ?? []
+                                  ).map((pc) =>
+                                    pc.id === c.id
+                                      ? {
+                                          ...pc,
+                                          criteria: (pc.criteria ?? []).map(
+                                            (k) =>
+                                              k.id === crit.id
+                                                ? {
+                                                    ...k,
+                                                    description:
+                                                      e.target.value ||
+                                                      undefined,
+                                                  }
+                                                : k
+                                          ),
+                                        }
+                                      : pc
+                                  ),
+                                }))
+                              }
+                            />
+                          </div>
                         </div>
                       ))
                     )}
