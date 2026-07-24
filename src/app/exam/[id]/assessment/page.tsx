@@ -653,46 +653,6 @@ export default function AssessmentPage() {
                 showFillLegend
                 fillScopeLabel={fillScopeLabel}
               />
-              {concreteGroupSelected && (
-                <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-0.5">
-                      <Label
-                        htmlFor="group-performance"
-                        className="text-sm font-medium"
-                      >
-                        Gruppenleistung
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Änderungen an Teilnote/Kriterien gelten für alle{" "}
-                        <span className="font-medium text-foreground tabular-nums">
-                          {groupMemberKeys.length}
-                        </span>{" "}
-                        Mitglieder dieser Gruppe.
-                      </p>
-                    </div>
-                    <Switch
-                      id="group-performance"
-                      checked={groupPerformance}
-                      onCheckedChange={setGroupPerformance}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    disabled={groupMemberKeys.length < 2}
-                    onClick={() => copyActiveTlToGroup()}
-                  >
-                    Aktuelle TL-Werte auf Gruppe übernehmen
-                  </Button>
-                  <p className="text-[11px] text-muted-foreground">
-                    Quelle: zuerst ausgewählte Person, sonst erstes
-                    Gruppenmitglied.
-                  </p>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -804,6 +764,58 @@ export default function AssessmentPage() {
                       )}
                     </div>
                   )}
+                </div>
+              )}
+              {concreteGroupSelected && (
+                <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-0.5">
+                      <Label
+                        htmlFor="group-performance"
+                        className="text-sm font-medium"
+                      >
+                        Gruppenleistung
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Änderungen an Teilnote/Kriterien gelten für alle{" "}
+                        <span className="font-medium text-foreground tabular-nums">
+                          {groupMemberKeys.length}
+                        </span>{" "}
+                        Mitglieder
+                        {selectedGroupName ? (
+                          <>
+                            {" "}
+                            von{" "}
+                            <span className="font-medium text-foreground">
+                              {selectedGroupName}
+                            </span>
+                          </>
+                        ) : (
+                          " dieser Gruppe"
+                        )}
+                        .
+                      </p>
+                    </div>
+                    <Switch
+                      id="group-performance"
+                      checked={groupPerformance}
+                      onCheckedChange={setGroupPerformance}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    disabled={groupMemberKeys.length < 2}
+                    onClick={() => copyActiveTlToGroup()}
+                  >
+                    Aktuelle TL-Werte auf Gruppe übernehmen
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">
+                    Quelle: zuerst ausgewählte Person, sonst erstes
+                    Gruppenmitglied.
+                  </p>
                 </div>
               )}
               {selectedGroupId &&
