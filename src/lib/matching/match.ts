@@ -1,14 +1,18 @@
 import { calculateGrade } from "@/lib/grades/schema";
 import { computeEffectiveTotal } from "@/lib/grades/points-total";
 import {
+  getNextGermanGradeInfo,
   getNextGradeInfo,
+  gradePointsBelowPass,
   isFailedGrade,
   pointsBelowPass,
 } from "@/lib/grades/next-grade";
 import { ensureScenarios, getActiveScenario } from "@/lib/grades/scenarios";
 import { countMissingCriteria } from "@/lib/grades/sta-criteria";
 import {
+  computePortfolioFulfillment,
   computePortfolioGradeForProject,
+  computePortfolioRawAverageForProject,
   countMissingPortfolioCells,
 } from "@/lib/grades/portfolio";
 import { flattenHisRows, getHisSources } from "@/lib/his-sources";
@@ -56,11 +60,26 @@ function calculatedGradeForRecord(
 function scenarioGradesForPoints(
   project: ExamProject,
   totalPoints: number | null,
-  gradeOverride: number | null
+  gradeOverride: number | null,
+  portfolioFinalGrade?: number | null
 ): EnrichedStudentRow["scenarioGrades"] {
   const scenarios = ensureScenarios(project).filter(
     (sc) => !sc.editable || sc.enabled === true
   );
+  // Portfolio: Noten hängen nicht am Punkt-Schema der Szenarien
+  if (isPortfolioExam(project.examType)) {
+    const g =
+      gradeOverride != null
+        ? gradeOverride
+        : portfolioFinalGrade != null
+          ? portfolioFinalGrade
+          : null;
+    return scenarios.map((sc) => ({
+      scenarioId: sc.id,
+      name: sc.name,
+      grade: g,
+    }));
+  }
   return scenarios.map((sc) => {
     const grade =
       gradeOverride != null
@@ -77,8 +96,41 @@ function gradeExtras(
   finalGrade: number | null,
   schema: GradeSchema,
   project: ExamProject,
-  gradeOverride: number | null
+  gradeOverride: number | null,
+  opts?: {
+    portfolioRawAverage?: number | null;
+  }
 ) {
+  if (isPortfolioExam(project.examType)) {
+    const raw = opts?.portfolioRawAverage ?? null;
+    const next =
+      raw != null
+        ? getNextGermanGradeInfo(raw)
+        : {
+            currentGrade: 5,
+            nextGrade: null,
+            pointsNeeded: null,
+            thresholdForNext: null,
+          };
+    return {
+      pointsToNext: raw != null ? next.pointsNeeded : null,
+      nextGrade: raw != null ? next.nextGrade : null,
+      isFailed: finalGrade != null && isFailedGrade(finalGrade),
+      pointsBelowPass:
+        raw != null && isFailedGrade(finalGrade)
+          ? gradePointsBelowPass(raw)
+          : raw != null && finalGrade != null && !isFailedGrade(finalGrade)
+            ? Math.min(0, gradePointsBelowPass(raw) ?? 0)
+            : null,
+      scenarioGrades: scenarioGradesForPoints(
+        project,
+        totalPoints,
+        gradeOverride,
+        finalGrade
+      ),
+    };
+  }
+
   const next =
     totalPoints != null
       ? getNextGradeInfo(totalPoints, schema)
@@ -102,6 +154,45 @@ function gradeExtras(
       totalPoints,
       gradeOverride
     ),
+  };
+}
+
+/**
+ * Punkte / % / Rohmittel für die Notenübersicht.
+ * Portfolio: Erfüllungsäquivalent (0–100) und Unit-%; sonst Klausur-Punkte.
+ */
+function resolveOverviewMetrics(
+  project: ExamProject,
+  pointsRec: PointsRecord | undefined,
+  totalOpts: { criteria?: ExamProject["criteria"]; maxPoints?: number },
+  maxPoints: number,
+  groupId?: string | null
+): {
+  totalPoints: number | null;
+  percent: number | null;
+  rawAverage: number | null;
+} {
+  if (isPortfolioExam(project.examType)) {
+    const ctx = { groupId };
+    const ful = computePortfolioFulfillment(project, pointsRec, ctx);
+    const rawAverage = computePortfolioRawAverageForProject(
+      project,
+      pointsRec,
+      ctx
+    );
+    return {
+      totalPoints: ful?.displayPoints ?? null,
+      percent: ful?.percent ?? null,
+      rawAverage,
+    };
+  }
+  const totalPoints =
+    pointsRec != null ? computeEffectiveTotal(pointsRec, totalOpts) : null;
+  return {
+    totalPoints,
+    percent:
+      totalPoints != null && maxPoints > 0 ? totalPoints / maxPoints : null,
+    rawAverage: null,
   };
 }
 
@@ -202,10 +293,17 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       subAreaPoints[sa.id] = pointsRec?.bySubArea[sa.id] ?? null;
     }
 
-    const totalPoints =
-      pointsRec != null
-        ? computeEffectiveTotal(pointsRec, totalOpts)
-        : null;
+    const {
+      totalPoints,
+      percent,
+      rawAverage: portfolioRaw,
+    } = resolveOverviewMetrics(
+      project,
+      pointsRec,
+      totalOpts,
+      gradeSchema.maxPoints,
+      student.groupId
+    );
     const gradeOverride = pointsRec?.gradeOverride ?? null;
     const calculatedGrade = calculatedGradeForRecord(
       project,
@@ -261,7 +359,11 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     ) {
       warnings.push("Punkte über Maximum");
     }
-    if (totalPoints != null && totalPoints < 0) {
+    if (
+      !isPortfolioExam(project.examType) &&
+      totalPoints != null &&
+      totalPoints < 0
+    ) {
       warnings.push("Negative Punkte");
     }
     if (effectiveAttended === true && !hasPoints) {
@@ -307,10 +409,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       attended: effectiveAttended,
       hasPoints,
       totalPoints,
-      percent:
-        totalPoints != null && gradeSchema.maxPoints > 0
-          ? totalPoints / gradeSchema.maxPoints
-          : null,
+      percent,
       calculatedGrade,
       finalGrade,
       status,
@@ -332,7 +431,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
         finalGrade,
         gradeSchema,
         project,
-        gradeOverride
+        gradeOverride,
+        { portfolioRawAverage: portfolioRaw }
       ),
     });
   }
@@ -348,10 +448,17 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     for (const sa of subAreas) {
       subAreaPoints[sa.id] = pointsRec?.bySubArea[sa.id] ?? null;
     }
-    const totalPoints =
-      pointsRec != null
-        ? computeEffectiveTotal(pointsRec, totalOpts)
-        : null;
+    const {
+      totalPoints,
+      percent,
+      rawAverage: portfolioRaw,
+    } = resolveOverviewMetrics(
+      project,
+      pointsRec,
+      totalOpts,
+      gradeSchema.maxPoints,
+      student.groupId
+    );
     const gradeOverride = pointsRec?.gradeOverride ?? null;
     const calculatedGrade = calculatedGradeForRecord(
       project,
@@ -370,10 +477,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       attended: true,
       hasPoints: totalPoints != null || calculatedGrade != null,
       totalPoints,
-      percent:
-        totalPoints != null && gradeSchema.maxPoints > 0
-          ? totalPoints / gradeSchema.maxPoints
-          : null,
+      percent,
       calculatedGrade,
       finalGrade,
       status: "mismatch",
@@ -392,7 +496,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
         finalGrade,
         gradeSchema,
         project,
-        gradeOverride
+        gradeOverride,
+        { portfolioRawAverage: portfolioRaw }
       ),
     });
   }
@@ -408,7 +513,17 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     for (const sa of subAreas) {
       subAreaPoints[sa.id] = pointsRec.bySubArea[sa.id] ?? null;
     }
-    const totalPoints = computeEffectiveTotal(pointsRec, totalOpts);
+    const {
+      totalPoints,
+      percent,
+      rawAverage: portfolioRaw,
+    } = resolveOverviewMetrics(
+      project,
+      pointsRec,
+      totalOpts,
+      gradeSchema.maxPoints,
+      student.groupId
+    );
     const gradeOverride = pointsRec.gradeOverride ?? null;
     const calculatedGrade = calculatedGradeForRecord(
       project,
@@ -430,10 +545,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
         calculatedGrade != null ||
         gradeOverride != null,
       totalPoints,
-      percent:
-        totalPoints != null && gradeSchema.maxPoints > 0
-          ? totalPoints / gradeSchema.maxPoints
-          : null,
+      percent,
       calculatedGrade,
       finalGrade,
       status: "mismatch",
@@ -450,7 +562,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
         finalGrade,
         gradeSchema,
         project,
-        gradeOverride
+        gradeOverride,
+        { portfolioRawAverage: portfolioRaw }
       ),
     });
   }
@@ -465,10 +578,17 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     for (const sa of subAreas) {
       subAreaPoints[sa.id] = pointsRec?.bySubArea[sa.id] ?? null;
     }
-    const totalPoints =
-      pointsRec != null
-        ? computeEffectiveTotal(pointsRec, totalOpts)
-        : null;
+    const {
+      totalPoints,
+      percent,
+      rawAverage: portfolioRaw,
+    } = resolveOverviewMetrics(
+      project,
+      pointsRec,
+      totalOpts,
+      gradeSchema.maxPoints,
+      stored.groupId
+    );
     const gradeOverride = pointsRec?.gradeOverride ?? null;
     const calculatedGrade = calculatedGradeForRecord(
       project,
@@ -508,10 +628,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
         calculatedGrade != null ||
         gradeOverride != null,
       totalPoints,
-      percent:
-        totalPoints != null && gradeSchema.maxPoints > 0
-          ? totalPoints / gradeSchema.maxPoints
-          : null,
+      percent,
       calculatedGrade,
       finalGrade,
       status: deriveStudentStatus({
@@ -539,7 +656,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
         finalGrade,
         gradeSchema,
         project,
-        gradeOverride
+        gradeOverride,
+        { portfolioRawAverage: portfolioRaw }
       ),
     });
   }

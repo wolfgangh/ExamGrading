@@ -358,7 +358,16 @@ export function StudentsTable({
             );
           }
           return (
-            <span className="tabular-nums">{formatPoints(val)}</span>
+            <span
+              className="tabular-nums"
+              title={
+                val != null
+                  ? "Portfolio: Erfüllungsäquivalent 0–100 aus gewichteten Kriterien/Teilnoten"
+                  : undefined
+              }
+            >
+              {formatPoints(val)}
+            </span>
           );
         },
       },
@@ -367,7 +376,10 @@ export function StudentsTable({
         accessorFn: (r) => r.percent ?? -1,
         header: "%",
         cell: ({ row }) => (
-          <span className="tabular-nums">
+          <span
+            className="tabular-nums"
+            title="Anteil der möglichen Leistung (Portfolio: gewichtete Kriterien-Erfüllung)"
+          >
             {formatPercent(row.original.percent)}
           </span>
         ),
@@ -410,7 +422,10 @@ export function StudentsTable({
             );
           }
           return (
-            <span className="tabular-nums">
+            <span
+              className="tabular-nums"
+              title="Klausur: fehlende Punkte. Portfolio: Verbesserung des Notenmittels bis zur besseren Stufe."
+            >
               {formatPoints(r.pointsToNext)} → {formatGrade(r.nextGrade)}
             </span>
           );

@@ -4,7 +4,7 @@
 
 © Prof. Dr. Wolfgang Hößl · OTH Regensburg · *Client-seitig · Keine Serverübertragung*
 
-**Aktuelle Version:** 0.4.32 (siehe auch `package.json` und App-Footer)
+**Aktuelle Version:** 0.4.33 (siehe auch `package.json` und App-Footer)
 
 ---
 
@@ -145,4 +145,4 @@ Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Deta
 ## Lizenz & Kontakt
 
 Internes Hochschul-Tool.  
-© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.32
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.33

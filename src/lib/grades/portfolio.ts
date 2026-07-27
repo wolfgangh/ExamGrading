@@ -7,6 +7,7 @@ import type {
 import { GERMAN_GRADES } from "@/lib/types";
 import {
   countMissingCriteria,
+  gradeToUnit,
   normalizeCriterionValue,
 } from "@/lib/grades/sta-criteria";
 
@@ -133,6 +134,118 @@ export type PortfolioGradeContext = {
   /** Optional: nur diese Teilleistung (Füllstand / Missing) */
   componentId?: string | null;
 };
+
+/**
+ * Gewichteter Unit-Mittelwert 0…1 aus Kriterienwerten
+ * (1 = best / Note 1,0; 0 = Note 5,0).
+ */
+export function unitAvgFromCriterionValues(
+  values: Record<string, number | null | undefined> | undefined,
+  criteria: AssessmentCriterion[] | undefined | null,
+  options?: GradeFromCriteriaOptions
+): number | null {
+  const disabled = options?.disabledCriterionIds
+    ? options.disabledCriterionIds instanceof Set
+      ? options.disabledCriterionIds
+      : new Set(options.disabledCriterionIds)
+    : null;
+  const list = (criteria ?? []).filter((c) => !disabled?.has(c.id));
+  if (!list.length) return null;
+  const vals = values ?? {};
+  let wSum = 0;
+  let acc = 0;
+  for (const c of list) {
+    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 0;
+    if (w <= 0) continue;
+    const unit = normalizeCriterionValue(vals[c.id], c);
+    if (unit == null) return null;
+    wSum += w;
+    acc += unit * w;
+  }
+  if (wSum <= 0) return null;
+  return acc / wSum;
+}
+
+export type PortfolioFulfillment = {
+  /** 0…1, gewichtet über Teilleistungen */
+  unitAvg: number;
+  /** Anzeige in der Notenübersicht: unitAvg × 100 (Erfüllungsäquivalent) */
+  displayPoints: number;
+  /** unitAvg als Anteil 0…1 für %-Spalte */
+  percent: number;
+};
+
+/**
+ * Portfolio-Erfüllung für Übersicht (Punkte / %):
+ * Kriterien → Unit je TL (× Dozenten-Mittel), sonst Unit aus Teilnote.
+ * Nur wenn alle TL vollständig (wie Gesamtnote).
+ */
+export function computePortfolioFulfillment(
+  project: PortfolioProjectSlice,
+  rec: PointsRecord | undefined | null,
+  ctx?: PortfolioGradeContext
+): PortfolioFulfillment | null {
+  const components = project.portfolioComponents ?? [];
+  if (!components.length) return null;
+
+  const criteriaMode = project.portfolioCriteriaMode === true;
+  const groupId = ctx?.groupId;
+  const lecturers = (project.lecturers ?? [])
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  let wSum = 0;
+  let acc = 0;
+
+  for (const c of components) {
+    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 0;
+    if (w <= 0) continue;
+
+    let unit: number | null = null;
+
+    if (criteriaMode) {
+      const disabled = disabledCriteriaForGroup(project, groupId, c.id);
+      if (!project.portfolioPerLecturerGrading) {
+        unit = unitAvgFromCriterionValues(
+          rec?.portfolioCriterionValues?.[c.id],
+          c.criteria,
+          { disabledCriterionIds: disabled }
+        );
+      } else {
+        if (!lecturers.length) return null;
+        let uAcc = 0;
+        for (const name of lecturers) {
+          const u = unitAvgFromCriterionValues(
+            rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name],
+            c.criteria,
+            { disabledCriterionIds: disabled }
+          );
+          if (u == null) return null;
+          uAcc += u;
+        }
+        unit = uAcc / lecturers.length;
+      }
+    } else {
+      const grades = effectivePortfolioGrades(project, rec, ctx);
+      const g = grades[c.id];
+      if (g == null || !Number.isFinite(g)) return null;
+      unit = gradeToUnit(g);
+    }
+
+    if (unit == null) return null;
+    wSum += w;
+    acc += unit * w;
+  }
+
+  if (wSum <= 0) return null;
+  const unitAvg = acc / wSum;
+  const displayPoints = Math.round(unitAvg * 1000) / 10; // 0…100, eine Nachkommastelle
+  return {
+    unitAvg,
+    displayPoints,
+    percent: unitAvg,
+  };
+}
 
 /** Füllstand einer Gruppe / Person im Bewertungs-Scope */
 export type PortfolioFillStatus = "empty" | "none" | "partial" | "complete";

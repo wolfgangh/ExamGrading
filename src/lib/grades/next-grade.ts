@@ -1,5 +1,7 @@
 import type { GradeSchema } from "@/lib/types";
+import { GERMAN_GRADES } from "@/lib/types";
 import { calculateGrade } from "@/lib/grades/schema";
+import { roundToNearestGermanGrade } from "@/lib/grades/portfolio";
 
 export interface NextGradeInfo {
   currentGrade: number;
@@ -74,4 +76,51 @@ export function pointsBelowPass(
   if (points == null || !Number.isFinite(points)) return null;
   const p = effectivePointsForGrading(points, schema);
   return Math.round((schema.passThreshold - p) * 10) / 10;
+}
+
+/**
+ * Nächstbessere deutsche Note aus dem ungerundeten Notenmittel (Portfolio / StA).
+ * `pointsNeeded` = wie weit das Mittel noch sinken muss, bis die Rundung die
+ * bessere Stufe liefert (Grenze = Mittel zwischen den Stufen, Bindung → besser).
+ */
+export function getNextGermanGradeInfo(rawAverage: number): NextGradeInfo {
+  if (!Number.isFinite(rawAverage)) {
+    return {
+      currentGrade: 5,
+      nextGrade: null,
+      pointsNeeded: null,
+      thresholdForNext: null,
+    };
+  }
+  const raw = Math.min(5, Math.max(1, rawAverage));
+  const currentGrade = roundToNearestGermanGrade(raw);
+  const grades = [...GERMAN_GRADES];
+  const idx = grades.findIndex((g) => Math.abs(g - currentGrade) < 1e-9);
+  if (idx <= 0) {
+    return {
+      currentGrade,
+      nextGrade: null,
+      pointsNeeded: null,
+      thresholdForNext: null,
+    };
+  }
+  const nextGrade = grades[idx - 1];
+  // Grenze: ab diesem Mittel (inkl.) rundet die Bindung auf die bessere Note
+  const thresholdForNext = (nextGrade + currentGrade) / 2;
+  const pointsNeeded = Math.max(
+    0,
+    Math.round((raw - thresholdForNext) * 1000) / 1000
+  );
+  return {
+    currentGrade,
+    nextGrade,
+    pointsNeeded,
+    thresholdForNext,
+  };
+}
+
+/** Abstand des Roh-Mittels zur Note 4,0 (positiv = schlechter / darüber). */
+export function gradePointsBelowPass(rawAverage: number | null): number | null {
+  if (rawAverage == null || !Number.isFinite(rawAverage)) return null;
+  return Math.round((rawAverage - 4) * 1000) / 1000;
 }
