@@ -759,6 +759,15 @@ export default function GradesPage() {
               )
             : {}
         }
+        portfolioComponents={
+          project.examType === "portfolio"
+            ? (project.portfolioComponents ?? []).map((c) => ({
+                id: c.id,
+                code: c.code || c.name,
+                name: c.name,
+              }))
+            : []
+        }
       />
       </div>
 

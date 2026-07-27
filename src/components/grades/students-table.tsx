@@ -155,6 +155,7 @@ export function StudentsTable({
   noShowOnly = false,
   orphanOnly = false,
   highlightBorderlineMax = 1,
+  portfolioComponents = [],
 }: {
   rows: EnrichedStudentRow[];
   editable?: boolean;
@@ -171,6 +172,8 @@ export function StudentsTable({
   orphanOnly?: boolean;
   /** Ab welcher pointsToNext-Schwelle Zeilen amber markiert werden */
   highlightBorderlineMax?: number;
+  /** Portfolio: Teilleistungen für Spalten in der Übersicht */
+  portfolioComponents?: { id: string; code: string; name: string }[];
 }) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "orderIndex", desc: false },
@@ -404,29 +407,75 @@ export function StudentsTable({
       },
     ];
 
+    for (const pc of portfolioComponents) {
+      cols.push({
+        id: `pc-${pc.id}`,
+        accessorFn: (r) => r.portfolioComponentGrades?.[pc.id] ?? 99,
+        header: () => (
+          <span title={pc.name} className="whitespace-nowrap">
+            {pc.code || pc.name}
+          </span>
+        ),
+        cell: ({ row }) => {
+          const g = row.original.portfolioComponentGrades?.[pc.id];
+          return (
+            <span className="tabular-nums" title={pc.name}>
+              {formatGrade(g ?? null)}
+            </span>
+          );
+        },
+      });
+    }
+
     if (showNextGrade) {
+      const unitFromRows = rows.find((r) => r.nextGradeUnit)?.nextGradeUnit;
+      const unitLabel =
+        unitFromRows === "grade"
+          ? "Notengrade"
+          : unitFromRows === "points"
+            ? "Punkte"
+            : "Punkte / Notengrade";
       cols.push({
         id: "toNext",
         accessorFn: (r) => r.pointsToNext ?? 999,
-        header: "bis nächste Note",
+        header: () => (
+          <span
+            title={
+              unitFromRows === "grade"
+                ? "Abstand des ungerundeten Notenmittels zur nächstgelegenen Nachbarstufe (besser bei Gleichstand; schlechter wenn näher)."
+                : "Fehlende Punkte bis zur nächstbesseren Notenschwelle (aktives Szenario)."
+            }
+            className="whitespace-nowrap"
+          >
+            bis nächste Note
+            <span className="mt-0.5 block text-[10px] font-normal text-muted-foreground">
+              ({unitLabel})
+            </span>
+          </span>
+        ),
         cell: ({ row }) => {
           const r = row.original;
           if (r.pointsToNext == null || r.nextGrade == null) {
             return <span className="text-muted-foreground">–</span>;
           }
-          if (r.pointsToNext === 0) {
-            return (
-              <span className="text-muted-foreground tabular-nums">
-                (an Schwelle)
-              </span>
-            );
-          }
+          const unit = r.nextGradeUnit === "grade" ? "Notengrade" : "Punkte";
+          const dir = r.nextGradeDirection ?? "better";
+          const dirLabel =
+            dir === "worse" ? "nächstschlechtere Note" : "nächstbessere Note";
           return (
             <span
-              className="tabular-nums"
-              title="Klausur: fehlende Punkte. Portfolio: Verbesserung des Notenmittels bis zur besseren Stufe."
+              className={cn(
+                "tabular-nums",
+                dir === "worse" &&
+                  "font-medium text-amber-800 dark:text-amber-200"
+              )}
+              title={`${dirLabel} · Abstand in ${unit}`}
             >
-              {formatPoints(r.pointsToNext)} → {formatGrade(r.nextGrade)}
+              {formatPoints(r.pointsToNext, 1)} → {formatGrade(r.nextGrade)}
+              <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                {unit === "Notengrade" ? "N" : "P"}
+                {dir === "worse" ? "↓" : "↑"}
+              </span>
             </span>
           );
         },
@@ -477,6 +526,8 @@ export function StudentsTable({
     onEditTotalPoints,
     subAreaNames,
     showNextGrade,
+    portfolioComponents,
+    rows,
   ]);
 
   const table = useReactTable({

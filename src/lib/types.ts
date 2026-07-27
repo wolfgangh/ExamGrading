@@ -477,9 +477,18 @@ export interface EnrichedStudentRow {
   comment?: string;
   attempt?: number | null;
   orderIndex: number;
-  /** Punkte bis zur nächstbesseren Note (aktives Szenario) */
+  /**
+   * Abstand bis zur angezeigten Nachbar-Note.
+   * Klausur: Punkte; Portfolio: Notengrade (Δ im ungerundeten Mittel).
+   */
   pointsToNext: number | null;
   nextGrade: number | null;
+  /** better = nächstbesser, worse = nächstschlechter (Portfolio) */
+  nextGradeDirection?: "better" | "worse" | null;
+  /** Einheit der Spalte „bis nächste Note“ */
+  nextGradeUnit?: "points" | "grade";
+  /** Portfolio: effektive Teilnoten je Teilleistungs-Id */
+  portfolioComponentGrades?: Record<string, number | null>;
   /** Note > 4,0 und mit Bewertung */
   isFailed: boolean;
   /** Abstand zur Bestehensgrenze (positiv = darunter) */

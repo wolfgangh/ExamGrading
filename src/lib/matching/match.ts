@@ -1,7 +1,7 @@
 import { calculateGrade } from "@/lib/grades/schema";
 import { computeEffectiveTotal } from "@/lib/grades/points-total";
 import {
-  getNextGermanGradeInfo,
+  getAdjacentGermanGradeInfo,
   getNextGradeInfo,
   gradePointsBelowPass,
   isFailedGrade,
@@ -14,6 +14,7 @@ import {
   computePortfolioGradeForProject,
   computePortfolioRawAverageForProject,
   countMissingPortfolioCells,
+  effectivePortfolioGrades,
 } from "@/lib/grades/portfolio";
 import { flattenHisRows, getHisSources } from "@/lib/his-sources";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
@@ -105,16 +106,19 @@ function gradeExtras(
     const raw = opts?.portfolioRawAverage ?? null;
     const next =
       raw != null
-        ? getNextGermanGradeInfo(raw)
+        ? getAdjacentGermanGradeInfo(raw)
         : {
             currentGrade: 5,
-            nextGrade: null,
-            pointsNeeded: null,
-            thresholdForNext: null,
+            nextGrade: null as number | null,
+            pointsNeeded: null as number | null,
+            thresholdForNext: null as number | null,
+            direction: null as "better" | "worse" | null,
           };
     return {
       pointsToNext: raw != null ? next.pointsNeeded : null,
       nextGrade: raw != null ? next.nextGrade : null,
+      nextGradeDirection: raw != null ? next.direction : null,
+      nextGradeUnit: "grade" as const,
       isFailed: finalGrade != null && isFailedGrade(finalGrade),
       pointsBelowPass:
         raw != null && isFailedGrade(finalGrade)
@@ -144,6 +148,8 @@ function gradeExtras(
   return {
     pointsToNext: totalPoints != null ? next.pointsNeeded : null,
     nextGrade: totalPoints != null ? next.nextGrade : null,
+    nextGradeDirection: totalPoints != null ? ("better" as const) : null,
+    nextGradeUnit: "points" as const,
     isFailed:
       finalGrade != null &&
       isFailedGrade(finalGrade) &&
@@ -194,6 +200,16 @@ function resolveOverviewMetrics(
       totalPoints != null && maxPoints > 0 ? totalPoints / maxPoints : null,
     rawAverage: null,
   };
+}
+
+function portfolioComponentGradesForRow(
+  project: ExamProject,
+  pointsRec: PointsRecord | undefined,
+  groupId?: string | null
+): Record<string, number | null> | undefined {
+  if (!isPortfolioExam(project.examType)) return undefined;
+  if (!(project.portfolioComponents?.length)) return undefined;
+  return effectivePortfolioGrades(project, pointsRec, { groupId });
 }
 
 /**
@@ -426,6 +442,11 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       multiProgram,
       attendanceWithoutHis: false,
       needsGradingCount,
+      portfolioComponentGrades: portfolioComponentGradesForRow(
+        project,
+        pointsRec,
+        student.groupId
+      ),
       ...gradeExtras(
         totalPoints,
         finalGrade,
@@ -491,6 +512,11 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       orderIndex: 10_000 + rows.length,
       multiProgram: false,
       attendanceWithoutHis: true,
+      portfolioComponentGrades: portfolioComponentGradesForRow(
+        project,
+        pointsRec,
+        student.groupId
+      ),
       ...gradeExtras(
         totalPoints,
         finalGrade,
@@ -557,6 +583,11 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       orderIndex: 20_000 + rows.length,
       multiProgram: false,
       attendanceWithoutHis: false,
+      portfolioComponentGrades: portfolioComponentGradesForRow(
+        project,
+        pointsRec,
+        student.groupId
+      ),
       ...gradeExtras(
         totalPoints,
         finalGrade,
@@ -651,6 +682,11 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       orderIndex: 30_000 + rows.length,
       multiProgram: false,
       attendanceWithoutHis: false,
+      portfolioComponentGrades: portfolioComponentGradesForRow(
+        project,
+        pointsRec,
+        stored.groupId
+      ),
       ...gradeExtras(
         totalPoints,
         finalGrade,
