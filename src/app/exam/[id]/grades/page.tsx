@@ -209,6 +209,14 @@ export default function GradesPage() {
         ? (borderlineCustom ?? defaultBl)
         : Number(borderlineFilter);
 
+  const editIsNotAttended = useMemo(() => {
+    if (!editKey || !project) return false;
+    const rec = project.points.find(
+      (p) => normalizeMatriculation(p.matriculationNumber) === editKey
+    );
+    return rec?.notAttended === true;
+  }, [editKey, project]);
+
   if (!project) return null;
 
   const gradingLocked = hasOpenGrading(project);
@@ -321,14 +329,6 @@ export default function GradesPage() {
     });
     setEditKey(null);
   };
-
-  const editIsNotAttended = useMemo(() => {
-    if (!editKey || !project) return false;
-    const rec = project.points.find(
-      (p) => normalizeMatriculation(p.matriculationNumber) === editKey
-    );
-    return rec?.notAttended === true;
-  }, [editKey, project]);
 
   const toggleNotAttended = (value: boolean) => {
     if (!editKey) return;
