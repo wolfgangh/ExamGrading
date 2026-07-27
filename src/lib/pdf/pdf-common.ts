@@ -8,6 +8,7 @@ import type {
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { downloadBlob } from "@/lib/download";
 import { datedExportFilename, formatGrade, formatPoints } from "@/lib/utils";
+import { portfolioDisplayPassAndMax } from "@/lib/grades/portfolio";
 
 export const PDF_MARGIN = 14;
 export const PDF_PAGE_WIDTH = 210;
@@ -184,10 +185,20 @@ export function examHeaderLines(project: ExamProject): string[] {
     lines.push(`Semester: ${pdfText(project.semester)}`);
   }
   lines.push(...formatLecturerHeaderLines(project.lecturers));
-  lines.push(
-    `Bestehensgrenze: ${project.gradeSchema.passThreshold} Pkt. (von ${project.gradeSchema.maxPoints})`
-  );
+  lines.push(formatExamPassThresholdLine(project));
   return lines;
+}
+
+/** Bestehensgrenze für PDF: bei Portfolio-Punkte-Kriterien echte Max-Punkte */
+export function formatExamPassThresholdLine(project: ExamProject): string {
+  const disp = portfolioDisplayPassAndMax(project);
+  if (disp) {
+    const pass = String(disp.passThreshold).replace(".", ",");
+    const max = String(disp.maxPoints).replace(".", ",");
+    const pct = String(disp.passPercent).replace(".", ",");
+    return `Bestehensgrenze: ${pass} Pkt. (von ${max}) · ${pct} %`;
+  }
+  return `Bestehensgrenze: ${project.gradeSchema.passThreshold} Pkt. (von ${project.gradeSchema.maxPoints})`;
 }
 
 /** Dokumenttitel unter OTH-Header; gibt nächste Y zurück */

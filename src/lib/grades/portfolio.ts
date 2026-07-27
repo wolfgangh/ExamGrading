@@ -209,6 +209,134 @@ export function portfolioUsesGradeScenarios(
 }
 
 /**
+ * Alle aktiven Kriterien über alle TLs sind Punkte-Skala (mit maxPoints).
+ * Dann Anzeige/PDF echte Rohpunkte statt unit×100.
+ */
+export function portfolioAllCriteriaArePoints(
+  project: PortfolioProjectSlice,
+  groupId?: string | null
+): boolean {
+  if (project.portfolioCriteriaMode !== true) return false;
+  const components = project.portfolioComponents ?? [];
+  if (!components.length) return false;
+  let any = false;
+  for (const c of components) {
+    if (resolveComponentCriteriaScale(c) !== "points") return false;
+    const disabled = new Set(disabledCriteriaForGroup(project, groupId, c.id));
+    const crits = (c.criteria ?? []).filter((k) => !disabled.has(k.id));
+    if (!crits.length) continue;
+    any = true;
+    for (const k of crits) {
+      if (k.scale !== "points" || !(k.maxPoints != null && k.maxPoints > 0)) {
+        return false;
+      }
+    }
+  }
+  return any;
+}
+
+/** Strukturelles Punkte-Maximum (Summe Kriterien-Max, deaktivierte ausgenommen). */
+export function portfolioCriterionPointsMax(
+  project: PortfolioProjectSlice,
+  groupId?: string | null
+): number | null {
+  if (!portfolioAllCriteriaArePoints(project, groupId)) return null;
+  let max = 0;
+  for (const c of project.portfolioComponents ?? []) {
+    const disabled = new Set(disabledCriteriaForGroup(project, groupId, c.id));
+    const crits = (c.criteria ?? []).filter((k) => !disabled.has(k.id));
+    for (const k of crits) {
+      const w = Number.isFinite(k.weight) && k.weight > 0 ? k.weight : 1;
+      const cMax = k.maxPoints != null && k.maxPoints > 0 ? k.maxPoints : 0;
+      max += cMax * w;
+    }
+  }
+  return max > 0 ? Math.round(max * 100) / 100 : null;
+}
+
+/**
+ * Rohpunkte-Summe einer Person über alle TLs (points-Kriterien).
+ * Dozenten: Mittel der Rohsummen je TL. null wenn unvollständig oder nicht reine Punkte.
+ */
+export function computePortfolioCriterionPointTotals(
+  project: PortfolioProjectSlice,
+  rec: PointsRecord | undefined | null,
+  ctx?: PortfolioGradeContext
+): { raw: number; max: number } | null {
+  const groupId = ctx?.groupId;
+  if (!portfolioAllCriteriaArePoints(project, groupId)) return null;
+  const components = project.portfolioComponents ?? [];
+  const lecturers = (project.lecturers ?? [])
+    .map((l) => l.trim())
+    .filter(Boolean);
+  let rawSum = 0;
+  let maxSum = 0;
+
+  for (const c of components) {
+    const disabled = disabledCriteriaForGroup(project, groupId, c.id);
+    const crits = (c.criteria ?? []).map((k) => ({
+      ...k,
+      scale: "points" as const,
+    }));
+    const active = crits.filter((k) => !disabled.includes(k.id));
+    if (!active.length) continue;
+
+    if (!project.portfolioPerLecturerGrading) {
+      const tot = criterionPointsTotals(
+        rec?.portfolioCriterionValues?.[c.id],
+        crits,
+        { disabledCriterionIds: disabled }
+      );
+      if (!tot) return null;
+      rawSum += tot.raw;
+      maxSum += tot.max;
+    } else {
+      if (!lecturers.length) return null;
+      let rAcc = 0;
+      let mAcc = 0;
+      for (const name of lecturers) {
+        const tot = criterionPointsTotals(
+          rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name],
+          crits,
+          { disabledCriterionIds: disabled }
+        );
+        if (!tot) return null;
+        rAcc += tot.raw;
+        mAcc += tot.max;
+      }
+      rawSum += rAcc / lecturers.length;
+      maxSum += mAcc / lecturers.length;
+    }
+  }
+  if (!(maxSum > 0)) return null;
+  return {
+    raw: Math.round(rawSum * 100) / 100,
+    max: Math.round(maxSum * 100) / 100,
+  };
+}
+
+/**
+ * Anzeige-Max und Bestehensgrenze in echten Kriterien-Punkten
+ * (Szenario-% × Struktur-Max), sonst null → Schema 100er-Skala.
+ */
+export function portfolioDisplayPassAndMax(
+  project: ExamProject,
+  groupId?: string | null
+): { maxPoints: number; passThreshold: number; passPercent: number } | null {
+  const max = portfolioCriterionPointsMax(project, groupId);
+  if (max == null || !(max > 0)) return null;
+  const schema = project.gradeSchema;
+  const schemaMax = schema.maxPoints > 0 ? schema.maxPoints : 100;
+  const passPercent =
+    schema.passThreshold != null && schemaMax > 0
+      ? Math.round((schema.passThreshold / schemaMax) * 1000) / 10
+      : 50;
+  const passThreshold =
+    Math.round((passPercent / 100) * max * 10) / 10;
+  return { maxPoints: max, passThreshold, passPercent };
+}
+
+/**
  * Unit 0…1 → Teilnote.
  * - scale grade (oder ohne Schema): linear 5−4·unit
  * - scale points/percent + Schema: calculateGrade(unit·max, schema) = aktives Szenario

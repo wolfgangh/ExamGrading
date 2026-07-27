@@ -5,6 +5,7 @@ import {
   drawSignatureBlock,
   findPointsRecord,
   formatDeDate,
+  formatExamPassThresholdLine,
   formatLecturerHeaderLines,
   getLastTableY,
   pdfGrade,
@@ -90,7 +91,7 @@ export function exportFailersPdf(
     `Studiengang: ${pdfText(programs.join(", ") || project.examNumber || "–")}`,
     `Modul / Prüfung: ${pdfText(project.name)}`,
     `Prüfungsnummer: ${pdfText(project.examNumber || "–")}`,
-    `Bestehensgrenze: ${project.gradeSchema.passThreshold} von ${project.gradeSchema.maxPoints} Punkten`,
+    formatExamPassThresholdLine(project),
     ...formatLecturerHeaderLines(project.lecturers),
   ];
   y = drawKeyValueBlock(doc, header, y);

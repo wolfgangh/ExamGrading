@@ -1,6 +1,7 @@
 import { computeGradeBuckets } from "@/lib/grades/scenario-impact";
 import { ensureScenarios } from "@/lib/grades/scenarios";
 import { computeSubAreaStats } from "@/lib/grades/question-stats";
+import { portfolioDisplayPassAndMax } from "@/lib/grades/portfolio";
 import type {
   EnrichedStudentRow,
   ExamProject,
@@ -88,14 +89,18 @@ function activeScenarioLabel(project: ExamProject): string {
   const scenarios = ensureScenarios(project);
   const active =
     scenarios.find((s) => s.id === project.activeScenarioId) ?? scenarios[0];
+  const disp = portfolioDisplayPassAndMax(project);
+  const passLabel = disp
+    ? `${String(disp.passThreshold).replace(".", ",")} Pkt. (von ${String(disp.maxPoints).replace(".", ",")})`
+    : `${active?.passThreshold ?? project.gradeSchema.passThreshold} Pkt.`;
   if (!active) {
-    return `Bestehen ab ${project.gradeSchema.passThreshold} Pkt.`;
+    return `Bestehen ab ${passLabel}`;
   }
   const name = active.name
     .replace(" (Standard)", "")
     .replace(" (frei)", "")
     .trim();
-  return `${name} · Bestehen ab ${active.passThreshold} Pkt.`;
+  return `${name} · Bestehen ab ${passLabel}`;
 }
 
 function shareOf(count: number, total: number): number {
@@ -159,7 +164,10 @@ export function buildNotenspiegelData(
     { label: "Median Punkte", value: formatPoints(stats.medianPoints) },
     {
       label: "Max. Punkte",
-      value: formatPoints(project.gradeSchema.maxPoints),
+      value: formatPoints(
+        portfolioDisplayPassAndMax(project)?.maxPoints ??
+          project.gradeSchema.maxPoints
+      ),
     },
   ];
 
@@ -220,8 +228,12 @@ export function buildNotenspiegelData(
     semester: project.semester || "–",
     lecturers: (project.lecturers ?? []).filter(Boolean).join(", ") || "–",
     scenarioName: activeScenarioLabel(project),
-    passThreshold: project.gradeSchema.passThreshold,
-    maxPoints: project.gradeSchema.maxPoints,
+    passThreshold:
+      portfolioDisplayPassAndMax(project)?.passThreshold ??
+      project.gradeSchema.passThreshold,
+    maxPoints:
+      portfolioDisplayPassAndMax(project)?.maxPoints ??
+      project.gradeSchema.maxPoints,
     generatedAt: new Date().toISOString(),
     graded: stats.graded,
     averageGrade: stats.averageGrade,

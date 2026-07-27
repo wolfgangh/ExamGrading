@@ -167,11 +167,11 @@ Details: [SECURITY.md](../SECURITY.md).
 
 Bei Releases `package.json`, `app-version.ts` und README-Footer abstimmen.
 
-**Stand dieser Doku:** App v0.4.48.
+**Stand dieser Doku:** App v0.4.49.
 
 **Noten aus Punkten:** `calculateGrade` vergleicht exakte Punkte mit `minPoints` (≥, Epsilon gegen FP). Kein `Math.ceil`/ROUNDUP auf ganze Punkte vor der Zuordnung.
 
-**Portfolio (points/percent-TLs):** Gesamtnote = `unitAvg × max → calculateGrade` mit aktivem Szenario-Schema (Bestehensgrenze wirkt). Reine Note-TLs: linear `5−4·unit`. Grenzfälle: `defaultBorderlineMax` (Punkte ≈ max/50 ≤ 2; Notengrade 0,1).
+**Portfolio (points/percent-TLs):** Gesamtnote = `unitAvg × schemaMax → calculateGrade` (Schema oft 0–100). **Anzeige** bei reinen Punkte-Kriterien: echte Rohpunkte/Max (z. B. 11×6=66); PDF-Bestehensgrenze skaliert in diese Max-Punkte. Reine Note-TLs: linear `5−4·unit`.
 
 **Nicht angetreten (Portfolio/StA):** `PointsRecord.notAttended` → Status `no_show`, keine Teilnoten nötig; zählt für Workflow-Vollständigkeit; HIS-Export mit leerer Note. Export-Validierung (`validateForExport`) nimmt No-Shows von „Teilnoten unvollständig“ aus.
 
