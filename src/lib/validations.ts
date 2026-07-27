@@ -91,9 +91,11 @@ export function validateForExport(
     } else {
       const incomplete = rows.filter((r) => {
         if (!r.inHis) return false;
+        if (r.status === "no_show") return false;
         const rec = project.points.find(
           (p) => normalizeMatriculation(p.matriculationNumber) === r.key
         );
+        if (rec?.notAttended === true) return false;
         return (
           countMissingCriteria(rec?.criterionValues, project.criteria ?? []) >
           0
@@ -111,7 +113,10 @@ export function validateForExport(
 
   if (isStaManualExam(project.examType)) {
     const missingGrade = rows.filter(
-      (r) => r.inHis && r.finalGrade == null
+      (r) =>
+        r.inHis &&
+        r.status !== "no_show" &&
+        r.finalGrade == null
     );
     if (missingGrade.length > 0) {
       items.push({
@@ -130,11 +135,14 @@ export function validateForExport(
           "Keine Teilleistungen definiert – unter Einstellungen anlegen (Standard: 2).",
       });
     } else {
+      // No-Show / notAttended: keine Teilnoten nötig (auch bei 2 Korrektoren)
       const incomplete = rows.filter((r) => {
         if (!r.inHis) return false;
+        if (r.status === "no_show") return false;
         const rec = project.points.find(
           (p) => normalizeMatriculation(p.matriculationNumber) === r.key
         );
+        if (rec?.notAttended === true) return false;
         return (
           countMissingPortfolioCells(project, rec, {
             groupId: r.student.groupId,
