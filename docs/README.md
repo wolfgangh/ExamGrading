@@ -1,11 +1,11 @@
 # Dokumentation ExamGrade
 
 Zentrale Übersicht der Projektdokumentation.  
-**App-Version:** 0.4.27 (abstimmen mit `package.json` und `src/lib/app-version.ts`)
+**App-Version:** 0.4.53 (abstimmen mit `package.json` und `src/lib/app-version.ts`)
 
 | Dokument | Beschreibung |
 |----------|--------------|
-| [BENUTZERHANDBUCH.md](BENUTZERHANDBUCH.md) | Anleitung für Prüfer: Prüfung anlegen, Import, Zuordnung, Bewertung, Noten, Szenarien, Export, Backup, Teams |
+| [BENUTZERHANDBUCH.md](BENUTZERHANDBUCH.md) | **Vollständige Nutzerdokumentation** – Prüfungstypen, Workflow, Import, Bewertung, Noten, Szenarien, Export, No-Show, FAQ |
 | [ARCHITEKTUR.md](ARCHITEKTUR.md) | Technische Architektur, Module, Routing, Storage |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Vercel, Umgebungsvariablen, Teams-Einbettung, Fehlerbehebung |
 | [../SECURITY.md](../SECURITY.md) | Sicherheitsaudit und Betriebs-Checkliste |
@@ -13,20 +13,21 @@ Zentrale Übersicht der Projektdokumentation.
 
 ## Empfohlene Lesereihenfolge
 
-1. **Neu in der App?** → [BENUTZERHANDBUCH.md](BENUTZERHANDBUCH.md)  
+1. **Neu in der App?** → [BENUTZERHANDBUCH.md](BENUTZERHANDBUCH.md) (Inhaltsverzeichnis, Checklisten, FAQ)  
 2. **Deployment / Passwort?** → [DEPLOYMENT.md](DEPLOYMENT.md)  
 3. **Code beitragen / verstehen?** → [ARCHITEKTUR.md](ARCHITEKTUR.md) + [SECURITY.md](../SECURITY.md)  
 
-## Themen-Map
+## Themen-Map (Benutzerhandbuch)
 
-| Thema | Dokument |
-|-------|----------|
-| THE / elektrP / Klausur-Workflow | Benutzerhandbuch §3–6 |
-| StA, Portfolio, Gruppen, Dozenten-Teilnoten | Benutzerhandbuch §2, §6–7, §10 |
-| Notenszenarien, PNG/PDF-Vergleich | Benutzerhandbuch §7–8 |
-| JSON-Sicherung, Semester-ZIP | Benutzerhandbuch §9; README |
-| Vercel, `NEXT_PUBLIC_APP_PASSWORD`, Teams | Deployment, Security |
-| IndexedDB, Module, Routing | Architektur |
+| Thema | Abschnitt |
+|-------|-----------|
+| THE / elektrP / Klausur | §4, §7–9, §15 |
+| StA, Portfolio, Gruppen, Korrektoren, No-Show | §4, §6, §10–11, §15 |
+| Notenszenarien, Grenzfälle | §12 |
+| Notenliste PDF, HIS-Excel pro Studiengang | §13 |
+| JSON-Sicherung, Semester-ZIP | §14 |
+| Export gesperrt / FAQ | §16 |
+| Glossar | §17 |
 
 ## Sample-Dateien
 

@@ -1,227 +1,606 @@
 # Benutzerhandbuch ExamGrade
 
-Anleitung für Prüferinnen und Prüfer. Alle Daten bleiben **im Browser** (keine Serverübertragung von Notenlisten).
+Vollständige Anleitung für Prüferinnen und Prüfer – Einstieg und Nachschlagewerk.
 
-**Version:** 0.4.10
+**App-Version:** 0.4.53  
+**Zielgruppe:** Personen, die Prüfungen bewerten und Noten an HISinOne bzw. die Studienabteilung melden  
+**Datenschutz:** Alle Prüfungsdaten bleiben **im Browser** (IndexedDB). Es gibt **keine** Übertragung von Notenlisten an einen App-Server.
 
----
-
-## 1. Voraussetzungen
-
-| Punkt | Empfehlung |
-|-------|------------|
-| Browser | Aktuelles Chrome, Edge oder Firefox (Desktop) |
-| Zugang | App-Passwort (von der IT/Betreuung bzw. aus `.env` / Vercel) |
-| Dateien | HISinOne-Export, ggf. Moodle-Antritt und -Punkte (Excel) |
-| Backup | JSON-Sicherungen speichern (USB/Netzlaufwerk) |
-
-**MS Teams:** Die App kann als Website-Tab eingebettet werden. Downloads sind dort oft eingeschränkt – die App bietet dann einen Datei-Dialog oder einen manuellen Link am unteren Rand. Bei Problemen: „Im Browser öffnen“.
+> **Keine Gewähr** für die Richtigkeit der Berechnungen. Ergebnisse vor dem Upload in HISinOne und vor der Weitergabe an Studierende prüfen.
 
 ---
 
-## 2. Erste Schritte
+## Inhaltsverzeichnis
 
-1. App-URL öffnen und **Passwort** eingeben.  
-2. **Startseite:** vorhandene Prüfungen (Karten mit **Semester**, **Prüfungsform**, **Workflow-Status**) oder **Neue Prüfung**.  
-3. Metadaten: Name, Prüfungsnummer(n), Semester, **Dozenten** (Vorschlagsliste oder Freitext, Chips), **Prüfungstyp**, Teilgebiete / Punktemaxima.  
-4. Die **Workflow-Leiste** (links in der Prüfung) zeigt erledigte und offene Schritte.
-
-### Prüfungstypen
-
-| Typ | Typischer Ablauf |
-|-----|------------------|
-| **Take-Home-Exam (THE)** | HISinOne → Antritt → Matrikel-Zuordnung → Punkte → Noten → Export |
-| **Elektronische Prüfung (elektrP)** | wie THE (Prüfung vor Ort, sonst gleicher Ablauf) |
-| **Klausur** | HISinOne → Punkte (Vorlage/Import) → Noten → Export (kein Moodle-Antritt) |
-| **Studienarbeit (StA) – Kriterien** | HISinOne → Kriterien definieren → Werte (%, Punkte oder Note) mit Gewichten → Note → Export |
-| **Studienarbeit (StA) – manuelle Note** | HISinOne → Note manuell je Person → Export |
-| **Portfolioprüfung** | HISinOne → Teilleistungen (Standard: 2) → Teilnoten → gewichtete Gesamtnote → Export |
-| **Sonstige** | flexibel, je nach konfiguriertem Ablauf |
-
-Bei StA und Portfolioprüfung können weitere Personen **manuell** unter Importe hinzugefügt werden (ohne HISinOne nur über die manuelle Notenmeldung exportierbar).
-
-**Gruppen (StA / Portfolio):** Unter Einstellungen Gruppen anlegen, in der **Bewertungsmatrix** (Seite *Bewertung*) zuordnen und per Schaltflächen filtern. Hilfen: **Namenssuche** (mehrere Namen mit Komma), Hervorhebung von Personen **ohne Gruppe** und noch **unbefüllten** Gruppen (dürfen absichtlich leer bleiben), Personenzahl im Gruppen-Dropdown, **Mehrfachauswahl** (Checkboxen) mit Sammelzuordnung.
-
-**Portfolioprüfung:** Gesamtnote = gewichteter Mittelwert der Teilnoten, gerundet auf die nächste deutsche Note (1,0 / 1,3 / … / 5,0). Optional in den Einstellungen (Standard **aus**): **Teilnoten je Dozent** – jeder Dozent vergibt Noten pro Teilleistung; die Teilnote ist das **gleichgewichtete Mittel** der Dozenten, danach wie bisher die gewichtete Gesamtnote.
-
-**StA-Kriterien:** In der Matrix zeigen Spaltenköpfe Skalen-Badges (`0–100 %`, `Note 1–5`, `Punkte 0–…`), Placeholder und ⓘ-Tooltips mit Eingabehinweis.
+1. [Einführung](#1-einführung)
+2. [Zugang und Darstellung](#2-zugang-und-darstellung)
+3. [Startseite](#3-startseite)
+4. [Prüfungstypen im Überblick](#4-prüfungstypen-im-überblick)
+5. [Navigation und Workflow](#5-navigation-und-workflow)
+6. [Einstellungen](#6-einstellungen)
+7. [Importe](#7-importe)
+8. [Matrikel-Zuordnung (THE / elektrP)](#8-matrikel-zuordnung-the--elektrp)
+9. [Punkte und Detailpunkte](#9-punkte-und-detailpunkte)
+10. [Bewertung (StA und Portfolio)](#10-bewertung-sta-und-portfolio)
+11. [Notenübersicht](#11-notenübersicht)
+12. [Notenszenarien](#12-notenszenarien)
+13. [Dokumente und Export](#13-dokumente-und-export)
+14. [Sicherung und Wiederherstellung](#14-sicherung-und-wiederherstellung)
+15. [Checklisten je Prüfungstyp](#15-checklisten-je-prüfungstyp)
+16. [Häufige Fragen und Fehlerbehebung](#16-häufige-fragen-und-fehlerbehebung)
+17. [Glossar](#17-glossar)
+18. [Verantwortungsvoller Umgang](#18-verantwortungsvoller-umgang)
 
 ---
 
-## 3. Workflow im Überblick
+## 1. Einführung
 
-### 3.1 THE / elektrP
+### 1.1 Was ist ExamGrade?
 
-1. **HISinOne-Masterliste** importieren (eine oder mehrere Studiengangs-Dateien).  
-2. **Antrittsliste** (Moodle) importieren.  
-3. **Matrikel-Zuordnung:** Orphans prüfen – zusammenführen oder ablehnen.  
-4. **Punkte** importieren und offene manuelle Bewertungen abschließen.  
-5. **Noten** prüfen (Szenarien, Overrides).  
-6. **Sicherung nach Import** und später **nach Noten** (JSON).  
-7. **Export:** HISinOne-XLSX + gewünschte PDFs/Notenspiegel.
+ExamGrade unterstützt den Weg von der **HISinOne-Masterliste** über **Antritt und Bewertung** bis zum **formatgetreuen Notenexport** und internen Auswertungen (Notenspiegel, Szenarienvergleich, PDFs).
 
-### 3.2 Klausur
+Typische Einsatzgebiete:
 
-1. HISinOne-Masterliste importieren.  
-2. Punkte: Vorlage exportieren und importieren **oder** unter **Punkte** manuell in der Tabelle eintragen/ändern.  
-3. Noten berechnen und prüfen.  
-4. JSON-Sicherungen und HISinOne-/PDF-Export.
+- Take-Home-Exams (THE) und elektronische Prüfungen (elektrP) mit Moodle
+- Klassische Klausuren mit Punkteimport oder manueller Punktetabelle
+- Studienarbeiten (Kriterienmatrix oder manuelle Note)
+- Portfolioprüfungen mit Teilleistungen, optional Kriterien und mehreren Korrektoren
+- Mehrere Studiengänge (mehrere HISinOne-Dateien) in **einer** Prüfung
 
-### 3.3 StA / Portfolio
+### 1.2 Was ExamGrade **nicht** ist
 
-1. HISinOne importieren (optional manuell Personen ergänzen).  
-2. Einstellungen: Kriterien bzw. Teilleistungen, optional Gruppen und Dozenten-Teilnoten.  
-3. Seite **Bewertung:** Matrix ausfüllen, Gruppen zuordnen.  
-4. Noten/Szenarien prüfen → Sicherung → Export (HISinOne und/oder manuelle Noten-PDF).
+- Kein HISinOne-Ersatz (Upload der Noten erfolgt weiter über das Campus-System)
+- Keine Cloud-Notenverwaltung der App selbst
+- Keine automatische rechtliche Finalisierung – **Sie** sind für die gemeldeten Noten verantwortlich
 
-Der Workflow blockiert Export und Teile der Notenliste, solange **offene Bewertungen** oder (bei THE/elektrP) **ungeprüfte Orphans** bestehen.
+### 1.3 Lokale Datenhaltung
+
+| Aspekt | Bedeutung |
+|--------|-----------|
+| Speicherort | Browser dieses Geräts (IndexedDB) |
+| Server | Keine Noten-API; App kann statisch gehostet sein (z. B. Vercel) |
+| Anderer Browser / PC | Daten **nicht** automatisch da – JSON-Sicherung importieren |
+| Browser-Profil-Sync | Kann Daten mitnehmen – auf geteilten Konten vorsichtig sein |
 
 ---
 
-## 4. Import
+## 2. Zugang und Darstellung
 
-Seite: **Importe** in der Prüfung.
+### 2.1 Anmeldung
 
-| Datei | Inhalt |
-|-------|--------|
-| **HISinOne** | Offizielle Anmeldungsliste / Noteneintrag-Vorlage (`.xlsx`). Originalstruktur wird für den Re-Export mitgespeichert. |
-| **Antritt** | Moodle-Antrittsliste (THE/elektrP). |
-| **Punkte** | Moodle-Bewertung / Punkte-Excel mit Aufgaben-Spalten oder Gesamtpunkte. |
+1. App-URL öffnen.  
+2. **App-Passwort** eingeben (von der Betreuung / aus der Umgebungskonfiguration).  
+3. Session gilt für den Browser-Tab bzw. bis zum Schließen der Sitzung (sessionStorage).
 
-**Hinweise**
+Passwort vergessen: nur Personen mit Zugriff auf die Deployment-Umgebung (z. B. Vercel-Env) können es setzen und die App neu ausrollen.
 
-- Mehrere HISinOne-Dateien pro Prüfung möglich (verschiedene Studiengänge).  
-- Sehr große Dateien werden abgelehnt (Excel max. ca. 15 MB, JSON-Sicherung max. ca. 50 MB).  
-- Nach erfolgreichem Komplett-Import: Workflow-Schritt **Sicherung nach Import** nutzen.
+### 2.2 Darstellung (Header)
+
+| Einstellung | Wirkung |
+|-------------|---------|
+| Hell / Dunkel | Farbschema |
+| Schriftgröße | Standard / Groß / Sehr groß (wirkt auf rem-basierte Texte, inkl. Matrix und TL-Nebenangaben) |
+| Hoher Kontrast | verstärkte Kontraste |
+
+Einstellungen werden **lokal im Browser** gespeichert.
+
+### 2.3 Sidebar
+
+In einer geöffneten Prüfung:
+
+- Navigation zu den Bereichen (je nach Prüfungstyp unterschiedlich)
+- **Workflow-Fortschritt** (erledigte / offene Schritte)
+- Sidebar **ein-/ausklappbar** (Zustand wird gemerkt)
+
+### 2.4 MS Teams
+
+Die App kann als Website-Tab eingebettet werden. Downloads sind in Teams oft eingeschränkt; die App bietet dann Datei-Dialog oder manuellen Link. Bei Problemen: **Im Browser öffnen**.
+
+---
+
+## 3. Startseite
+
+### 3.1 Prüfungskarten
+
+Pro Prüfung sehen Sie u. a.:
+
+- Name, Semester, Prüfungsform
+- **Workflow-Status** (Fortschritt)
+- Öffnen, ggf. Löschen
+
+### 3.2 Neue Prüfung anlegen
+
+Typische Felder:
+
+- Name der Prüfung  
+- Semester  
+- Prüfungsnummer(n)  
+- Dozentinnen/Dozenten (Liste / Freitext, Chips)  
+- **Prüfungstyp** (entscheidet den gesamten weiteren Ablauf)  
+- ggf. Teilgebiete und Punktemaxima (je nach Typ)
+
+### 3.3 Sicherung von der Startseite
+
+- **JSON importieren** (eine oder mehrere Dateien) – legt **Kopien** der Prüfungen in **diesem** Browser an  
+- **Semester-ZIP** importieren / Semester sichern – mehrere Projekte auf einmal  
+
+Dateinamen der Sicherung typisch: Datum + Name + Schritt (z. B. `…_nach-Noten.json`), ohne Uhrzeit.
+
+---
+
+## 4. Prüfungstypen im Überblick
+
+| Typ | Kurzbeschreibung | Typische Seiten |
+|-----|------------------|-----------------|
+| **THE** | Take-Home, Moodle-Antritt + Punkte | Import, Zuordnung, Punkte, Detailpunkte, Noten, Szenarien, Dokumente |
+| **elektrP** | wie THE (Prüfung vor Ort) | wie THE |
+| **Klausur** | HISinOne + Punkte (Vorlage/Import/manuell) | Import, Punkte, Detailpunkte, Noten, Szenarien, Dokumente |
+| **StA – Kriterien** | Gewichtete Kriterien → Note | Import, **Kriterienbewertung**, Noten, ggf. Szenarien, Dokumente |
+| **StA – manuell** | Note je Person manuell | Import, Notenübersicht, Dokumente |
+| **Portfolio** | Teilleistungen, optional Kriterien & Korrektoren | Import, **Teilnoten**, Noten, ggf. Szenarien, Dokumente |
+| **Sonstige** | flexibel | je nach Konfiguration |
+
+**Gruppen** (StA / Portfolio): unter Einstellungen anlegen, in der Bewertungsmatrix zuordnen und filtern.
+
+**Mehrere HISinOne-Quellen:** mehrere Studiengangs-Dateien in **einer** Prüfung; Export später **pro Datei/Studiengang**.
+
+---
+
+## 5. Navigation und Workflow
+
+### 5.1 Sidebar-Einträge (je nach Typ)
+
+| Eintrag | Inhalt |
+|---------|--------|
+| Übersicht | Status, nächste Schritte, Kennzahlen |
+| Importe | HISinOne, Antritt, Punkte, manuell Personen |
+| Zuordnung | nur THE/elektrP – Orphans |
+| Punkteerfassung / Detailpunkte | Klausur, THE, elektrP |
+| Kriterienbewertung / Teilnoten | StA-Kriterien bzw. Portfolio |
+| Notenübersicht | Tabelle, Filter, Overrides, Szenario-Umschalter |
+| Notenszenarien | Bestehensgrenzen, Vergleich (nicht bei StA manuell) |
+| Dokumente | PDFs, HISinOne-Excel, Notenspiegel |
+| Sicherung | JSON-Download / Status |
+| Einstellungen | Metadaten, Struktur, Gruppen, Dozenten |
+
+### 5.2 Workflow-Schritte (Beispiele)
+
+**THE / elektrP:** HISinOne → Antritt → Zuordnung → Punkte/Bewertung → Noten → Sicherung nach Noten → Dokumente  
+
+**Klausur:** HISinOne → Punkte → Noten → Sicherung → Dokumente  
+
+**StA / Portfolio:** HISinOne → Struktur (Einstellungen) → Bewertung → Noten → Sicherung → Dokumente  
+
+Meilensteine u. a.:
+
+- **Sicherung nach Import**  
+- **Sicherung nach Noten** (vor geschütztem Export empfohlen/erforderlich)
+
+### 5.3 Wann ist etwas gesperrt?
+
+| Sperre | Typische Ursache |
+|--------|------------------|
+| Notenschlüssel / Szenario-Wechsel | Offene Aufgaben „Bewertung notwendig“ (Moodle-Detail) |
+| Teilnoten / Noten-Workflow (Portfolio) | Unvollständige Kriterien bei **angetretenen** Personen |
+| Export / PDFs | Offene Bewertungen; ungeprüfte Orphans (THE); **veraltete oder fehlende JSON-Sicherung**; Validierungsfehler (z. B. unvollständige Teilnoten, fehlende HIS-Originalvorlage) |
+| HISinOne-Excel | Fehlende Original-.xlsx-Vorlage (erneut importieren) |
+
+**No-Show / „Nicht angetreten“** (Portfolio/StA): markierte Personen brauchen **keine** Teilnoten und blockieren den Workflow nicht; im HISinOne-Export erscheint i. d. R. **keine Note**.
+
+---
+
+## 6. Einstellungen
+
+Seite: **Einstellungen**.
+
+### 6.1 Metadaten
+
+- Name, Semester, Prüfungsnummer  
+- Dozentinnen/Dozenten (mehrere möglich – erscheinen in PDFs und Exporten)  
+
+### 6.2 Struktur je Typ
+
+| Typ | Typische Einstellungen |
+|-----|------------------------|
+| Klausur / THE | Teilgebiete, Maxima, Notenschema indirekt über Szenarien |
+| StA-Kriterien | Kriterienliste: Name, Code, Gewicht, Skala (%, Punkte, Note), Beschreibung |
+| Portfolio | Teilleistungen (Code, Name, Gewicht); optional **Kriterienmodus**; optional **Teilnoten je Dozent** |
+| Gruppen | Anlegen, umbenennen, Reihenfolge; in der Matrix zuordnen |
+
+### 6.3 Portfolio: Kriterien und Korrektoren
+
+- **Kriterienmodus:** je Teilleistung einheitliche Skala (Punkte / Prozent / Note) und Kriterien mit Gewicht und Maxima (bei Punkten z. B. 0–6).  
+- **Pro Dozent bewerten:** jeder Korrektor füllt die Matrix; Teilnote = Mittel der Dozenten.  
+- **Kriterien pro Gruppe deaktivieren:** unter Gruppensteuerung – deaktivierte Kriterien zählen nicht in die Note dieser Gruppe.
+
+### 6.4 Notenszenarien (Voreinstellung)
+
+Die **aktive** Bestehensgrenze steuert die Noten bei punkte-/prozentbasierten Pfaden. Details: [§12 Notenszenarien](#12-notenszenarien).
+
+---
+
+## 7. Importe
+
+Seite: **Importe**.
+
+### 7.1 HISinOne (Masterliste / Noteneintrag)
+
+- Offizielle Excel-Vorlage(n) aus HISinOne  
+- **Mehrere Dateien** möglich (verschiedene Studiengänge) – werden als getrennte Quellen geführt  
+- Die **Originaldatei** wird für den formatgetreuen Re-Export mitgespeichert  
+
+### 7.2 Antritt (THE / elektrP)
+
+- Moodle-Antrittsliste  
+- Fehlende Matrikelnummern in HISinOne → **Zuordnung**  
+
+### 7.3 Punkte
+
+- Moodle-Punkte / Bewertungsexcel oder Klausur-Vorlage  
+- Offene manuelle Aufgaben später unter Detailpunkte schließen  
+
+### 7.4 Manuell Personen (StA / Portfolio)
+
+Personen ohne HIS-Import hinzufügen – Export über HISinOne nur, wenn sie in der Masterliste sind; sonst manuelle Notenmeldung-PDF.
+
+### 7.5 Größenlimits
+
+| Typ | ca. Maximum |
+|-----|-------------|
+| Excel | 15 MB |
+| JSON-Sicherung | 50 MB |
 
 Mini-Beispiele: [`sample/`](../sample/).
 
 ---
 
-## 5. Matrikel-Zuordnung (THE / elektrP)
+## 8. Matrikel-Zuordnung (THE / elektrP)
 
 Seite: **Zuordnung**.
 
-Wenn Antritt oder Punkte eine Matrikelnummer enthalten, die **nicht** in HISinOne vorkommt:
+Wenn Antritt oder Punkte eine Matrikelnummer enthalten, die **nicht** in HISinOne vorkommt (**Orphan**):
 
-1. App schlägt Kandidaten vor (Ähnlichkeit Namen/Matrikel).  
+1. Vorschläge prüfen (Ähnlichkeit Name/Matrikel).  
 2. **Zusammenführen** (mit Begründung) **oder ablehnen**.  
-3. Sammelablehnung für Orphans ohne Vorschlag möglich.  
-4. **Rückgängig** für Merges und Ablehnungen dokumentiert möglich.
+3. Ggf. Sammelablehnung.  
+4. Merges und Ablehnungen sind dokumentiert und **rückgängig** machbar.
 
-Solange ungeprüfte Orphans existieren, bleiben Notenliste und HISinOne-Export **gesperrt**.
+Solange Orphans ungeprüft sind, bleiben Notenliste und HISinOne-Export **gesperrt**.
 
 ---
 
-## 6. Punkte und Bewertung
+## 9. Punkte und Detailpunkte
+
+(Für Klausur, THE, elektrP – nicht primär StA manuell.)
 
 | Seite | Nutzen |
 |-------|--------|
-| **Punkte** / Import | Matrix und importierte Werte |
-| **Detailpunkte** | Aufgabenweise Bewertung, offene Felder |
-| **Teilgebiete** | Mapping von Fragen auf Teilgebiete (falls genutzt) |
-| **Bewertung** | StA-Kriterienmatrix bzw. Portfolio-Teilnoten; Gruppen, Suche, Mehrfachzuordnung |
+| **Punkteerfassung** | Übersicht / manuelle Gesamtpunkte |
+| **Detailpunkte** | Aufgabenweise Werte, „Bewertung notwendig“ abschließen |
+| Teilgebiet-Mapping | Fragen den Teilgebieten zuordnen (falls genutzt) |
 
-**„Bewertung notwendig“:** Manuelle Aufgaben ohne Note blockieren den Notenschlüssel und den Export, bis alle erledigt sind.
-
----
-
-## 7. Noten und Szenarien
-
-| Seite | Nutzen |
-|-------|--------|
-| **Notenszenarien** | Bestehensgrenzen wählen und vergleichen (siehe unten) |
-| **Noten** | Tabelle aller Studierenden; Filter nach Status und **Note** (Mehrfachauswahl, Alle wählen/abwählen); **Kopieren** der gefilterten Liste (Matr., Name, Studiengang, Punkte, Note) in die Zwischenablage für Teams/Excel; Overrides, Kommentare, Szenario-Charts |
-| **Notenspiegel** | Kennzahlen und Export PDF/Excel inkl. Diagramm |
-
-### Empfehlung: Szenarien entscheiden
-
-Sinnvolle Reihenfolge auf der Szenarien-Seite:
-
-1. **Aktive Schwelle** setzen (welches Szenario steuert die echten Noten?).  
-2. **Kennzahlen-Direktvergleich** und **Auswirkung des Wechsels** (besser / schlechter / neu bestanden).  
-3. **Notenstufen** (Tabelle links, Chart rechts) – Fokus Bestehen/Durchfallen.  
-4. **Einzelnoten 1,0–5,0** (Tabelle + Chart) – Feindetail.  
-5. **Durchfaller über Szenarien** – wer fällt wo durch?  
-6. Personentabelle „Wer profitiert / verliert?“  
-
-Diagramme: **Klick zum Vergrößern**; **PNG speichern** enthält Titel und Beschriftung.  
-**PDF Export** bündelt Kennzahlen, Verteilungen und Durchfaller-Analyse zum internen Austausch.
-
-Manuelle Notenkorrekturen mit Kommentar dokumentieren.
-
-**Punktenoten (THE, elektrP, Klausur, StA-Kriterien):** Die Note ergibt sich aus den **exakten** Gesamtpunkten und den Schwellen (≥). Es wird **nicht** vor der Zuordnung auf ganze Punkte aufgerundet (z. B. 80,5 bei Grenze 81 für Note 1,3 → Note 1,7, nicht 1,3).
+**„Bewertung notwendig“:** blockiert den Notenschlüssel und den Export, bis alle betroffenen Aufgaben erledigt sind.
 
 ---
 
-## 8. Dokumente und Export
+## 10. Bewertung (StA und Portfolio)
 
-Seite: **Dokumente** bzw. **Export**.
+Seite: **Kriterienbewertung** bzw. **Teilnoten**.
+
+### 10.1 Bewertungsmatrix
+
+- Zeilen: Studierende  
+- Spalten: Kriterien (StA) bzw. Kriterien je Teilleistung (Portfolio) und berechnete **Teilnote**  
+- **Tab** springt zum nächsten Kriterium; Name kann zur Person verlinken (Notenübersicht → Matrix)  
+- Horizontales Scrollen per Pfeile (wenn viele Spalten)  
+
+### 10.2 Anzeige unter der Teilnote (Portfolio)
+
+- Erfüllung in % und ggf. Rohpunkte-Summe (z. B. `19,6/24 · 82 %`)  
+- Chip **Abstand zur nächsten Teilnote** (besser ↑ / schlechter ↓)  
+
+### 10.3 Gruppen
+
+- Zuordnung pro Person (Dropdown)  
+- Filterleiste: Gruppe wählen, Sammelzuordnung, Füllstand der Gruppe  
+- Personen **ohne Gruppe** sind hervorgehoben  
+- Optional: Kriterien einer Gruppe deaktivieren  
+
+### 10.4 Dozenten / Korrektoren (Portfolio)
+
+Wenn „Teilnoten je Dozent“ aktiv: Bewerter wählen; jede Person braucht vollständige Werte **aller** Korrektoren für die Teilnote.
+
+### 10.5 Nicht angetreten (No-Show)
+
+Für HISinOne-angemeldete Personen, die **nicht** bewertet werden (z. B. ohne Gruppe, nicht erschienen):
+
+| Ort | Aktion |
+|-----|--------|
+| Matrix | Button **„Nicht angetreten“** (orange, mit Icon) |
+| Notenübersicht | Note klicken → Dialog: als nicht angetreten markieren |
+
+**Wirkung:**
+
+- Status **No-Show**  
+- Keine Teilnoten erforderlich  
+- Workflow und Export-Validierung werten die Person als erledigt  
+- HISinOne-Export: leere Note  
+
+**Sichtbar**, wenn: ohne Gruppe **oder** noch keine Werte **oder** bereits No-Show (zum Aufheben).  
+**Ausgeblendet**, wenn: Person hat eine Gruppe **und** bereits Noten/Punkte/% eingetragen.
+
+**Antritt markieren** hebt die Markierung wieder auf.
+
+### 10.6 Schriftgröße
+
+Matrix- und Tabellentexte skalieren mit der Appearance-Schriftgröße (Standard / Groß / Sehr groß).
+
+---
+
+## 11. Notenübersicht
+
+Seite: **Notenübersicht**.
+
+### 11.1 Tabelle
+
+Typische Spalten:
+
+- Matrikel, Name, **Studiengang**, Status, Antritt  
+- **Gruppe** (bei StA/Portfolio mit Gruppen)  
+- Punkte, %, Note  
+- Portfolio: **Teilnoten** je TL mit %/Punkten und Abstand zur nächsten TL-Note  
+- „bis nächste Note“ (Gesamt)  
+- Filterbare und sortierbare Ansicht  
+
+Name kann zur **Bewertungsmatrix** der Person springen (Deep-Link).
+
+### 11.2 Filter und Markierungen
+
+| Filter | Bedeutung |
+|--------|-----------|
+| Suche | Name / Matrikel |
+| Status | z. B. exportbereit, No-Show |
+| **Studiengang** | Programmkürzel (bei mehreren HIS-Quellen); „Ohne Studiengang“ |
+| Note | Mehrfachauswahl |
+| Gruppe | über Gruppenleiste (StA/Portfolio) |
+| Grenzfall | Abstand zur nächsten Note ≤ Schwelle (Punkte oder Notengrade, je nach Kontext) |
+| Nur Durchfaller / No-Shows / Antritt ohne HIS | Checkboxen |
+
+Zeilenfarben u. a. Grenzfall (amber), Durchfaller (rose), No-Show.
+
+### 11.3 Note manuell überschreiben
+
+- Note in der Tabelle anklicken  
+- Override setzen, Kommentar  
+- Override entfernen  
+- Bei StA/Portfolio: **Nicht angetreten** im Dialog  
+
+### 11.4 Aktives Notenszenario
+
+Umschalter / Link zu den Szenarien: das **aktive** Szenario steuert die Noten bei punkte-/prozentbasierten Portfolio- und Klausur-Schlüsseln.
+
+### 11.5 Durchfaller-Analyse
+
+- Nav-Link **Durchfaller** bzw. Kennzahl-Kachel  
+- Abschnitt mit Anzahl, Ø Punkte, Nähe zur Bestehensgrenze, Liste  
+- Details ein-/ausklappbar; Anker `#durchfaller` öffnet den Bereich  
+
+### 11.6 Punkte-Anzeige bei Portfolio mit Punkte-Kriterien
+
+Bei **reinen Punkte-Kriterien** (z. B. 11 × max. 6 → Max. 66):
+
+- Spalte **Punkte** = **echte Rohpunktesumme**, nicht „Erfüllung × 100“  
+- % = Rohpunkte / Max  
+- Interne Notenfindung kann weiter über eine 0–100-Skala laufen; Anzeige und PDF-Header nutzen die echten Maxima  
+
+---
+
+## 12. Notenszenarien
+
+Seite: **Notenszenarien** (nicht bei StA manuell; Portfolio wenn Punkte/Prozent-TLs).
+
+### 12.1 Was steuert das Szenario?
+
+| Kontext | Wirkung |
+|---------|---------|
+| Klausur / THE / Punkte | Punkte → Note über Schwellen des aktiven Schemas |
+| Portfolio Punkte/Prozent | Erfüllung (unit) × Schema-Max → `calculateGrade` mit aktivem Schema |
+| Portfolio reine Note-TLs | linear 5−4·unit, **unabhängig** vom Szenario |
+
+### 12.2 Portfolio-Presets
+
+Typisch:
+
+- **50 % Bestehen** (Standard)  
+- **40 % Bestehen**  
+- **Frei** (Bestehens-% einstellbar)  
+- optional **Eigene Grenzen** (Schwellen je Note)  
+
+Anzeige der Schwellen dual in **% und Punkten** (bezogen auf das Anzeige-Max der Prüfung).
+
+### 12.3 Direktvergleich und Impact
+
+- Kennzahlen je Szenario (Ø Note, Median, Bestehen %, Durchfaller, Grenzfälle)  
+- Auswirkung des Wechsels (besser/schlechter/neu bestanden)  
+- Notenstufen und Einzelnoten (Tabelle / Chart)  
+- Durchfaller über Szenarien  
+- **PDF-Export** des Vergleichs  
+
+Diagramme: vergrößern, PNG speichern.
+
+### 12.4 Grenzfälle
+
+- Markierung, wenn der Abstand zur nächsten Note klein ist  
+- Defaults: z. B. ≤ 2 Punkte (bei Max 100 Schema) bzw. ≤ 0,1 Notengrade  
+- In der Notenübersicht einstellbar  
+
+---
+
+## 13. Dokumente und Export
+
+Seite: **Dokumente** (geschützte Exporte erfordern i. d. R. aktuelle **JSON-Sicherung**).
+
+### 13.1 Notenliste PDF
+
+- Alle Teilnehmenden inkl. No-Shows  
+- **Teilnoten** je Teilleistung in der Haupttabelle  
+- Optional: Checkbox **„Rohwerte der Teilkriterien anhängen“** → zusätzliche Tabelle(n), bei vielen Kriterien in **Abschnitten** (kein horizontaler Überlauf)  
+- Unterschriftenblock, dokumentierte Matrikel-Merges  
+- Footer: Prüfung, Prüfungsnummer, Seitenzahl  
+
+### 13.2 HISinOne-Excel
+
+- Formatgetreu aus der **importierten Originalvorlage** (nur Notenspalte)  
+- **Eine Datei pro importierter HIS-Quelle / Studiengang**  
+- Bei mehreren Quellen:  
+  - deutlicher Hinweis „N separate Dateien“  
+  - **eigener Button pro Studiengang** (Kürzel, Prüfungsnummer, Anmeldezahlen, Dateiname)  
+  - optional „Alle N Dateien nacheinander“  
+
+### 13.3 Weitere Exporte
 
 | Export | Verwendung |
 |--------|------------|
-| **HISinOne-XLSX** | Upload ins Campus-System – Struktur der Originalvorlage, aktualisierte Noten |
-| **Notenliste PDF** | Dokumentation inkl. Studiengang |
-| **Notenänderungen PDF** | Korrekturen nach Einsicht |
-| **Manuelle Noten PDF** | z. B. für Abteilung Studium |
-| **Durchfaller / Zweitkorrektur** | Listen |
-| **Notenspiegel** | PDF und Excel; Kennzahlen und Notenverteilung nebeneinander; bei mehreren Teilgebieten Auswertung je Teilgebiet |
-| **Szenarienvergleich PDF** | Notenszenarien-Seite – Prüferaustausch |
-| **Diagramm-PNG** | aus vergrößerter Ansicht oder PNG-Button |
-| **JSON-Sicherung** | vollständiges Projekt |
+| Manuelle Notenmeldung PDF | Personen ohne HIS / Sonderfälle |
+| Durchfaller / Zweitkorrektur PDF | Zweitkorrektur dokumentieren |
+| Notenänderungen PDF | Korrekturen nach Einsicht |
+| Notenspiegel PDF/Excel | aggregiert, ohne Personenliste |
+| Szenarienvergleich PDF | von der Szenarien-Seite |
 
-Export ist gesperrt bei offenen Bewertungen, ungeprüften Orphans oder fehlender Original-HISinOne-Vorlage (je nach Typ).
+### 13.4 Wann Export gesperrt ist
 
-PDFs führen im **Briefkopf** und in den Metadaten **alle** hinterlegten Dozenten/Prüfer auf (nicht nur den ersten).
+Prüfen Sie die Hinweise auf der Dokumente-Seite:
 
----
-
-## 9. JSON-Sicherung und Wiederherstellung
-
-### Sichern
-
-- Über **Export / Sicherung**, Workflow-Meilensteine oder Startseite.  
-- **Dateiname** (Beispiel): `2026-07-19_ExamGrade_MAP_nach-Noten.json` – **Datum + Prüfungsname + Schritt**, ohne Uhrzeit.  
-- **Semester sichern:** ZIP aller Prüfungen mit dem aktuellen Semester-Label.  
-- Mehrere JSON-Dateien auf der Startseite auf einmal importierbar.  
-- Nach wesentlichen Änderungen erneut sichern, wenn die App eine **veraltete Sicherung** meldet.
-
-### Wiederherstellen
-
-1. Startseite → **Sicherung importieren**: eine oder mehrere **JSON**-Dateien und/oder eine **Semester-ZIP** (wie von „Semester sichern“ erzeugt; enthält mehrere JSON-Projekte).  
-2. Jede Datei wird als **neue Kopie** der Prüfung in **diesem** Browser angelegt.  
-3. Relevante Daten (inkl. Base64-HISinOne-Vorlagen, falls importiert) stecken in den JSON-Dateien.
+1. **Sicherung veraltet / fehlt** → unter **Sicherung** JSON speichern  
+2. Offene „Bewertung notwendig“  
+3. Ungeprüfte Orphans (THE/elektrP)  
+4. Validierung: z. B. Teilnoten unvollständig bei **angetretenen** Personen (No-Shows zählen nicht)  
+5. Fehlende HIS-Originalvorlage → Import wiederholen  
 
 ---
 
-## 10. Einstellungen und Darstellung
+## 14. Sicherung und Wiederherstellung
 
-- **Einstellungen:** Metadaten, Typ, Dozenten (Hinzufügen per Liste/Freitext), Teilgebiete, StA-Kriterien, Portfolio-Teilleistungen, **Teilnoten je Dozent**, Studentengruppen.  
-- **Darstellung** (Header): Hell/Dunkel, **Schriftgröße** (Standard / Groß / Sehr groß), hoher Kontrast – lokal im Browser.
+### 14.1 Sichern
 
----
+- Seite **Sicherung** oder Workflow-Meilensteine  
+- Nach Import und nach finalen Noten empfohlen  
+- **Semester-ZIP** von der Startseite  
 
-## 11. Häufige Fragen
+Nach Änderungen meldet die App ggf. **„Sicherung veraltet“** – dann erneut sichern, sonst bleiben PDFs/HIS-Export gesperrt.
 
-**Die Workflow-Schritte sind nicht alle grün, obwohl ich alles importiert habe.**  
-Offene Detailbewertungen und (bei THE/elektrP) die Matrikel-Zuordnung prüfen.
+### 14.2 Wiederherstellen
 
-**HISinOne-Export wird verweigert.**  
-Oft fehlt die Originaldatei (erneut importieren) oder es gibt noch Orphans / offene Bewertungen.
-
-**Download in Teams funktioniert nicht.**  
-Dateidialog oder Banner am unteren Rand; alternativ im normalen Browser öffnen.
-
-**Daten weg nach Browser-Wechsel / anderem PC.**  
-Daten liegen nur im jeweiligen Browser – JSON-Sicherung importieren.
-
-**Passwort vergessen.**  
-Nur die Betreuung mit Zugriff auf Vercel-Env bzw. `.env.local` kann das Passwort setzen und die App neu bauen.
+1. Startseite → JSON und/oder Semester-ZIP importieren  
+2. Jede Datei wird als **neue Kopie** in **diesem** Browser angelegt  
+3. Auf einem neuen PC: nur über diese Dateien  
 
 ---
 
-## 12. Verantwortungsvoller Umgang
+## 15. Checklisten je Prüfungstyp
 
-- Prüfungsdaten sind personenbezogen – Gerät sperren, keine Screenshots in ungeschützte Kanäle.  
-- JSON-, PDF- und Excel-Exporte wie Notenlisten behandeln.  
-- Die App speichert **nicht** in der Cloud der App selbst; Browser-Sync kann IndexedDB mitnehmen – auf geteilten Konten vorsichtig sein.
+### 15.1 THE / elektrP
+
+- [ ] HISinOne importiert (alle Studiengänge)  
+- [ ] Antritt importiert  
+- [ ] Orphans erledigt  
+- [ ] Punkte importiert, offene Aufgaben geschlossen  
+- [ ] Noten / Szenario geprüft  
+- [ ] JSON-Sicherung (nach Noten)  
+- [ ] HIS-Excel **pro Studiengang** + gewünschte PDFs  
+
+### 15.2 Klausur
+
+- [ ] HISinOne  
+- [ ] Punkte vollständig  
+- [ ] Noten / Szenario  
+- [ ] Sicherung  
+- [ ] Export  
+
+### 15.3 Portfolio / StA-Kriterien
+
+- [ ] HISinOne (+ manuell Personen falls nötig)  
+- [ ] Teilleistungen / Kriterien / Gruppen / Dozenten in den Einstellungen  
+- [ ] Matrix vollständig **oder** No-Show markiert  
+- [ ] Notenübersicht und Szenario (falls Punkte/Prozent)  
+- [ ] Sicherung  
+- [ ] Dokumente: Notenliste, HIS-Excel je Studiengang, ggf. Notenspiegel  
+
+### 15.4 StA manuell
+
+- [ ] HISinOne  
+- [ ] Note je Person  
+- [ ] Sicherung  
+- [ ] Export  
+
+---
+
+## 16. Häufige Fragen und Fehlerbehebung
+
+**Workflow „Teilnoten“ bleibt offen, obwohl fast alle fertig sind.**  
+Eine Person ohne Note und ohne No-Show-Markierung reicht. → Nicht angetreten markieren oder bewerten.
+
+**Dokumente gesperrt, obwohl Noten da sind und eine No-Show markiert ist.**  
+1) JSON-Sicherung aktuell? 2) Andere Personen noch unvollständig? 3) HIS-Originalvorlage vorhanden?
+
+**PDF zeigt 50 von 100 Punkten, obwohl max. 66 Kriterienpunkte.**  
+Ab Version 0.4.49: bei reinen Punkte-Kriterien Anzeige und PDF-Header in echten Punkten. Hard-Reload der App prüfen.
+
+**Notenliste zeigt „75 Punkte“ statt Rohsumme.**  
+Siehe oben – echte Rohpunkte bei Punkte-Kriterien; sonst Erfüllungsskala 0–100.
+
+**Szenario 40 % / 50 % / 60 % ändert die Noten nicht.**  
+Nur bei Punkte/Prozent-TLs im Kriterienmodus. Reine Note-TLs sind linear und szenario-unabhängig.
+
+**HISinOne-Export: nur eine Datei erwartet, aber mehrere Buttons.**  
+Pro importierter HIS-Datei ein Export – jeweils in HISinOne hochladen.
+
+**Download in Teams klappt nicht.**  
+Dateidialog / Banner; besser im normalen Browser.
+
+**Daten nach Browserwechsel weg.**  
+JSON-Sicherung importieren.
+
+**Schrift in der Matrix/Notenliste zu klein.**  
+Header → Schriftgröße „Groß“ oder „Sehr groß“.
+
+---
+
+## 17. Glossar
+
+| Begriff | Bedeutung |
+|---------|-----------|
+| **HISinOne** | Campus-Management; Noteneintrag über Excel-Vorlage |
+| **Orphan** | Antritt/Punkte-Matrikel ohne Treffer in HISinOne |
+| **Teilleistung (TL)** | Bestandteil einer Portfolioprüfung |
+| **Teilkriterium** | Einzelkriterium innerhalb einer TL oder StA |
+| **Unit / Erfüllung** | Normierte Leistung 0…1 (bzw. %) |
+| **Notenszenario** | Bestehensgrenze und Schwellen für den Notenschlüssel |
+| **No-Show / nicht angetreten** | Angemeldet, aber nicht bewertet; leere Note im Export |
+| **Override** | Manuell gesetzte Note statt berechneter Note |
+| **JSON-Sicherung** | Vollständiger lokaler Projektstand zum Download |
+| **Grenzfall** | Knapp vor der nächsten Notenstufe |
+
+---
+
+## 18. Verantwortungsvoller Umgang
+
+- Prüfungsdaten sind personenbezogen: Gerät sperren, Exporte wie Notenlisten behandeln.  
+- Keine ungeschützten Screenshots in Messenger-Gruppen.  
+- Vor dem Upload: Stichproben (Punkte, Teilnoten, No-Shows, Studiengänge).  
+- Die App speichert **nicht** in einer App-Cloud; trotzdem JSON-Backups extern ablegen.
+
+---
+
+## Siehe auch
+
+| Dokument | Inhalt |
+|----------|--------|
+| [README.md](../README.md) | Projektüberblick, Schnellstart |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Vercel, Passwort, Teams |
+| [ARCHITEKTUR.md](ARCHITEKTUR.md) | Technik (für Entwickler) |
+| [SECURITY.md](../SECURITY.md) | Sicherheit und Betrieb |
+
+---
+
+*ExamGrade · OTH Regensburg · Dokumentation Stand App v0.4.53*
