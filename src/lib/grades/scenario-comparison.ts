@@ -5,7 +5,11 @@ import type {
 } from "@/lib/types";
 import { GERMAN_GRADES } from "@/lib/types";
 import { buildEnrichedRows } from "@/lib/matching/match";
-import { computeStatistics } from "@/lib/grades/statistics";
+import {
+  computeStatistics,
+  defaultBorderlineMax,
+  resolveNextGradeUnit,
+} from "@/lib/grades/statistics";
 import { ensureScenarios, visibleScenarios } from "@/lib/grades/scenarios";
 import {
   computeGradeBuckets,
@@ -77,7 +81,11 @@ export function buildScenarioColumns(project: ExamProject): ScenarioColumn[] {
       gradeScenarios: all,
       activeScenarioId: sc.id,
     });
-    const stats = computeStatistics(rows, sc.schema, 1, project);
+    const blMax = defaultBorderlineMax(
+      resolveNextGradeUnit(rows),
+      sc.schema.maxPoints
+    );
+    const stats = computeStatistics(rows, sc.schema, blMax, project);
     return {
       id: sc.id,
       label: shortScenarioLabel(sc.name, sc.passThreshold),

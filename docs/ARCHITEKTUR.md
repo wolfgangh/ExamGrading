@@ -167,9 +167,11 @@ Details: [SECURITY.md](../SECURITY.md).
 
 Bei Releases `package.json`, `app-version.ts` und README-Footer abstimmen.
 
-**Stand dieser Doku:** App v0.4.39.
+**Stand dieser Doku:** App v0.4.40.
 
 **Noten aus Punkten:** `calculateGrade` vergleicht exakte Punkte mit `minPoints` (≥, Epsilon gegen FP). Kein `Math.ceil`/ROUNDUP auf ganze Punkte vor der Zuordnung.
+
+**Portfolio (points/percent-TLs):** Gesamtnote = `unitAvg × max → calculateGrade` mit aktivem Szenario-Schema (Bestehensgrenze wirkt). Reine Note-TLs: linear `5−4·unit`. Grenzfälle: `defaultBorderlineMax` (Punkte ≈ max/50 ≤ 2; Notengrade 0,1).
 
 ---
 

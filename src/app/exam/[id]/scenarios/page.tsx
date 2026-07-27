@@ -20,7 +20,11 @@ import {
 } from "@/lib/grades/scenarios";
 import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
 import { buildEnrichedRows } from "@/lib/matching/match";
-import { computeStatistics } from "@/lib/grades/statistics";
+import {
+  computeStatistics,
+  defaultBorderlineMax,
+  resolveNextGradeUnit,
+} from "@/lib/grades/statistics";
 import {
   hasOpenGrading,
   openGradingSummary,
@@ -113,7 +117,11 @@ export default function ScenariosPage() {
         gradeScenarios: allScenarios,
         activeScenarioId: sc.id,
       });
-      const stats = computeStatistics(rows, sc.schema);
+      const blMax = defaultBorderlineMax(
+        resolveNextGradeUnit(rows),
+        sc.schema.maxPoints
+      );
+      const stats = computeStatistics(rows, sc.schema, blMax, project);
       return { scenario: sc, stats, rows };
     });
   }, [project, scenarios, allScenarios]);
@@ -611,6 +619,21 @@ export default function ScenariosPage() {
                 ))}
               </TableBody>
             </Table>
+            {comparison[0] && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Grenzfälle: Abstand zur nächstbesseren Note ≤{" "}
+                {String(
+                  defaultBorderlineMax(
+                    resolveNextGradeUnit(comparison[0].rows),
+                    comparison[0].scenario.schema.maxPoints
+                  )
+                ).replace(".", ",")}{" "}
+                {resolveNextGradeUnit(comparison[0].rows) === "grade"
+                  ? "Notengrade"
+                  : "Punkte"}{" "}
+                (nicht bestanden ausgeschlossen).
+              </p>
+            )}
           </CardContent>
         </Card>
 

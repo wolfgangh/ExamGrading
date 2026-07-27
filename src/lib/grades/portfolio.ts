@@ -647,11 +647,25 @@ export function groupPortfolioFillStatus(
   return "partial";
 }
 
+/**
+ * Portfolio-Gesamtnote.
+ * Bei points/percent-TLs + Schema: unitAvg × max → calculateGrade (Szenario).
+ * Sonst: Mittel der Teilnoten (linear bzw. schema-basierte TL-Noten), gerundet.
+ */
 export function computePortfolioGradeForProject(
   project: PortfolioProjectSlice,
   rec: PointsRecord | undefined | null,
   ctx?: PortfolioGradeContext
 ): number | null {
+  if (
+    portfolioUsesGradeScenarios(project as ExamProject) &&
+    ctx?.schema != null &&
+    ctx.schema.maxPoints > 0
+  ) {
+    const ful = computePortfolioFulfillment(project, rec, ctx);
+    if (ful == null) return null;
+    return gradeFromUnitWithScenario(ful.unitAvg, ctx.schema);
+  }
   return computePortfolioGrade(
     effectivePortfolioGrades(project, rec, ctx),
     project.portfolioComponents ?? []
@@ -668,12 +682,46 @@ export function computePortfolioScenarioGrade(
   schema: GradeSchema,
   groupId?: string | null
 ): number | null {
-  if (!portfolioUsesGradeScenarios(project as ExamProject)) {
-    return computePortfolioGradeForProject(project, rec, { groupId });
+  return computePortfolioGradeForProject(project, rec, {
+    groupId,
+    schema: portfolioUsesGradeScenarios(project as ExamProject)
+      ? schema
+      : undefined,
+  });
+}
+
+/** Fehlende Schema-Punkte bis zur nächstbesseren Note (unit 0…1 × max). */
+function nextGradeFromUnitAndSchema(
+  unit: number,
+  schema: GradeSchema
+): {
+  pointsNeeded: number | null;
+  nextGrade: number | null;
+  direction: "better" | "worse" | null;
+} {
+  if (!(schema.maxPoints > 0) || !Number.isFinite(unit)) {
+    return { pointsNeeded: null, nextGrade: null, direction: null };
   }
-  const ful = computePortfolioFulfillment(project, rec, { groupId });
-  if (ful == null) return null;
-  return gradeFromUnitWithScenario(ful.unitAvg, schema);
+  const points = Math.min(1, Math.max(0, unit)) * schema.maxPoints;
+  const currentGrade = calculateGrade(points, schema);
+  const sorted = [...schema.thresholds].sort(
+    (a, b) => b.minPoints - a.minPoints
+  );
+  const better = sorted.filter((t) => t.grade < currentGrade - 1e-9);
+  if (better.length === 0) {
+    return { pointsNeeded: null, nextGrade: null, direction: null };
+  }
+  better.sort((a, b) => b.grade - a.grade);
+  const next = better[0];
+  const needed = Math.max(
+    0,
+    Math.round((next.minPoints - points) * 10) / 10
+  );
+  return {
+    pointsNeeded: needed,
+    nextGrade: next.grade,
+    direction: "better",
+  };
 }
 
 export type PortfolioComponentDetail = {
@@ -764,14 +812,28 @@ export function computePortfolioComponentDetails(
     let pointsToNext: number | null = null;
     let nextGrade: number | null = null;
     let nextGradeDirection: "better" | "worse" | null = null;
-    // Rohnote der TL für Adjacent: linear ungerundet 5-4*unit
     const unitForRaw =
       percent != null
         ? percent
         : grade != null
           ? gradeToUnit(grade)
           : null;
-    if (unitForRaw != null && getAdjacent) {
+    const scale =
+      criteriaMode && components.length
+        ? resolveComponentCriteriaScale(c)
+        : "grade";
+    // points/percent + Schema: Abstand in Schema-Punkten; sonst Adjacent-Notengrade
+    if (
+      unitForRaw != null &&
+      schema != null &&
+      schema.maxPoints > 0 &&
+      (scale === "points" || scale === "percent")
+    ) {
+      const nx = nextGradeFromUnitAndSchema(unitForRaw, schema);
+      pointsToNext = nx.pointsNeeded;
+      nextGrade = nx.nextGrade;
+      nextGradeDirection = nx.direction;
+    } else if (unitForRaw != null && getAdjacent) {
       const rawNote = 5 - 4 * unitForRaw;
       const adj = getAdjacent(rawNote);
       pointsToNext = adj.pointsNeeded;

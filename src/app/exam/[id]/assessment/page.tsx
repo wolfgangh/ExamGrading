@@ -1472,7 +1472,10 @@ export default function AssessmentPage() {
                             )
                           )
                         : new Set<string>();
-                      const gradeCtx = { groupId: rowGroupId };
+                      const gradeCtx = {
+                        groupId: rowGroupId,
+                        schema: project.gradeSchema,
+                      };
                       const effGrades = isPortfolio
                         ? effectivePortfolioGrades(project, rec, gradeCtx)
                         : null;

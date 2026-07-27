@@ -48,7 +48,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { computeFailerAnalysis, computeStatistics } from "@/lib/grades/statistics";
+import {
+  computeFailerAnalysis,
+  computeStatistics,
+  defaultBorderlineMax,
+  resolveNextGradeUnit,
+} from "@/lib/grades/statistics";
 import {
   ensureScenarios,
   formatThresholdDual,
@@ -106,7 +111,7 @@ export default function GradesPage() {
   const [comment, setComment] = useState("");
   const [borderlineFilter, setBorderlineFilter] =
     useState<BorderlineFilter>("off");
-  const [borderlineCustom, setBorderlineCustom] = useState(1);
+  const [borderlineCustom, setBorderlineCustom] = useState<number | null>(null);
   const [failersOnly, setFailersOnly] = useState(false);
   const [noShowOnly, setNoShowOnly] = useState(false);
   const [orphanOnly, setOrphanOnly] = useState(false);
@@ -141,7 +146,7 @@ export default function GradesPage() {
         gradeScenarios: all,
         activeScenarioId: sc.id,
       });
-      const scStats = computeStatistics(scRows, sc.schema, 1, project);
+      const scStats = computeStatistics(scRows, sc.schema, undefined, project);
       return {
         key: sc.id,
         label: shortScenarioLabel(sc.name, sc.passThreshold),
@@ -164,11 +169,22 @@ export default function GradesPage() {
     return computeScenarioImpact(project, a.id, b.id);
   }, [project, scenarios]);
 
+  const nextGradeUnit = useMemo(() => resolveNextGradeUnit(rows), [rows]);
+  const defaultBl = useMemo(
+    () =>
+      defaultBorderlineMax(
+        nextGradeUnit,
+        project?.gradeSchema.maxPoints
+      ),
+    [nextGradeUnit, project?.gradeSchema.maxPoints]
+  );
+  const unitLabelShort =
+    nextGradeUnit === "grade" ? "Notengrade" : "Pkt.";
   const highlightMax =
     borderlineFilter === "off"
-      ? 1
+      ? defaultBl
       : borderlineFilter === "custom"
-        ? borderlineCustom
+        ? (borderlineCustom ?? defaultBl)
         : Number(borderlineFilter);
 
   if (!project) return null;
@@ -571,41 +587,64 @@ export default function GradesPage() {
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">
         <div className="grid gap-1">
-          <Label className="text-xs">Grenzfälle (bis nächste Note)</Label>
+          <Label className="text-xs">
+            Grenzfälle (bis nächste Note, {unitLabelShort})
+          </Label>
           <Select
             value={borderlineFilter}
             onValueChange={(v) =>
               v && setBorderlineFilter(v as BorderlineFilter)
             }
           >
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-52">
               <SelectValue>
                 {borderlineFilter === "off"
-                  ? "Filter aus"
+                  ? `Markierung ≤ ${String(defaultBl).replace(".", ",")} ${unitLabelShort}`
                   : borderlineFilter === "custom"
-                    ? `≤ ${borderlineCustom}`
-                    : `≤ ${borderlineFilter} Pkt.`}
+                    ? `≤ ${String(borderlineCustom ?? defaultBl).replace(".", ",")} ${unitLabelShort}`
+                    : `≤ ${String(borderlineFilter).replace(".", ",")} ${unitLabelShort}`}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="off">Filter aus</SelectItem>
-              <SelectItem value="0.5">≤ 0,5 Punkte</SelectItem>
-              <SelectItem value="1">≤ 1,0 Punkte</SelectItem>
-              <SelectItem value="1.5">≤ 1,5 Punkte</SelectItem>
-              <SelectItem value="2">≤ 2,0 Punkte</SelectItem>
+              <SelectItem value="off">
+                Standard (≤ {String(defaultBl).replace(".", ",")}{" "}
+                {unitLabelShort})
+              </SelectItem>
+              {nextGradeUnit === "grade" ? (
+                <>
+                  <SelectItem value="0.05">≤ 0,05 Notengrade</SelectItem>
+                  <SelectItem value="0.1">≤ 0,1 Notengrade</SelectItem>
+                  <SelectItem value="0.15">≤ 0,15 Notengrade</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="0.5">≤ 0,5 Punkte</SelectItem>
+                  <SelectItem value="1">≤ 1,0 Punkte</SelectItem>
+                  <SelectItem value="2">≤ 2,0 Punkte</SelectItem>
+                  <SelectItem value="3">≤ 3,0 Punkte</SelectItem>
+                </>
+              )}
               <SelectItem value="custom">Benutzerdefiniert…</SelectItem>
             </SelectContent>
           </Select>
+          <p className="max-w-xs text-[10px] text-muted-foreground">
+            Markierung: Abstand zur nächsten Note ≤ Schwelle
+            {nextGradeUnit === "grade"
+              ? " (Notengrade, z. B. 0,1)."
+              : " (Schema-Punkte)."}
+          </p>
         </div>
         {borderlineFilter === "custom" && (
           <div className="grid gap-1">
-            <Label className="text-xs">Max. fehlende Punkte</Label>
+            <Label className="text-xs">
+              Max. Abstand ({unitLabelShort})
+            </Label>
             <Input
               type="number"
-              step="0.1"
+              step={nextGradeUnit === "grade" ? "0.05" : "0.1"}
               min={0}
               className="w-24"
-              value={borderlineCustom}
+              value={borderlineCustom ?? defaultBl}
               onChange={(e) =>
                 setBorderlineCustom(Number(e.target.value) || 0)
               }
@@ -787,7 +826,7 @@ export default function GradesPage() {
         onEditGrade={openEdit}
         showNextGrade
         borderlineFilter={borderlineFilter}
-        borderlineCustom={borderlineCustom}
+        borderlineCustom={borderlineCustom ?? defaultBl}
         failersOnly={failersOnly}
         noShowOnly={noShowOnly}
         orphanOnly={orphanOnly}

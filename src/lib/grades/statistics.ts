@@ -16,12 +16,42 @@ function stdDevSample(values: number[]): number | null {
   return Math.sqrt(variance);
 }
 
+/**
+ * Sinnvolle Grenzfall-Schwelle für „bis nächste Note“.
+ * - Notengrade: 0,1 (Stufen ≈ 0,3 – nicht die ganze Kohorte)
+ * - Punkte: ca. max/50, geklemmt auf 0,5…2 (bei max 100 → 2 Pkt.)
+ */
+export function defaultBorderlineMax(
+  unit: "points" | "grade" = "points",
+  maxPoints?: number
+): number {
+  if (unit === "grade") return 0.1;
+  const max = maxPoints != null && maxPoints > 0 ? maxPoints : 100;
+  const raw = Math.round((max / 50) * 10) / 10;
+  return Math.min(2, Math.max(0.5, raw));
+}
+
+/** Einheit aus Zeilen ableiten (Mehrheit / erste gesetzte). */
+export function resolveNextGradeUnit(
+  rows: EnrichedStudentRow[]
+): "points" | "grade" {
+  for (const r of rows) {
+    if (r.nextGradeUnit === "grade" || r.nextGradeUnit === "points") {
+      return r.nextGradeUnit;
+    }
+  }
+  return "points";
+}
+
 export function computeStatistics(
   rows: EnrichedStudentRow[],
   schema: GradeSchema,
-  borderlineMax = 1,
+  borderlineMax?: number,
   project?: ExamProject | null
 ): ExamStatistics {
+  const unit = resolveNextGradeUnit(rows);
+  const effectiveBorderline =
+    borderlineMax ?? defaultBorderlineMax(unit, schema.maxPoints);
   const hasAttendanceList = (project?.attendance.length ?? 0) > 0;
   const attendanceImported = project?.attendance.length ?? 0;
 
@@ -54,7 +84,7 @@ export function computeStatistics(
   const borderlineCount = rows.filter(
     (r) =>
       r.pointsToNext != null &&
-      r.pointsToNext <= borderlineMax &&
+      r.pointsToNext <= effectiveBorderline &&
       r.pointsToNext > 0 &&
       !r.isFailed
   ).length;

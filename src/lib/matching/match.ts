@@ -82,7 +82,7 @@ function scenarioGradesForPoints(
         grade: gradeOverride,
       }));
     }
-    // Vergleichsnoten: bei points/percent über Szenario-Schlüssel; aktiv = linear
+    // Vergleichsnoten: bei points/percent über jeweiligen Szenario-Schlüssel
     if (portfolioUsesGradeScenarios(project)) {
       return scenarios.map((sc) => ({
         scenarioId: sc.id,

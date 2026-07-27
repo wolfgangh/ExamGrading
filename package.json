@@ -1,12 +1,13 @@
 {
   "name": "exam-grade",
-  "version": "0.4.39",
+  "version": "0.4.40",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:grades": "tsx scripts/grade-constellation-matrix.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

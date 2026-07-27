@@ -438,7 +438,7 @@ export function getExamWorkflowSummary(
   project: ExamProject
 ): ExamWorkflowSummary {
   const rows = buildEnrichedRows(project);
-  const stats = computeStatistics(rows, project.gradeSchema, 1, project);
+  const stats = computeStatistics(rows, project.gradeSchema, undefined, project);
   const steps = buildWorkflowSteps(project, rows, stats, project.id);
   const { doneCount, totalCount, progressPct, nextOpen } =
     workflowProgress(steps);

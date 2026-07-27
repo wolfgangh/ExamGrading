@@ -133,12 +133,17 @@ async function writeClipboardTable(
   await navigator.clipboard.writeText(tsv);
 }
 
+/** Filterwerte als String (Punkte oder Notengrade je nach nextGradeUnit) */
 export type BorderlineFilter =
   | "off"
+  | "0.05"
+  | "0.1"
+  | "0.15"
   | "0.5"
   | "1"
   | "1.5"
   | "2"
+  | "3"
   | "custom";
 
 export function StudentsTable({

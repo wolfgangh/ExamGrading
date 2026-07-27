@@ -78,7 +78,7 @@ export function useExam(id: string) {
   const stats = useMemo(
     () =>
       project
-        ? computeStatistics(rows, project.gradeSchema, 1, project)
+        ? computeStatistics(rows, project.gradeSchema, undefined, project)
         : null,
     [project, rows]
   );
