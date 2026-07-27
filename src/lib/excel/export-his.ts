@@ -222,23 +222,34 @@ function exportFileName(source: HisSource): string {
 }
 
 /**
- * Exportiert alle HIS-Quellen als separate Dateien – formatgetreu aus der
+ * Exportiert HIS-Quellen als separate Dateien – formatgetreu aus der
  * jeweiligen Originalvorlage (nur Notenspalte wird gesetzt).
+ * @param options.sourceId nur diese Quelle; sonst alle Quellen
  */
 export async function exportHisExcel(
   project: ExamProject,
   rows: EnrichedStudentRow[],
-  stats?: ExamStatistics
+  stats?: ExamStatistics,
+  options?: { sourceId?: string }
 ): Promise<void> {
   void stats;
-  const sources = getHisSources(project);
-  if (sources.length === 0) {
+  const all = getHisSources(project);
+  if (all.length === 0) {
     throw new Error(
       "Keine HIS-Quelle vorhanden. Bitte zuerst die HisinOne-Noteneintragsdatei(en) importieren."
     );
   }
 
-  const missing = sourcesMissingOriginalTemplate(project);
+  const sources = options?.sourceId
+    ? all.filter((s) => s.id === options.sourceId)
+    : all;
+  if (sources.length === 0) {
+    throw new Error(
+      "Die gewählte HIS-Quelle wurde nicht gefunden. Bitte Import prüfen."
+    );
+  }
+
+  const missing = sources.filter((s) => !hasOriginalHisTemplate(s));
   if (missing.length > 0) {
     const labels = missing.map((s) => s.label || s.originalFileName || s.id);
     throw new Error(

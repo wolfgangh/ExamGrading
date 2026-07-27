@@ -41,6 +41,7 @@ import {
 import { exportNotenspiegelPdf } from "@/lib/pdf/export-notenspiegel-pdf";
 import { exportNotenspiegelExcel } from "@/lib/excel/export-notenspiegel";
 import { exportHisExcel } from "@/lib/excel/export-his";
+import { getHisSources } from "@/lib/his-sources";
 import {
   findPointsRecord,
   resolveProgramCode,
@@ -123,6 +124,10 @@ export default function DocumentsPage() {
         ? secondCorrectionComplete(project, rows)
         : { total: 0, filled: 0, ready: false },
     [project, rows]
+  );
+  const hisSources = useMemo(
+    () => (project ? getHisSources(project) : []),
+    [project]
   );
 
   const validation = useMemo(
@@ -362,34 +367,167 @@ export default function DocumentsPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
               2. {HISINONE_LABEL} Excel
+              {hisSources.length > 1 && (
+                <Badge
+                  variant="default"
+                  className="ml-2 bg-primary font-semibold tabular-nums"
+                >
+                  {hisSources.length} Dateien
+                </Badge>
+              )}
             </CardTitle>
             <CardDescription>
               Formatgetreu aus der importierten Vorlage – nur die Notenspalte.
-              Eine Datei pro Studiengang, danach in {HISINONE_LABEL} hochladen.
+              Danach in {HISINONE_LABEL} hochladen.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={
-                busy != null ||
-                !pdfAllowed ||
-                !stats ||
-                project.hisRows.length === 0
-              }
-              onClick={() => {
-                if (!stats) return;
-                run(
-                  "hisinone",
-                  () => exportHisExcel(project, rows, stats),
-                  `${HISINONE_LABEL}-Excel heruntergeladen.`
-                );
-              }}
-            >
-              <FileSpreadsheet className="size-4" />
-              {busy === "hisinone" ? "…" : "Excel exportieren"}
-            </Button>
+          <CardContent className="space-y-3">
+            {hisSources.length > 1 && (
+              <div
+                role="status"
+                className="rounded-lg border-2 border-amber-500/80 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-50"
+              >
+                <p className="font-semibold">
+                  {hisSources.length} separate Excel-Dateien
+                </p>
+                <p className="mt-0.5 text-xs opacity-95">
+                  Pro importiertem Studiengang / HIS-Datei eine Vorlage. Bitte
+                  jede Datei einzeln in {HISINONE_LABEL} hochladen.
+                </p>
+              </div>
+            )}
+            {hisSources.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine HIS-Quelle – bitte unter Import die Noteneintragsdatei(en)
+                einlesen.
+              </p>
+            ) : hisSources.length === 1 ? (
+              <Button
+                size="sm"
+                variant="default"
+                className="w-full sm:w-auto"
+                disabled={
+                  busy != null ||
+                  !pdfAllowed ||
+                  !stats ||
+                  project.hisRows.length === 0
+                }
+                title={
+                  hisSources[0].originalFileName ||
+                  hisSources[0].examNumber ||
+                  hisSources[0].label
+                }
+                onClick={() => {
+                  if (!stats) return;
+                  const src = hisSources[0];
+                  run(
+                    "hisinone",
+                    () =>
+                      exportHisExcel(project, rows, stats, {
+                        sourceId: src.id,
+                      }),
+                    `${HISINONE_LABEL}-Excel für ${src.programCode || src.label} heruntergeladen.`
+                  );
+                }}
+              >
+                <FileSpreadsheet className="size-4" />
+                {busy === "hisinone"
+                  ? "…"
+                  : `Excel · ${hisSources[0].programCode || hisSources[0].label}`}
+              </Button>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {hisSources.map((src) => {
+                  const busyKey = `hisinone:${src.id}`;
+                  const n = src.rows?.length ?? 0;
+                  const label =
+                    src.programCode ||
+                    src.examNumber ||
+                    src.label ||
+                    "HIS";
+                  return (
+                    <div
+                      key={src.id}
+                      className="rounded-lg border-2 border-primary/40 bg-primary/5 p-2.5 dark:bg-primary/10"
+                    >
+                      <div className="mb-1.5 min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {label}
+                          {src.examNumber &&
+                            src.examNumber !== label && (
+                              <span className="ml-1.5 font-normal text-muted-foreground">
+                                · {src.examNumber}
+                              </span>
+                            )}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {n} Anmeldung(en)
+                          {src.originalFileName
+                            ? ` · ${src.originalFileName}`
+                            : ""}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="w-full"
+                        disabled={
+                          busy != null ||
+                          !pdfAllowed ||
+                          !stats ||
+                          n === 0
+                        }
+                        title={
+                          src.originalFileName ||
+                          src.examNumber ||
+                          src.label
+                        }
+                        onClick={() => {
+                          if (!stats) return;
+                          run(
+                            busyKey,
+                            () =>
+                              exportHisExcel(project, rows, stats, {
+                                sourceId: src.id,
+                              }),
+                            `${HISINONE_LABEL}-Excel für ${label} heruntergeladen.`
+                          );
+                        }}
+                      >
+                        <FileSpreadsheet className="size-4" />
+                        {busy === busyKey
+                          ? "…"
+                          : `Excel exportieren · ${label}`}
+                      </Button>
+                    </div>
+                  );
+                })}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  disabled={
+                    busy != null ||
+                    !pdfAllowed ||
+                    !stats ||
+                    project.hisRows.length === 0
+                  }
+                  onClick={() => {
+                    if (!stats) return;
+                    run(
+                      "hisinone:all",
+                      () => exportHisExcel(project, rows, stats),
+                      `${hisSources.length} ${HISINONE_LABEL}-Excel-Dateien heruntergeladen.`
+                    );
+                  }}
+                >
+                  <FileSpreadsheet className="size-4" />
+                  {busy === "hisinone:all"
+                    ? "…"
+                    : `Alle ${hisSources.length} Dateien nacheinander`}
+                </Button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               Bei älteren Projekten Originaldatei unter Import erneut einlesen.
             </p>
