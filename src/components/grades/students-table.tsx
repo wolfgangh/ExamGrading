@@ -191,8 +191,25 @@ export function StudentsTable({
   ]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [programFilter, setProgramFilter] = useState<string>("all");
   const [gradeFilter, setGradeFilter] = useState<GradeFilterKey[]>([]);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
+
+  const programOptions = useMemo(() => {
+    const codes = new Set<string>();
+    let hasEmpty = false;
+    for (const r of rows) {
+      const c = r.programCode?.trim();
+      if (c) codes.add(c);
+      else hasEmpty = true;
+    }
+    const list = [...codes].sort((a, b) => a.localeCompare(b, "de"));
+    return { codes: list, hasEmpty };
+  }, [rows]);
+
+  const showProgramFilter =
+    programOptions.codes.length > 1 ||
+    (programOptions.codes.length >= 1 && programOptions.hasEmpty);
 
   const borderlineLimit = useMemo(() => {
     if (borderlineFilter === "off") return null;
@@ -236,6 +253,11 @@ export function StudentsTable({
     if (statusFilter !== "all") {
       list = list.filter((r) => r.status === statusFilter);
     }
+    if (programFilter === "none") {
+      list = list.filter((r) => !r.programCode?.trim());
+    } else if (programFilter !== "all") {
+      list = list.filter((r) => r.programCode?.trim() === programFilter);
+    }
     if (gradeFilterActive) {
       list = list.filter((r) => {
         const g = r.finalGrade;
@@ -269,6 +291,7 @@ export function StudentsTable({
   }, [
     rows,
     statusFilter,
+    programFilter,
     gradeFilter,
     gradeFilterActive,
     failersOnly,
@@ -716,6 +739,39 @@ export function StudentsTable({
             )}
           </SelectContent>
         </Select>
+
+        {showProgramFilter && (
+          <Select
+            value={programFilter}
+            onValueChange={(v) => v && setProgramFilter(v)}
+          >
+            <SelectTrigger
+              className={cn(
+                "w-44",
+                programFilter !== "all" && "border-primary bg-primary/5"
+              )}
+            >
+              <SelectValue placeholder="Studiengang">
+                {programFilter === "all"
+                  ? "Alle Studiengänge"
+                  : programFilter === "none"
+                    ? "Ohne Studiengang"
+                    : programFilter}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle Studiengänge</SelectItem>
+              {programOptions.codes.map((code) => (
+                <SelectItem key={code} value={code}>
+                  {code}
+                </SelectItem>
+              ))}
+              {programOptions.hasEmpty && (
+                <SelectItem value="none">Ohne Studiengang</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        )}
 
         <Popover>
           <PopoverTrigger
