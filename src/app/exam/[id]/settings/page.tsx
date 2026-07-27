@@ -30,6 +30,7 @@ import {
   seedLecturerGradesFromSimple,
   withComponentCriteriaScale,
 } from "@/lib/grades/portfolio";
+import { ensurePortfolioScenarios } from "@/lib/grades/scenarios";
 import { Switch } from "@/components/ui/switch";
 import {
   createStudentGroup,
@@ -667,39 +668,42 @@ export default function SettingsPage() {
                 id="portfolio-criteria-mode"
                 checked={project.portfolioCriteriaMode === true}
                 onCheckedChange={(on) =>
-                  setProject((prev) => ({
-                    ...prev,
-                    portfolioCriteriaMode: on,
-                    portfolioComponents: (prev.portfolioComponents ?? []).map(
-                      (pc) => {
-                        if (on && !(pc.criteria?.length)) {
-                          return withComponentCriteriaScale(
-                            {
-                              ...pc,
-                              criteria: [
-                                {
-                                  id: createId("crit"),
-                                  name: "Inhalt",
-                                  code: "K1",
-                                  weight: 1,
-                                  scale: "points",
-                                  maxPoints: 6,
-                                },
-                              ],
-                            },
-                            "points"
-                          );
+                  setProject((prev) => {
+                    const next = {
+                      ...prev,
+                      portfolioCriteriaMode: on,
+                      portfolioComponents: (prev.portfolioComponents ?? []).map(
+                        (pc) => {
+                          if (on && !(pc.criteria?.length)) {
+                            return withComponentCriteriaScale(
+                              {
+                                ...pc,
+                                criteria: [
+                                  {
+                                    id: createId("crit"),
+                                    name: "Inhalt",
+                                    code: "K1",
+                                    weight: 1,
+                                    scale: "points",
+                                    maxPoints: 6,
+                                  },
+                                ],
+                              },
+                              "points"
+                            );
+                          }
+                          if (on) {
+                            return withComponentCriteriaScale(
+                              pc,
+                              resolveComponentCriteriaScale(pc)
+                            );
+                          }
+                          return pc;
                         }
-                        if (on) {
-                          return withComponentCriteriaScale(
-                            pc,
-                            resolveComponentCriteriaScale(pc)
-                          );
-                        }
-                        return pc;
-                      }
-                    ),
-                  }))
+                      ),
+                    };
+                    return on ? ensurePortfolioScenarios(next) : next;
+                  })
                 }
               />
             </div>
@@ -808,6 +812,11 @@ export default function SettingsPage() {
                           updatePortfolioComponent(c.id, {
                             criteriaScale: v as CriterionScale,
                           });
+                          if (v === "points" || v === "percent") {
+                            setProject((prev) =>
+                              ensurePortfolioScenarios(prev)
+                            );
+                          }
                         }}
                       >
                         <SelectTrigger className="w-full">

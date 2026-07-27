@@ -121,6 +121,17 @@ export interface GradeScenario {
    */
   enabled?: boolean;
   schema: GradeSchema;
+  /**
+   * Portfolio: Bestehen als % vom Maximum (0–100).
+   * Intern passThreshold in Punkten bei schema.maxPoints.
+   */
+  passPercent?: number;
+  /**
+   * Portfolio: Schwellen je Note manuell (nicht linear aus Pass abgeleitet).
+   */
+  customThresholds?: boolean;
+  /** Stabiler Preset-Schlüssel (Portfolio / Klausur) */
+  presetKind?: "pass50" | "pass40" | "free" | "custom";
 }
 
 export interface Student {

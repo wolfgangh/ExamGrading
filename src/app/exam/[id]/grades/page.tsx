@@ -51,9 +51,11 @@ import {
 import { computeFailerAnalysis, computeStatistics } from "@/lib/grades/statistics";
 import {
   ensureScenarios,
+  formatThresholdDual,
   visibleScenarios,
   withActiveScenario,
 } from "@/lib/grades/scenarios";
+import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
 import {
   computeGradeBuckets,
   computeScenarioImpact,
@@ -326,26 +328,44 @@ export default function GradesPage() {
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Szenario:</span>
-        {scenarios.map((sc) => (
-          <Button
-            key={sc.id}
-            size="sm"
-            variant={
-              sc.id === project.activeScenarioId ? "default" : "outline"
-            }
-            disabled={gradingLocked}
-            title={
-              gradingLocked
-                ? "Zuerst alle Aufgaben bewerten"
-                : undefined
-            }
-            onClick={() =>
-              setProject((prev) => withActiveScenario(prev, sc.id))
-            }
-          >
-            {sc.passThreshold} Pkt.
-          </Button>
-        ))}
+        {scenarios.map((sc) => {
+          const dual = formatThresholdDual(
+            sc.passThreshold,
+            sc.schema.maxPoints
+          );
+          const port = portfolioUsesGradeScenarios(project);
+          return (
+            <Button
+              key={sc.id}
+              size="sm"
+              variant={
+                sc.id === project.activeScenarioId ? "default" : "outline"
+              }
+              disabled={gradingLocked}
+              className="h-auto min-h-8 flex-col items-start gap-0 py-1"
+              title={
+                gradingLocked
+                  ? "Zuerst alle Aufgaben bewerten"
+                  : `${sc.name} · ${dual.label}`
+              }
+              onClick={() =>
+                setProject((prev) => withActiveScenario(prev, sc.id))
+              }
+            >
+              <span className="text-xs font-semibold leading-tight">
+                {sc.name
+                  .replace(" (Standard)", "")
+                  .replace(" (frei)", "")
+                  .replace(" (Bestehens-%)", "")}
+              </span>
+              <span className="text-[10px] font-normal opacity-90">
+                {port
+                  ? `${String(dual.percent).replace(".", ",")} % · ${String(dual.points).replace(".", ",")} Pkt.`
+                  : `${String(dual.points).replace(".", ",")} Pkt.`}
+              </span>
+            </Button>
+          );
+        })}
       </div>
 
       {scenarioChartSeries.length > 0 && (

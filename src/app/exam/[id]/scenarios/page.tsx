@@ -6,18 +6,26 @@ import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import {
   ensureScenarios,
+  formatThresholdDual,
+  getCustomThresholdsScenario,
   getEditableScenario,
+  scoreToPercent,
+  setCustomScenarioEnabled,
   setEditableScenarioEnabled,
+  updateCustomScenarioThresholds,
   updateEditableScenario,
+  updateEditableScenarioPassPercent,
   visibleScenarios,
   withActiveScenario,
 } from "@/lib/grades/scenarios";
+import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
 import { buildEnrichedRows } from "@/lib/matching/match";
 import { computeStatistics } from "@/lib/grades/statistics";
 import {
   hasOpenGrading,
   openGradingSummary,
 } from "@/lib/grades/open-grading";
+import { GERMAN_GRADES } from "@/lib/types";
 import { formatPercent } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,8 +90,19 @@ export default function ScenariosPage() {
     () => (project ? getEditableScenario(project) : undefined),
     [project]
   );
+  const customSc = useMemo(
+    () => (project ? getCustomThresholdsScenario(project) : undefined),
+    [project]
+  );
   const s3Enabled = editable?.enabled === true;
+  const customEnabled = customSc?.enabled === true;
+  const isPortfolioScenarios = project
+    ? portfolioUsesGradeScenarios(project)
+    : false;
   const gradingLocked = project ? hasOpenGrading(project) : false;
+  const [customPercents, setCustomPercents] = useState<
+    Record<number, string>
+  >({});
 
   const comparison = useMemo(() => {
     if (!project) return [];
@@ -163,8 +182,10 @@ export default function ScenariosPage() {
           Notenszenarien
         </h1>
         <p className="text-muted-foreground">
-          Vergleich der Bestehensgrenzen. Das aktive Szenario steuert Noten,
-          Export und Grenzfälle. Nur intern – keine Studierenden-Kommunikation.
+          {isPortfolioScenarios
+            ? "Portfolio (Punkte/Prozent): Grenzen relativ zum Maximum (typ. 100). Anzeige immer in Punkten und Prozent. Das aktive Szenario steuert Teil- und Gesamtnoten."
+            : "Vergleich der Bestehensgrenzen. Das aktive Szenario steuert Noten, Export und Grenzfälle."}{" "}
+          Nur intern – keine Studierenden-Kommunikation.
         </p>
       </div>
 
@@ -199,21 +220,37 @@ export default function ScenariosPage() {
               {active && (
                 <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                   {active.name.replace(" (Standard)", "")} · Bestehen ab{" "}
-                  {active.passThreshold} Pkt.
+                  {
+                    formatThresholdDual(
+                      active.passThreshold,
+                      active.schema.maxPoints
+                    ).label
+                  }
                 </span>
               )}
             </div>
             <div className="flex max-w-full flex-wrap gap-1.5">
-              {thresholds.map((t) => (
-                <span
-                  key={t.grade}
-                  className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-0.5 text-xs tabular-nums"
-                  title={`Note ${formatGrade(t.grade)} ab ${t.minPoints} Punkten`}
-                >
-                  <span className="font-semibold">{formatGrade(t.grade)}</span>
-                  <span className="text-muted-foreground">≥{t.minPoints}</span>
-                </span>
-              ))}
+              {thresholds.map((t) => {
+                const dual = formatThresholdDual(
+                  t.minPoints,
+                  active?.schema.maxPoints ?? project.gradeSchema.maxPoints
+                );
+                return (
+                  <span
+                    key={t.grade}
+                    className="inline-flex flex-col items-start gap-0 rounded-md border bg-muted/40 px-2 py-0.5 text-xs tabular-nums"
+                    title={`Note ${formatGrade(t.grade)}: ${dual.label}`}
+                  >
+                    <span className="font-semibold">
+                      {formatGrade(t.grade)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      ≥{String(dual.points).replace(".", ",")} Pkt. ·{" "}
+                      {String(dual.percent).replace(".", ",")} %
+                    </span>
+                  </span>
+                );
+              })}
             </div>
           </div>
 
@@ -221,6 +258,10 @@ export default function ScenariosPage() {
             <div className="flex flex-wrap gap-1.5">
               {scenarios.map((sc) => {
                 const isActive = sc.id === activeId;
+                const dual = formatThresholdDual(
+                  sc.passThreshold,
+                  sc.schema.maxPoints
+                );
                 return (
                   <Button
                     key={sc.id}
@@ -228,13 +269,22 @@ export default function ScenariosPage() {
                     size="sm"
                     variant={isActive ? "default" : "outline"}
                     disabled={gradingLocked}
+                    className="h-auto min-h-9 flex-col items-start gap-0 py-1.5"
                     onClick={() =>
                       setProject((prev) => withActiveScenario(prev, sc.id))
                     }
                   >
-                    {isActive && <Check className="size-3.5" />}
-                    {sc.name.replace(" (Standard)", "").replace(" (frei)", "")}
-                    <span className="opacity-80">{sc.passThreshold} Pkt.</span>
+                    <span className="inline-flex items-center gap-1">
+                      {isActive && <Check className="size-3.5" />}
+                      {sc.name
+                        .replace(" (Standard)", "")
+                        .replace(" (frei)", "")
+                        .replace(" (Bestehens-%)", "")}
+                    </span>
+                    <span className="text-[10px] font-normal opacity-90">
+                      {String(dual.percent).replace(".", ",")} % ·{" "}
+                      {String(dual.points).replace(".", ",")} Pkt.
+                    </span>
                   </Button>
                 );
               })}
@@ -253,7 +303,9 @@ export default function ScenariosPage() {
                   id="s3-toggle"
                 />
                 <Label htmlFor="s3-toggle" className="cursor-pointer text-sm">
-                  Szenario 3 (frei)
+                  {isPortfolioScenarios
+                    ? "Frei (Bestehens-%)"
+                    : "Szenario 3 (frei)"}
                 </Label>
                 {s3Enabled && (
                   <>
@@ -261,12 +313,50 @@ export default function ScenariosPage() {
                       type="number"
                       step="0.5"
                       className="h-8 w-20"
-                      title="Bestehensgrenze"
+                      title={
+                        isPortfolioScenarios
+                          ? "Bestehen in % vom Maximum"
+                          : "Bestehensgrenze in Punkten"
+                      }
                       disabled={gradingLocked}
-                      value={editPass ?? editable.passThreshold}
+                      value={
+                        editPass ??
+                        (isPortfolioScenarios
+                          ? String(
+                              editable.passPercent ??
+                                scoreToPercent(
+                                  editable.passThreshold,
+                                  editable.schema.maxPoints
+                                )
+                            )
+                          : editable.passThreshold)
+                      }
                       onChange={(e) => setEditPass(e.target.value)}
                     />
-                    <span className="text-xs text-muted-foreground">Pkt.</span>
+                    <span className="text-xs text-muted-foreground">
+                      {isPortfolioScenarios ? "%" : "Pkt."}
+                    </span>
+                    {isPortfolioScenarios && (
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        ={" "}
+                        {String(
+                          Math.round(
+                            ((Number(
+                              (editPass ??
+                                editable.passPercent ??
+                                50
+                              )
+                                .toString()
+                                .replace(",", ".")
+                            ) || 0) /
+                              100) *
+                              editable.schema.maxPoints *
+                              10
+                          ) / 10
+                        ).replace(".", ",")}{" "}
+                        Pkt.
+                      </span>
+                    )}
                     <Button
                       type="button"
                       size="sm"
@@ -274,18 +364,153 @@ export default function ScenariosPage() {
                       disabled={gradingLocked}
                       onClick={() => {
                         const p = Number(
-                          (editPass ?? editable.passThreshold)
+                          (editPass ??
+                            (isPortfolioScenarios
+                              ? editable.passPercent ?? 50
+                              : editable.passThreshold)
+                          )
                             .toString()
                             .replace(",", ".")
                         );
                         if (!Number.isFinite(p)) return;
-                        setProject((prev) => updateEditableScenario(prev, p));
+                        setProject((prev) =>
+                          isPortfolioScenarios
+                            ? updateEditableScenarioPassPercent(prev, p)
+                            : updateEditableScenario(prev, p)
+                        );
                         setEditPass(null);
                       }}
                     >
                       Übernehmen
                     </Button>
                   </>
+                )}
+              </div>
+            )}
+
+            {customSc && isPortfolioScenarios && (
+              <div className="w-full max-w-md space-y-2 rounded-lg border px-2.5 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Switch
+                    checked={customEnabled}
+                    disabled={gradingLocked}
+                    onCheckedChange={(on) => {
+                      setProject((prev) =>
+                        setCustomScenarioEnabled(prev, on === true)
+                      );
+                      if (on) {
+                        const max = customSc.schema.maxPoints;
+                        const init: Record<number, string> = {};
+                        for (const g of GERMAN_GRADES) {
+                          if (g >= 5) continue;
+                          const t = customSc.schema.thresholds.find(
+                            (x) => Math.abs(x.grade - g) < 1e-9
+                          );
+                          init[g] = String(
+                            t
+                              ? scoreToPercent(t.minPoints, max)
+                              : g <= 4
+                                ? 50
+                                : 0
+                          ).replace(".", ",");
+                        }
+                        setCustomPercents(init);
+                      }
+                    }}
+                    id="custom-sc-toggle"
+                  />
+                  <Label
+                    htmlFor="custom-sc-toggle"
+                    className="cursor-pointer text-sm"
+                  >
+                    Eigene Grenzen
+                  </Label>
+                </div>
+                {customEnabled && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] text-muted-foreground">
+                      Mindest-% vom Maximum je Note (Punkte werden berechnet).
+                      Note 5,0 = 0 %.
+                    </p>
+                    <div className="grid grid-cols-[3.5rem_1fr_4.5rem] gap-1.5 text-[11px] font-medium text-muted-foreground">
+                      <span>Note</span>
+                      <span>% vom Max</span>
+                      <span>Pkt.</span>
+                    </div>
+                    {GERMAN_GRADES.filter((g) => g < 5).map((g) => {
+                      const max = customSc.schema.maxPoints;
+                      const raw =
+                        customPercents[g] ??
+                        String(
+                          scoreToPercent(
+                            customSc.schema.thresholds.find(
+                              (x) => Math.abs(x.grade - g) < 1e-9
+                            )?.minPoints ?? 0,
+                            max
+                          )
+                        ).replace(".", ",");
+                      const pct = Number(raw.replace(",", ".")) || 0;
+                      const pts =
+                        Math.round((pct / 100) * max * 10) / 10;
+                      return (
+                        <div
+                          key={g}
+                          className="grid grid-cols-[3.5rem_1fr_4.5rem] items-center gap-1.5"
+                        >
+                          <span className="tabular-nums text-sm font-medium">
+                            {formatGrade(g)}
+                          </span>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            className="h-8"
+                            disabled={gradingLocked}
+                            value={raw}
+                            onChange={(e) =>
+                              setCustomPercents((prev) => ({
+                                ...prev,
+                                [g]: e.target.value,
+                              }))
+                            }
+                          />
+                          <span className="tabular-nums text-xs text-muted-foreground">
+                            {String(pts).replace(".", ",")}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={gradingLocked}
+                      onClick={() => {
+                        const map: Record<number, number> = {};
+                        for (const g of GERMAN_GRADES) {
+                          if (g >= 5) {
+                            map[g] = 0;
+                            continue;
+                          }
+                          const raw =
+                            customPercents[g] ??
+                            String(
+                              scoreToPercent(
+                                customSc.schema.thresholds.find(
+                                  (x) => Math.abs(x.grade - g) < 1e-9
+                                )?.minPoints ?? 0,
+                                customSc.schema.maxPoints
+                              )
+                            );
+                          map[g] = Number(raw.replace(",", ".")) || 0;
+                        }
+                        setProject((prev) =>
+                          updateCustomScenarioThresholds(prev, map)
+                        );
+                      }}
+                    >
+                      Grenzen übernehmen
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
