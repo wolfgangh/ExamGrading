@@ -1023,11 +1023,11 @@ export default function GradesPage() {
               {project && isHisManualAssessmentExam(project.examType) && (
                 <Button
                   type="button"
-                  variant={editIsNotAttended ? "secondary" : "outline"}
+                  variant={editIsNotAttended ? "default" : "outline"}
                   className={
                     editIsNotAttended
-                      ? undefined
-                      : "border-orange-400 text-orange-950 dark:text-orange-100"
+                      ? "bg-orange-600 font-semibold text-white hover:bg-orange-700"
+                      : "border-2 border-orange-500 bg-orange-50 font-semibold text-orange-950 hover:bg-orange-100 dark:border-orange-400 dark:bg-orange-950/50 dark:text-orange-50"
                   }
                   onClick={() => toggleNotAttended(!editIsNotAttended)}
                   title={

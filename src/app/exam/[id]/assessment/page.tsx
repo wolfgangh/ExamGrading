@@ -78,6 +78,8 @@ import {
   CircleHelp,
   Search,
   Settings,
+  UserCheck,
+  UserX,
   Users,
 } from "lucide-react";
 import {
@@ -95,7 +97,57 @@ import {
   sortedStudentGroups,
   type GroupFilterId,
 } from "@/lib/student-groups";
-import { setStudentNotAttended } from "@/lib/grades/not-attended";
+import {
+  personHasAssessmentValues,
+  setStudentNotAttended,
+} from "@/lib/grades/not-attended";
+import {
+  getAdjacentGermanGradeInfo,
+  getNextGradeInfo,
+} from "@/lib/grades/next-grade";
+import type { CriterionScale, GradeSchema } from "@/lib/types";
+
+/** Abstand zur nächsten Note für angezeigte TL-Unit (Schema-Punkte oder Notengrade). */
+function tlNextFromUnit(
+  unit: number | null | undefined,
+  scale: CriterionScale | undefined,
+  schema: GradeSchema | null | undefined
+): {
+  pointsToNext: number;
+  nextGrade: number;
+  direction: "better" | "worse";
+} | null {
+  if (unit == null || !Number.isFinite(unit)) return null;
+  const u = Math.min(1, Math.max(0, unit));
+  if (
+    (scale === "points" || scale === "percent") &&
+    schema != null &&
+    schema.maxPoints > 0
+  ) {
+    const next = getNextGradeInfo(u * schema.maxPoints, schema);
+    if (next.pointsNeeded == null || next.nextGrade == null) return null;
+    if (!(next.pointsNeeded > 0)) return null;
+    return {
+      pointsToNext: next.pointsNeeded,
+      nextGrade: next.nextGrade,
+      direction: "better",
+    };
+  }
+  const adj = getAdjacentGermanGradeInfo(5 - 4 * u);
+  if (
+    adj.pointsNeeded == null ||
+    adj.nextGrade == null ||
+    !(adj.pointsNeeded > 0) ||
+    adj.direction == null
+  ) {
+    return null;
+  }
+  return {
+    pointsToNext: adj.pointsNeeded,
+    nextGrade: adj.nextGrade,
+    direction: adj.direction,
+  };
+}
 
 /** Ein Begriff oder mehrere (Komma/Semikolon/Zeilenumbruch = ODER) */
 function matchesNameSearch(row: EnrichedStudentRow, query: string): boolean {
@@ -1561,32 +1613,56 @@ export default function AssessmentPage() {
                                   </Badge>
                                 )}
                               </span>
-                              {r.inHis && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-1.5 text-[0.625rem] text-muted-foreground"
-                                  title={
-                                    r.status === "no_show"
-                                      ? "Wieder bewerten (Teilnoten erforderlich)"
-                                      : "Keine Teilnoten – Workflow/Export freigeben (No-Show)"
-                                  }
-                                  onClick={() =>
-                                    setProject((prev) =>
-                                      setStudentNotAttended(
-                                        prev,
-                                        r.key,
-                                        r.status !== "no_show"
+                              {(() => {
+                                const isNoShow = r.status === "no_show";
+                                const hasGroup = Boolean(r.student.groupId);
+                                const hasValues = personHasAssessmentValues(
+                                  project,
+                                  rec
+                                );
+                                // Mit Gruppe + eingetragenen Werten ausblenden;
+                                // No-Show immer anzeigen (Aufheben).
+                                const showToggle =
+                                  r.inHis &&
+                                  (isNoShow || !hasGroup || !hasValues);
+                                if (!showToggle) return null;
+                                return (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={isNoShow ? "default" : "outline"}
+                                    className={cn(
+                                      "h-7 gap-1 px-2 text-xs font-semibold shadow-sm",
+                                      isNoShow
+                                        ? "bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-500"
+                                        : "border-2 border-orange-500 bg-orange-50 text-orange-950 hover:bg-orange-100 dark:border-orange-400 dark:bg-orange-950/50 dark:text-orange-50 dark:hover:bg-orange-950"
+                                    )}
+                                    title={
+                                      isNoShow
+                                        ? "Wieder bewerten (Teilnoten erforderlich)"
+                                        : "Keine Teilnoten – Workflow/Export freigeben (No-Show)"
+                                    }
+                                    onClick={() =>
+                                      setProject((prev) =>
+                                        setStudentNotAttended(
+                                          prev,
+                                          r.key,
+                                          !isNoShow
+                                        )
                                       )
-                                    )
-                                  }
-                                >
-                                  {r.status === "no_show"
-                                    ? "Antritt markieren"
-                                    : "Nicht angetreten"}
-                                </Button>
-                              )}
+                                    }
+                                  >
+                                    {isNoShow ? (
+                                      <UserCheck className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <UserX className="size-3.5 shrink-0" />
+                                    )}
+                                    {isNoShow
+                                      ? "Antritt markieren"
+                                      : "Nicht angetreten"}
+                                  </Button>
+                                );
+                              })()}
                             </div>
                           </TableCell>
                           <TableCell className={cn("font-mono text-xs", rowBg)}>
@@ -1737,6 +1813,13 @@ export default function AssessmentPage() {
                                         ptsLabel = pctLabel;
                                       }
                                     }
+                                    const tlNext = tlNextFromUnit(
+                                      unit,
+                                      scale,
+                                      project.gradeSchema
+                                    );
+                                    const nextWorse =
+                                      tlNext?.direction === "worse";
                                     return (
                                       <TableCell
                                         key={`${c.id}::note`}
@@ -1750,6 +1833,29 @@ export default function AssessmentPage() {
                                           {ptsLabel ? (
                                             <span className="text-[0.625rem] font-normal text-muted-foreground">
                                               {ptsLabel}
+                                            </span>
+                                          ) : null}
+                                          {tlNext ? (
+                                            <span
+                                              className={cn(
+                                                "inline-flex w-fit max-w-full items-center rounded border px-1 py-px text-[0.5625rem] font-semibold tabular-nums",
+                                                nextWorse
+                                                  ? "border-rose-400 bg-rose-50 text-rose-900 dark:border-rose-500 dark:bg-rose-950/60 dark:text-rose-50"
+                                                  : "border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-50"
+                                              )}
+                                              title={
+                                                nextWorse
+                                                  ? `Abstand zur nächstschlechteren TL-Note`
+                                                  : `Abstand zur nächstbesseren TL-Note`
+                                              }
+                                            >
+                                              {nextWorse ? "↓" : "↑"}
+                                              {formatPoints(
+                                                tlNext.pointsToNext,
+                                                1
+                                              )}
+                                              →
+                                              {formatGrade(tlNext.nextGrade)}
                                             </span>
                                           ) : null}
                                         </div>
@@ -1804,13 +1910,48 @@ export default function AssessmentPage() {
                                           "bg-amber-100/40 dark:bg-amber-950/20"
                                       )}
                                     >
-                                      {formatGrade(
-                                        averageLecturerGradesForComponent(
-                                          rec?.portfolioGradesByLecturer,
-                                          c.id,
-                                          lecturers
-                                        )
-                                      )}
+                                      {(() => {
+                                        const avgG =
+                                          averageLecturerGradesForComponent(
+                                            rec?.portfolioGradesByLecturer,
+                                            c.id,
+                                            lecturers
+                                          );
+                                        const unit =
+                                          avgG != null
+                                            ? (5 - avgG) / 4
+                                            : null;
+                                        const tlNext = tlNextFromUnit(
+                                          unit,
+                                          "grade",
+                                          null
+                                        );
+                                        const nextWorse =
+                                          tlNext?.direction === "worse";
+                                        return (
+                                          <div className="flex flex-col items-center gap-0.5">
+                                            <span>{formatGrade(avgG)}</span>
+                                            {tlNext ? (
+                                              <span
+                                                className={cn(
+                                                  "inline-flex w-fit items-center rounded border px-1 py-px text-[0.5625rem] font-semibold tabular-nums",
+                                                  nextWorse
+                                                    ? "border-rose-400 bg-rose-50 text-rose-900 dark:border-rose-500 dark:bg-rose-950/60 dark:text-rose-50"
+                                                    : "border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-50"
+                                                )}
+                                              >
+                                                {nextWorse ? "↓" : "↑"}
+                                                {formatPoints(
+                                                  tlNext.pointsToNext,
+                                                  1
+                                                )}
+                                                →
+                                                {formatGrade(tlNext.nextGrade)}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        );
+                                      })()}
                                     </TableCell>,
                                   ])
                                 : components.map((c) => {
