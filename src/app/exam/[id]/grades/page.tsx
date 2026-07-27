@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useExamContext } from "@/components/exam/exam-context";
 import {
   StudentsTable,
@@ -129,6 +129,25 @@ export default function GradesPage() {
     () => computeFailerAnalysis(rows),
     [rows]
   );
+
+  /** #durchfaller nur nutzbar, wenn Panel im DOM – bei Hash öffnen */
+  useEffect(() => {
+    if (failerAnalysis.count <= 0) return;
+    const openFromHash = () => {
+      if (typeof window === "undefined") return;
+      if (window.location.hash === "#durchfaller") {
+        setShowFailerPanel(true);
+        requestAnimationFrame(() => {
+          document
+            .getElementById("durchfaller")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
+    };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+  }, [failerAnalysis.count]);
 
   const scenarios = useMemo(
     () => (project ? visibleScenarios(project) : []),
@@ -483,16 +502,44 @@ export default function GradesPage() {
               { l: "75%-Quantil", v: formatGrade(stats.q75Grade) },
               { l: "Stabw.", v: formatStat(stats.stdDevGrade, 2) },
               { l: "Bestehen", v: formatPercent(stats.passRate) },
-              { l: "Durchfaller", v: `${stats.failCount}` },
-            ].map((c) => (
-              <div
-                key={c.l}
-                className="min-w-[7rem] flex-1 rounded-xl border bg-card px-3 py-2 text-sm sm:max-w-[10rem]"
-              >
-                <p className="text-muted-foreground">{c.l}</p>
-                <p className="text-lg font-semibold tabular-nums">{c.v}</p>
-              </div>
-            ))}
+              {
+                l: "Durchfaller",
+                v: `${stats.failCount}`,
+                href:
+                  stats.failCount > 0
+                    ? ("#durchfaller" as const)
+                    : undefined,
+              },
+            ].map((c) => {
+              const body = (
+                <>
+                  <p className="text-muted-foreground">{c.l}</p>
+                  <p className="text-lg font-semibold tabular-nums">{c.v}</p>
+                </>
+              );
+              const shell =
+                "min-w-[7rem] flex-1 rounded-xl border bg-card px-3 py-2 text-sm sm:max-w-[10rem]";
+              if ("href" in c && c.href) {
+                return (
+                  <a
+                    key={c.l}
+                    href={c.href}
+                    className={cn(
+                      shell,
+                      "transition-colors hover:border-rose-300 hover:bg-rose-50/60 dark:hover:border-rose-800 dark:hover:bg-rose-950/30"
+                    )}
+                    onClick={() => setShowFailerPanel(true)}
+                  >
+                    {body}
+                  </a>
+                );
+              }
+              return (
+                <div key={c.l} className={shell}>
+                  {body}
+                </div>
+              );
+            })}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">
             <span className="text-xs text-muted-foreground">Notenspiegel</span>
@@ -678,14 +725,20 @@ export default function GradesPage() {
           />
           Antritt ohne HIS
         </label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setShowFailerPanel((v) => !v)}
-        >
-          Durchfaller-Analyse (intern)
-        </Button>
+        {failerAnalysis.count > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowFailerPanel((v) => !v)}
+            aria-expanded={showFailerPanel}
+            aria-controls="durchfaller"
+          >
+            {showFailerPanel
+              ? "Durchfaller-Analyse ausblenden"
+              : "Durchfaller-Analyse (intern)"}
+          </Button>
+        )}
         <div className="ml-auto flex flex-wrap gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <span
@@ -711,7 +764,7 @@ export default function GradesPage() {
         </div>
       </div>
 
-      {showFailerPanel && (
+      {failerAnalysis.count > 0 && (
         <Card
           id="durchfaller"
           className={cn(
@@ -719,79 +772,96 @@ export default function GradesPage() {
             SECTION_SCROLL_MT
           )}
         >
-          <CardHeader>
-            <CardTitle className="text-base">
-              Durchfaller-Analyse (nur Prüfer)
-            </CardTitle>
-            <CardDescription>
-              Interne Auswertung – keine Weitergabe an Studierende, kein
-              E-Mail-Versand.
-            </CardDescription>
+          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
+            <div className="min-w-0 space-y-1">
+              <CardTitle className="text-base">
+                Durchfaller-Analyse (nur Prüfer)
+              </CardTitle>
+              <CardDescription>
+                Interne Auswertung – keine Weitergabe an Studierende, kein
+                E-Mail-Versand. Anzahl:{" "}
+                <strong className="text-foreground tabular-nums">
+                  {failerAnalysis.count}
+                </strong>
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => setShowFailerPanel((v) => !v)}
+              aria-expanded={showFailerPanel}
+            >
+              {showFailerPanel ? "Details einklappen" : "Details anzeigen"}
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-4 text-sm">
-              <span>
-                Anzahl: <strong>{failerAnalysis.count}</strong>
-              </span>
-              <span>
-                Ø Punkte:{" "}
-                <strong>{formatPoints(failerAnalysis.averagePoints)}</strong>
-              </span>
-              <span>
-                Median:{" "}
-                <strong>{formatPoints(failerAnalysis.medianPoints)}</strong>
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Nahe Bestehensgrenze (fehlende Punkte):
-            </p>
-            <div className="flex flex-wrap gap-2 text-sm">
-              {failerAnalysis.nearPass.map((n) => (
-                <span
-                  key={n.within}
-                  className="rounded-md border bg-background px-2 py-1"
-                >
-                  ≤ {formatPoints(n.within)}: <strong>{n.count}</strong>
+          {showFailerPanel && (
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-4 text-sm">
+                <span>
+                  Anzahl: <strong>{failerAnalysis.count}</strong>
                 </span>
-              ))}
-            </div>
-            {failerAnalysis.rows.length > 0 && (
-              <div className="max-h-48 overflow-auto rounded-lg border bg-background">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Matr.</TableHead>
-                      <TableHead>Punkte</TableHead>
-                      <TableHead>bis Bestehen</TableHead>
-                      <TableHead>Note</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {failerAnalysis.rows.map((r) => (
-                      <TableRow key={r.key}>
-                        <TableCell>
-                          {r.student.lastName}, {r.student.firstName}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {r.key}
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {formatPoints(r.totalPoints)}
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {formatPoints(r.pointsBelowPass)}
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {formatGrade(r.finalGrade)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <span>
+                  Ø Punkte:{" "}
+                  <strong>{formatPoints(failerAnalysis.averagePoints)}</strong>
+                </span>
+                <span>
+                  Median:{" "}
+                  <strong>{formatPoints(failerAnalysis.medianPoints)}</strong>
+                </span>
               </div>
-            )}
-          </CardContent>
+              <p className="text-sm text-muted-foreground">
+                Nahe Bestehensgrenze (fehlende Punkte):
+              </p>
+              <div className="flex flex-wrap gap-2 text-sm">
+                {failerAnalysis.nearPass.map((n) => (
+                  <span
+                    key={n.within}
+                    className="rounded-md border bg-background px-2 py-1"
+                  >
+                    ≤ {formatPoints(n.within)}: <strong>{n.count}</strong>
+                  </span>
+                ))}
+              </div>
+              {failerAnalysis.rows.length > 0 && (
+                <div className="max-h-48 overflow-auto rounded-lg border bg-background">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Matr.</TableHead>
+                        <TableHead>Punkte</TableHead>
+                        <TableHead>bis Bestehen</TableHead>
+                        <TableHead>Note</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {failerAnalysis.rows.map((r) => (
+                        <TableRow key={r.key}>
+                          <TableCell>
+                            {r.student.lastName}, {r.student.firstName}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {r.key}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {formatPoints(r.totalPoints)}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {formatPoints(r.pointsBelowPass)}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {formatGrade(r.finalGrade)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          )}
         </Card>
       )}
 

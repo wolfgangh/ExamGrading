@@ -784,7 +784,7 @@ export default function AssessmentPage() {
                             </span>
                             <span
                               className={cn(
-                                "text-[10px] font-normal",
+                                "text-[0.625rem] font-normal",
                                 active
                                   ? "text-primary-foreground/80"
                                   : "text-muted-foreground"
@@ -884,7 +884,7 @@ export default function AssessmentPage() {
                   >
                     Aktuelle TL-Werte auf Gruppe übernehmen
                   </Button>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[0.6875rem] text-muted-foreground">
                     Quelle: zuerst ausgewählte Person, sonst erstes
                     Gruppenmitglied.
                   </p>
@@ -915,7 +915,7 @@ export default function AssessmentPage() {
                           </span>
                         </p>
                         {!criteriaDisableOpen && (
-                          <p className="text-[11px] text-muted-foreground">
+                          <p className="text-[0.6875rem] text-muted-foreground">
                             {groupDisabledCritIds.size > 0
                               ? `${groupDisabledCritIds.size} deaktiviert · zum Anpassen aufklappen`
                               : "alle aktiv · zum Deaktivieren aufklappen"}
@@ -962,12 +962,12 @@ export default function AssessmentPage() {
                                       {k.name}
                                     </span>
                                   )}
-                                  <span className="ml-1.5 text-[10px] text-muted-foreground tabular-nums">
+                                  <span className="ml-1.5 text-[0.625rem] text-muted-foreground tabular-nums">
                                     w{k.weight}
                                   </span>
                                 </Label>
                                 <div className="flex shrink-0 items-center gap-2">
-                                  <span className="text-[10px] text-muted-foreground">
+                                  <span className="text-[0.625rem] text-muted-foreground">
                                     {off ? "aus" : "an"}
                                   </span>
                                   <Switch
@@ -1001,7 +1001,7 @@ export default function AssessmentPage() {
                   </p>
                 )}
               {!selectedGroupId && activeTlCriteria.length > 0 && (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[0.6875rem] text-muted-foreground">
                   Gruppe wählen, um Kriterien nur für diese Gruppe zu
                   deaktivieren.
                 </p>
@@ -1132,7 +1132,7 @@ export default function AssessmentPage() {
                   )}
                 </CardDescription>
                 {isCriteria && (
-                  <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+                  <p className="mt-1.5 text-[0.6875rem] leading-snug text-muted-foreground">
                     Eingabe je Spalte:{" "}
                     <span className="text-foreground">0–100 %</span>
                     {" · "}
@@ -1163,7 +1163,7 @@ export default function AssessmentPage() {
                     clearLabel="Suche löschen"
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
+                <p className="mt-1 text-[0.6875rem] text-muted-foreground">
                   Gruppenübergreifend · mehrere Namen mit Komma · per Checkbox
                   Sammelzuordnung.
                 </p>
@@ -1217,7 +1217,7 @@ export default function AssessmentPage() {
               </div>
             )}
             {hasGroups && unassignedTotal > 0 && selectedKeys.length === 0 && (
-              <p className="mt-2 text-[11px] text-amber-900 dark:text-amber-100">
+              <p className="mt-2 text-[0.6875rem] text-amber-900 dark:text-amber-100">
                 {unassignedTotal} Person(en) ohne Gruppe – markiert in der
                 Matrix; Checkboxen für Sammelzuordnung nutzen.
               </p>
@@ -1278,7 +1278,7 @@ export default function AssessmentPage() {
                               >
                                 <div className="flex items-start justify-center gap-0.5">
                                   <div className="min-w-0">
-                                    <div className="text-[10px] font-normal text-muted-foreground">
+                                    <div className="text-[0.625rem] font-normal text-muted-foreground">
                                       {col.componentCode}
                                       {activeLecturer
                                         ? ` · ${shortLecturerLabel(activeLecturer)}`
@@ -1286,14 +1286,14 @@ export default function AssessmentPage() {
                                     </div>
                                     <div
                                       className={cn(
-                                        "font-semibold text-[11px] leading-tight",
+                                        "font-semibold text-[0.6875rem] leading-tight",
                                         headerDisabled && "line-through"
                                       )}
                                     >
                                       {col.criterion.code ||
                                         col.criterion.name}
                                     </div>
-                                    <div className="text-[10px] text-muted-foreground">
+                                    <div className="text-[0.625rem] text-muted-foreground">
                                       {headerDisabled
                                         ? "deaktiviert"
                                         : `${criterionScaleShort(col.criterion)} · w${col.criterion.weight}`}
@@ -1326,10 +1326,10 @@ export default function AssessmentPage() {
                                 className="min-w-[64px] text-center bg-muted/30"
                                 title={`Berechnete Teilnote ${c.name}`}
                               >
-                                <div className="font-semibold text-[11px]">
+                                <div className="font-semibold text-[0.6875rem]">
                                   {c.code || c.name}
                                 </div>
-                                <div className="text-[10px] font-normal text-muted-foreground">
+                                <div className="text-[0.625rem] font-normal text-muted-foreground">
                                   Note · w{c.weight}
                                 </div>
                               </TableHead>
@@ -1343,10 +1343,10 @@ export default function AssessmentPage() {
                                   className="min-w-[88px] text-center"
                                   title={`${c.name} · ${lec} · Gewicht ${c.weight}`}
                                 >
-                                  <div className="font-semibold text-[11px] leading-tight">
+                                  <div className="font-semibold text-[0.6875rem] leading-tight">
                                     {c.code || c.name}
                                   </div>
-                                  <div className="text-[10px] font-normal text-muted-foreground">
+                                  <div className="text-[0.625rem] font-normal text-muted-foreground">
                                     {shortLecturerLabel(lec)}
                                   </div>
                                 </TableHead>
@@ -1356,10 +1356,10 @@ export default function AssessmentPage() {
                                 className="min-w-[64px] text-center bg-muted/30"
                                 title={`Mittel ${c.name} (Dozenten gleichgewichtet)`}
                               >
-                                <div className="font-semibold text-[11px]">
+                                <div className="font-semibold text-[0.6875rem]">
                                   {c.code || c.name}
                                 </div>
-                                <div className="text-[10px] font-normal text-muted-foreground">
+                                <div className="text-[0.625rem] font-normal text-muted-foreground">
                                   Ø · w{c.weight}
                                 </div>
                               </TableHead>,
@@ -1373,7 +1373,7 @@ export default function AssessmentPage() {
                                 <div className="font-semibold">
                                   {c.code || c.name}
                                 </div>
-                                <div className="text-[10px] font-normal text-muted-foreground">
+                                <div className="text-[0.625rem] font-normal text-muted-foreground">
                                   Note · w{c.weight}
                                 </div>
                               </TableHead>
@@ -1394,11 +1394,11 @@ export default function AssessmentPage() {
                                 <div className="mt-0.5 flex flex-wrap items-center justify-center gap-1">
                                   <Badge
                                     variant="outline"
-                                    className="h-5 max-w-full px-1.5 text-[10px] font-semibold whitespace-normal"
+                                    className="h-5 max-w-full px-1.5 text-[0.625rem] font-semibold whitespace-normal"
                                   >
                                     {criterionScaleShort(c)}
                                   </Badge>
-                                  <span className="text-[10px] font-normal text-muted-foreground tabular-nums">
+                                  <span className="text-[0.625rem] font-normal text-muted-foreground tabular-nums">
                                     w{c.weight}
                                   </span>
                                 </div>
@@ -1536,7 +1536,7 @@ export default function AssessmentPage() {
                             {ungrouped && (
                               <Badge
                                 variant="outline"
-                                className="ml-1 border-amber-500/60 bg-amber-100/80 text-[10px] text-amber-950 dark:bg-amber-900 dark:text-amber-50"
+                                className="ml-1 border-amber-500/60 bg-amber-100/80 text-[0.625rem] text-amber-950 dark:bg-amber-900 dark:text-amber-50"
                               >
                                 ohne Gruppe
                               </Badge>
@@ -1544,7 +1544,7 @@ export default function AssessmentPage() {
                             {!r.inHis && (
                               <Badge
                                 variant="outline"
-                                className="ml-1 text-[10px]"
+                                className="ml-1 text-[0.625rem]"
                               >
                                 manuell
                               </Badge>
@@ -1595,7 +1595,7 @@ export default function AssessmentPage() {
                                       >
                                         {critDisabled ? (
                                           <span
-                                            className="mx-auto inline-flex h-8 w-[4.5rem] items-center justify-center rounded-md border border-dashed text-[10px] text-muted-foreground"
+                                            className="mx-auto inline-flex h-8 w-[4.5rem] items-center justify-center rounded-md border border-dashed text-[0.625rem] text-muted-foreground"
                                             title="Kriterium für die Gruppe dieser Person deaktiviert – zählt nicht zur Note"
                                           >
                                             aus
@@ -1709,7 +1709,7 @@ export default function AssessmentPage() {
                                         <div className="flex flex-col items-center gap-0.5">
                                           <span>{formatGrade(note)}</span>
                                           {ptsLabel ? (
-                                            <span className="text-[10px] font-normal text-muted-foreground">
+                                            <span className="text-[0.625rem] font-normal text-muted-foreground">
                                               {ptsLabel}
                                             </span>
                                           ) : null}
