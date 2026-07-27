@@ -162,6 +162,7 @@ export function StudentsTable({
   highlightBorderlineMax = 1,
   portfolioComponents = [],
   assessmentHrefForRow,
+  groupNames = {},
 }: {
   rows: EnrichedStudentRow[];
   editable?: boolean;
@@ -182,6 +183,8 @@ export function StudentsTable({
   portfolioComponents?: { id: string; code: string; name: string }[];
   /** Link zur Teilnoten-/Kriterienbewertung für diese Person */
   assessmentHrefForRow?: (row: EnrichedStudentRow) => string | null;
+  /** Gruppen-id → Name; Spalte „Gruppe“ nur wenn nicht leer */
+  groupNames?: Record<string, string>;
 }) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "orderIndex", desc: false },
@@ -326,6 +329,36 @@ export function StudentsTable({
           return <span>{label}</span>;
         },
       },
+      ...(Object.keys(groupNames).length > 0
+        ? [
+            {
+              id: "group",
+              accessorFn: (r: EnrichedStudentRow) => {
+                const gid = r.student.groupId;
+                if (!gid) return "\uFFFF"; // ohne Gruppe ans Ende sortieren
+                return groupNames[gid] ?? gid;
+              },
+              header: "Gruppe",
+              cell: ({ row }: { row: { original: EnrichedStudentRow } }) => {
+                const gid = row.original.student.groupId;
+                if (!gid) {
+                  return (
+                    <span className="text-sm text-muted-foreground">–</span>
+                  );
+                }
+                const name = groupNames[gid] ?? gid;
+                return (
+                  <span
+                    className="block max-w-[10rem] truncate text-sm"
+                    title={name}
+                  >
+                    {name}
+                  </span>
+                );
+              },
+            } as const,
+          ]
+        : []),
       {
         id: "program",
         accessorFn: (r) => r.programCode ?? "",
@@ -606,6 +639,7 @@ export function StudentsTable({
     portfolioComponents,
     rows,
     assessmentHrefForRow,
+    groupNames,
   ]);
 
   const table = useReactTable({

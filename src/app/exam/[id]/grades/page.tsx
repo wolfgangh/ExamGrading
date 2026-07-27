@@ -100,6 +100,7 @@ import {
 import { GroupFilterBar } from "@/components/exam/group-filter-bar";
 import {
   filterRowsByGroup,
+  sortedStudentGroups,
   type GroupFilterId,
 } from "@/lib/student-groups";
 
@@ -916,6 +917,13 @@ export default function GradesPage() {
                 name: c.name,
               }))
             : []
+        }
+        groupNames={
+          supportsStudentGroups(project.examType)
+            ? Object.fromEntries(
+                sortedStudentGroups(project).map((g) => [g.id, g.name])
+              )
+            : undefined
         }
         assessmentHrefForRow={
           isPortfolioExam(project.examType) ||
