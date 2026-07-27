@@ -212,6 +212,8 @@ export default function AssessmentPage() {
   /** Kriterien-Deaktivierung pro Gruppe: Panel standardmäßig zu */
   const [criteriaDisableOpen, setCriteriaDisableOpen] = useState(false);
   const [highlightMat, setHighlightMat] = useState<string | null>(null);
+  /** No-Shows (nicht angetreten) in der Matrix anzeigen */
+  const [showNoShows, setShowNoShows] = useState(true);
   const matrixScrollRef = useRef<HTMLDivElement | null>(null);
 
   const scrollMatrix = (dir: "left" | "right") => {
@@ -236,6 +238,7 @@ export default function AssessmentPage() {
     if (mat) {
       setHighlightMat(mat);
       setNameQuery("");
+      setShowNoShows(true); // No-Show-Deep-Link sichtbar machen
       const t = window.setTimeout(() => {
         const el = document.querySelector(
           `[data-mat-row="${CSS.escape(mat)}"]`
@@ -257,14 +260,23 @@ export default function AssessmentPage() {
     [rows]
   );
   const searchActive = nameQuery.trim().length > 0;
+  const noShowCount = useMemo(
+    () => sortedRows.filter((r) => r.status === "no_show").length,
+    [sortedRows]
+  );
   const filteredRows = useMemo(() => {
     // Bei aktiver Namenssuche über alle Gruppen – erleichtert die Zuordnung
-    const base = searchActive
+    let base = searchActive
       ? sortedRows
       : filterRowsByGroup(sortedRows, groupFilter);
-    if (!searchActive) return base;
-    return base.filter((r) => matchesNameSearch(r, nameQuery));
-  }, [sortedRows, groupFilter, nameQuery, searchActive]);
+    if (searchActive) {
+      base = base.filter((r) => matchesNameSearch(r, nameQuery));
+    }
+    if (!showNoShows) {
+      base = base.filter((r) => r.status !== "no_show");
+    }
+    return base;
+  }, [sortedRows, groupFilter, nameQuery, searchActive, showNoShows]);
 
   const isCriteria = project ? isStaCriteriaExam(project.examType) : false;
   const isPortfolio = project ? isPortfolioExam(project.examType) : false;
@@ -1200,7 +1212,7 @@ export default function AssessmentPage() {
                   </p>
                 )}
               </div>
-              <div className="w-full min-w-[14rem] max-w-xs sm:w-72">
+              <div className="flex w-full min-w-[14rem] max-w-xs flex-col gap-2 sm:w-72">
                 <label className="sr-only" htmlFor="assessment-name-search">
                   Name oder Matrikelnummer suchen
                 </label>
@@ -1217,9 +1229,24 @@ export default function AssessmentPage() {
                   />
                 </div>
                 <p className="mt-1 text-[0.6875rem] text-muted-foreground">
-                  Gruppenübergreifend · mehrere Namen mit Komma · per Checkbox
-                  Sammelzuordnung.
+                  {hasGroups
+                    ? "Gruppenübergreifend · mehrere Namen mit Komma · per Checkbox Sammelzuordnung."
+                    : "Mehrere Namen mit Komma suchen."}
                 </p>
+                {noShowCount > 0 && (
+                  <label className="flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={showNoShows}
+                      onCheckedChange={(v) => setShowNoShows(v === true)}
+                    />
+                    <span>
+                      No-Shows anzeigen
+                      <span className="ml-1 tabular-nums text-muted-foreground">
+                        ({noShowCount})
+                      </span>
+                    </span>
+                  </label>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <Button
@@ -1306,7 +1333,9 @@ export default function AssessmentPage() {
                       Name
                     </TableHead>
                     <TableHead className="min-w-[88px]">Matr.</TableHead>
-                    <TableHead className="min-w-[7.5rem]">Gruppe</TableHead>
+                    {hasGroups && (
+                      <TableHead className="min-w-[7.5rem]">Gruppe</TableHead>
+                    )}
                     {isPortfolio
                       ? portfolioCriteriaMode
                         ? [
@@ -1494,11 +1523,12 @@ export default function AssessmentPage() {
                     <TableRow>
                       <TableCell
                         colSpan={
-                          4 +
+                          (hasGroups ? 2 : 0) + // Auswahl + Gruppe
+                          2 + // Name + Matr.
                           valueColCount +
-                          (hasGroups ? 1 : 0) +
-                          (isCriteria || isPortfolio ? 1 : 0) +
-                          1
+                          (isCriteria ? 1 : 0) +
+                          (isPortfolio ? 1 : 0) +
+                          1 // Note
                         }
                         className="h-20 text-center text-muted-foreground"
                       >
@@ -1506,7 +1536,9 @@ export default function AssessmentPage() {
                           ? "Noch keine Personen – bitte HISinOne importieren oder manuell hinzufügen."
                           : searchActive
                             ? "Keine Person passt zur Suche."
-                            : "Keine Personen in dieser Gruppe."}
+                            : !showNoShows && noShowCount > 0
+                              ? "Keine sichtbaren Personen (No-Shows sind ausgeblendet)."
+                              : "Keine Personen in dieser Gruppe."}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -1668,20 +1700,22 @@ export default function AssessmentPage() {
                           <TableCell className={cn("font-mono text-xs", rowBg)}>
                             {r.key}
                           </TableCell>
-                          <TableCell className={cn("p-1", rowBg)}>
-                            <StudentGroupSelect
-                              project={project}
-                              groupId={r.student.groupId}
-                              rows={sortedRows}
-                              compact
-                              highlightEmpty
-                              onChange={(gid) =>
-                                setProject((prev) =>
-                                  setStudentGroupId(prev, r.key, gid)
-                                )
-                              }
-                            />
-                          </TableCell>
+                          {hasGroups && (
+                            <TableCell className={cn("p-1", rowBg)}>
+                              <StudentGroupSelect
+                                project={project}
+                                groupId={r.student.groupId}
+                                rows={sortedRows}
+                                compact
+                                highlightEmpty
+                                onChange={(gid) =>
+                                  setProject((prev) =>
+                                    setStudentGroupId(prev, r.key, gid)
+                                  )
+                                }
+                              />
+                            </TableCell>
+                          )}
                           {isPortfolio
                             ? portfolioCriteriaMode
                               ? [
