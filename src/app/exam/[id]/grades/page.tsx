@@ -398,7 +398,7 @@ export default function GradesPage() {
                   .replace(" (frei)", "")
                   .replace(" (Bestehens-%)", "")}
               </span>
-              <span className="text-[10px] font-normal opacity-90">
+              <span className="text-[0.625rem] font-normal opacity-90">
                 {port
                   ? `${String(dual.percent).replace(".", ",")} % · ${String(dual.points).replace(".", ",")} Pkt.`
                   : `${String(dual.points).replace(".", ",")} Pkt.`}
@@ -674,7 +674,7 @@ export default function GradesPage() {
               <SelectItem value="custom">Benutzerdefiniert…</SelectItem>
             </SelectContent>
           </Select>
-          <p className="max-w-xs text-[10px] text-muted-foreground">
+          <p className="max-w-xs text-[0.625rem] text-muted-foreground">
             Markierung: Abstand zur nächsten Note ≤ Schwelle
             {nextGradeUnit === "grade"
               ? " (Notengrade, z. B. 0,1)."

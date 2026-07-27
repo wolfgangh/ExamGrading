@@ -439,7 +439,7 @@ export function StudentsTable({
                 {formatGrade(g)}
               </span>
               {pct != null && (
-                <span className="text-[10px] tabular-nums text-muted-foreground">
+                <span className="text-[0.625rem] tabular-nums text-muted-foreground">
                   {formatPercent(pct)}
                   {d?.pointsRaw != null && d?.pointsMax != null
                     ? ` · ${formatPoints(d.pointsRaw, 1)}/${formatPoints(d.pointsMax, 0)}`
@@ -449,7 +449,7 @@ export function StudentsTable({
               {next && (
                 <span
                   className={cn(
-                    "inline-flex w-fit max-w-full items-center rounded border px-1 py-px text-[9px] font-semibold tabular-nums",
+                    "inline-flex w-fit max-w-full items-center rounded border px-1 py-px text-[0.5625rem] font-semibold tabular-nums",
                     isWorse
                       ? "border-rose-400 bg-rose-50 text-rose-900 dark:border-rose-500 dark:bg-rose-950/60 dark:text-rose-50"
                       : "border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-50"
@@ -512,7 +512,7 @@ export function StudentsTable({
             className="whitespace-nowrap"
           >
             bis nächste Note
-            <span className="mt-0.5 block text-[10px] font-normal text-muted-foreground">
+            <span className="mt-0.5 block text-[0.625rem] font-normal text-muted-foreground">
               ({unitLabel})
             </span>
           </span>
@@ -539,7 +539,7 @@ export function StudentsTable({
             >
               <span
                 className={cn(
-                  "rounded px-1 py-px text-[10px] font-bold uppercase tracking-wide",
+                  "rounded px-1 py-px text-[0.625rem] font-bold uppercase tracking-wide",
                   isWorse
                     ? "bg-rose-600 text-white dark:bg-rose-500"
                     : "bg-emerald-700 text-white dark:bg-emerald-500"
@@ -550,7 +550,7 @@ export function StudentsTable({
               <span>
                 {formatPoints(r.pointsToNext, 1)} → {formatGrade(r.nextGrade)}
               </span>
-              <span className="text-[10px] font-medium opacity-80">
+              <span className="text-[0.625rem] font-medium opacity-80">
                 {unit === "Notengrade" ? "N" : "P"}
               </span>
             </span>
