@@ -1,10 +1,15 @@
-import type { EnrichedStudentRow, ExamProject } from "@/lib/types";
-import { HISINONE_LABEL } from "@/lib/types";
+import type {
+  EnrichedStudentRow,
+  ExamProject,
+  PointsRecord,
+} from "@/lib/types";
+import { HISINONE_LABEL, isPortfolioExam, isStaCriteriaExam } from "@/lib/types";
 import {
   autoTable,
   drawKeyValueBlock,
   drawSignatureBlock,
   examHeaderLines,
+  findPointsRecord,
   getLastTableY,
   pdfGrade,
   pdfPoints,
@@ -15,6 +20,7 @@ import {
   shortStatus,
   startPdfWithHeader,
 } from "@/lib/pdf/pdf-common";
+import { formatGrade, formatPoints } from "@/lib/utils";
 
 function sortRows(rows: EnrichedStudentRow[]): EnrichedStudentRow[] {
   return [...rows].sort((a, b) => {
@@ -38,25 +44,158 @@ function formatDeDateTime(iso: string): string {
   }
 }
 
+function meanFinite(values: (number | null | undefined)[]): number | null {
+  const nums = values.filter(
+    (v): v is number => v != null && Number.isFinite(v)
+  );
+  if (!nums.length) return null;
+  return Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100;
+}
+
+function formatCellValue(v: number | null, kind: "points" | "percent" | "grade"): string {
+  if (v == null || !Number.isFinite(v)) return "–";
+  if (kind === "grade") return pdfText(formatGrade(v));
+  if (kind === "percent") return pdfText(formatPoints(v, 0));
+  return pdfText(formatPoints(v, 1));
+}
+
+type ExtraCol = {
+  header: string;
+  value: (r: EnrichedStudentRow, rec: PointsRecord | undefined) => string;
+};
+
+/** Kriterien- und TL-Spalten für Portfolio-Kriterienmodus */
+function portfolioCriteriaExtraColumns(project: ExamProject): ExtraCol[] {
+  if (
+    !isPortfolioExam(project.examType) ||
+    project.portfolioCriteriaMode !== true
+  ) {
+    return [];
+  }
+  const components = project.portfolioComponents ?? [];
+  const lecturers = (project.lecturers ?? [])
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const multiTl = components.length > 1;
+  const cols: ExtraCol[] = [];
+
+  for (const c of components) {
+    const crits = c.criteria ?? [];
+    for (const k of crits) {
+      const header = multiTl
+        ? `${c.code || c.name}·${k.code || k.name}`
+        : k.code || k.name;
+      const kind =
+        k.scale === "grade"
+          ? ("grade" as const)
+          : k.scale === "percent"
+            ? ("percent" as const)
+            : ("points" as const);
+      cols.push({
+        header: pdfText(header).slice(0, 18),
+        value: (r, rec) => {
+          if (r.status === "no_show" || r.attended === false) return "–";
+          if (!rec) return "–";
+          if (project.portfolioPerLecturerGrading && lecturers.length) {
+            const vals = lecturers.map(
+              (name) =>
+                rec.portfolioCriterionValuesByLecturer?.[c.id]?.[name]?.[
+                  k.id
+                ] ?? null
+            );
+            return formatCellValue(meanFinite(vals), kind);
+          }
+          const v = rec.portfolioCriterionValues?.[c.id]?.[k.id] ?? null;
+          return formatCellValue(
+            v != null && Number.isFinite(v) ? v : null,
+            kind
+          );
+        },
+      });
+    }
+    // TL-Note nach den Kriterien der TL
+    cols.push({
+      header: pdfText(`N.${c.code || c.name}`).slice(0, 12),
+      value: (r) => {
+        if (r.status === "no_show" || r.attended === false) return "–";
+        const g =
+          r.portfolioComponentDetails?.[c.id]?.grade ??
+          r.portfolioComponentGrades?.[c.id] ??
+          null;
+        return g != null ? pdfGrade(g) : "–";
+      },
+    });
+  }
+  return cols;
+}
+
+/** StA-Kriterien-Spalten */
+function staCriteriaExtraColumns(project: ExamProject): ExtraCol[] {
+  if (!isStaCriteriaExam(project.examType)) return [];
+  const criteria = project.criteria ?? [];
+  return criteria.map((k) => {
+    const kind =
+      k.scale === "grade"
+        ? ("grade" as const)
+        : k.scale === "percent"
+          ? ("percent" as const)
+          : ("points" as const);
+    return {
+      header: pdfText(k.code || k.name).slice(0, 14),
+      value: (r, rec) => {
+        if (r.status === "no_show" || r.attended === false) return "–";
+        const v = rec?.criterionValues?.[k.id] ?? null;
+        return formatCellValue(
+          v != null && Number.isFinite(v) ? v : null,
+          kind
+        );
+      },
+    };
+  });
+}
+
 /** Gesamte Notenliste inkl. No-Shows und ohne HISinOne */
 export function exportGradesListPdf(
   project: ExamProject,
   rows: EnrichedStudentRow[]
 ): void {
-  const { doc, y: y0 } = startPdfWithHeader(project, "Notenliste");
+  const extraCols = [
+    ...portfolioCriteriaExtraColumns(project),
+    ...staCriteriaExtraColumns(project),
+  ];
+  const useLandscape = extraCols.length >= 4;
+
+  const { doc, y: y0 } = startPdfWithHeader(project, "Notenliste", {
+    orientation: useLandscape ? "landscape" : "portrait",
+  });
   let y = drawKeyValueBlock(doc, examHeaderLines(project), y0);
 
   doc.setFontSize(8);
   doc.setTextColor(80);
-  doc.text(
-    pdfText(
-      `Alle Prüfungsteilnehmer einschließlich No-Shows und Kandidaten ohne ${HISINONE_LABEL}-Anmeldung.`
-    ),
-    PDF_MARGIN,
-    y
-  );
+  const note =
+    extraCols.length > 0
+      ? `Alle Teilnehmenden. Spalten der Teilkriterien: Rohwerte` +
+        (project.portfolioPerLecturerGrading
+          ? " (Mittel der Korrektoren)"
+          : "") +
+        `; N.* = berechnete Teilnote.`
+      : `Alle Prüfungsteilnehmer einschließlich No-Shows und Kandidaten ohne ${HISINONE_LABEL}-Anmeldung.`;
+  doc.text(pdfText(note), PDF_MARGIN, y, { maxWidth: 260 });
   doc.setTextColor(0);
-  y += 4;
+  y += extraCols.length > 0 ? 6 : 4;
+
+  const head = [
+    "Nachname",
+    "Vorname",
+    "Matrikel-Nr.",
+    ...(useLandscape && extraCols.length > 6 ? [] : ["Studiengang"]),
+    ...extraCols.map((c) => c.header),
+    "Punkte",
+    "Note",
+    "Status",
+  ];
+
+  const includeProgram = !(useLandscape && extraCols.length > 6);
 
   const data = sortRows(rows).map((r) => {
     const isNoShow = r.status === "no_show" || r.attended === false;
@@ -65,47 +204,64 @@ export function exportGradesListPdf(
       status = `${status} (ZF ${r.mergedFromMatriculation})`;
     }
     const program = resolveProgramCode(r, project);
-    return [
+    const rec = findPointsRecord(project, r.key);
+    const cells: string[] = [
       pdfText(r.student.lastName),
       pdfText(r.student.firstName),
       pdfText(r.key),
-      pdfText(program || "–"),
+    ];
+    if (includeProgram) {
+      cells.push(pdfText(program || "–"));
+    }
+    for (const col of extraCols) {
+      cells.push(col.value(r, rec));
+    }
+    cells.push(
       isNoShow ? "–" : pdfPoints(r.totalPoints),
       isNoShow ? "–" : pdfGrade(r.finalGrade),
-      pdfText(status),
-    ];
+      pdfText(status)
+    );
+    return cells;
   });
+
+  const nExtra = extraCols.length;
+  const fontSize = nExtra > 10 ? 6 : nExtra > 5 ? 6.5 : 7.5;
+  const critW =
+    nExtra > 0
+      ? Math.min(14, Math.max(8, Math.floor(160 / Math.max(nExtra, 1))))
+      : 12;
+
+  const columnStyles: Record<number, { cellWidth?: number; halign?: "left" | "right" | "center" }> = {
+    0: { cellWidth: useLandscape ? 22 : 28 },
+    1: { cellWidth: useLandscape ? 18 : 24 },
+    2: { cellWidth: useLandscape ? 22 : 26 },
+  };
+  let idx = 3;
+  if (includeProgram) {
+    columnStyles[idx] = { cellWidth: useLandscape ? 16 : 22 };
+    idx++;
+  }
+  for (let i = 0; i < nExtra; i++) {
+    columnStyles[idx + i] = { cellWidth: critW, halign: "right" };
+  }
+  const afterExtra = idx + nExtra;
+  columnStyles[afterExtra] = { cellWidth: 14, halign: "right" };
+  columnStyles[afterExtra + 1] = { cellWidth: 12, halign: "right" };
+  columnStyles[afterExtra + 2] = { cellWidth: useLandscape ? 18 : 26 };
 
   autoTable(doc, {
     startY: y + 2,
-    head: [
-      [
-        "Nachname",
-        "Vorname",
-        "Matrikel-Nr.",
-        "Studiengang",
-        "Punkte",
-        "Note",
-        "Status",
-      ],
-    ],
+    head: [head],
     body: data,
-    styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.3 },
+    styles: { font: "helvetica", fontSize, cellPadding: 1.1 },
     headStyles: {
       fillColor: [68, 112, 153],
       textColor: 255,
       fontStyle: "bold",
+      fontSize: Math.max(5.5, fontSize - 0.5),
     },
     alternateRowStyles: { fillColor: [245, 247, 250] },
-    columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 24 },
-      2: { cellWidth: 26 },
-      3: { cellWidth: 22 },
-      4: { halign: "right", cellWidth: 16 },
-      5: { halign: "right", cellWidth: 14 },
-      6: { cellWidth: 26 },
-    },
+    columnStyles,
     margin: { left: PDF_MARGIN, right: PDF_MARGIN },
   });
 
@@ -328,7 +484,8 @@ export function exportGradesListPdf(
   }
 
   let sigY = finalY + 8;
-  if (sigY > 240) {
+  const pageH = doc.internal.pageSize.getHeight();
+  if (sigY > pageH - 50) {
     doc.addPage();
     sigY = PDF_MARGIN + 10;
   }

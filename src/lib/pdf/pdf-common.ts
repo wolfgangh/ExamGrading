@@ -19,12 +19,23 @@ export const OTH_BLUE: [number, number, number] = [68, 112, 153]; // #447099
 export const OTH_BLUE_DARK: [number, number, number] = [44, 81, 113]; // #2c5171
 export const OTH_MUTED: [number, number, number] = [91, 100, 112];
 
-export function createPdfDoc(): jsPDF {
+export function createPdfDoc(options?: {
+  orientation?: "portrait" | "landscape";
+}): jsPDF {
   return new jsPDF({
-    orientation: "portrait",
+    orientation: options?.orientation ?? "portrait",
     unit: "mm",
     format: "a4",
   });
+}
+
+/** Aktuelle Seitenbreite (Hoch/Quer) */
+export function pdfPageWidth(doc: jsPDF): number {
+  return doc.internal.pageSize.getWidth();
+}
+
+export function pdfContentWidth(doc: jsPDF): number {
+  return pdfPageWidth(doc) - PDF_MARGIN * 2;
 }
 
 /** Latin-1-sichere Zeichenkette für Helvetica */
@@ -68,7 +79,7 @@ export function drawOthHeader(
 ): number {
   const top = 8;
   const left = PDF_MARGIN;
-  const width = PDF_CONTENT_WIDTH;
+  const width = pdfContentWidth(doc);
   const textX = left + 4 + 20;
   const maxTextW = width - 28;
 
@@ -216,7 +227,7 @@ export function drawDocTitle(
   doc.setTextColor(100);
   doc.text(
     `ExamGrade · ${formatDeDate()}`,
-    PDF_PAGE_WIDTH - PDF_MARGIN,
+    pdfPageWidth(doc) - PDF_MARGIN,
     startY,
     { align: "right" }
   );
@@ -307,7 +318,9 @@ export function addPageNumbers(doc: jsPDF): void {
   doc.setTextColor(100);
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
-    doc.text(`Seite ${i} von ${total}`, PDF_PAGE_WIDTH / 2, 290, {
+    const w = pdfPageWidth(doc);
+    const h = doc.internal.pageSize.getHeight();
+    doc.text(`Seite ${i} von ${total}`, w / 2, h - 8, {
       align: "center",
     });
   }
@@ -363,9 +376,10 @@ export function resolveProgramCode(
 
 export function startPdfWithHeader(
   project: ExamProject,
-  title: string
+  title: string,
+  options?: { orientation?: "portrait" | "landscape" }
 ): { doc: jsPDF; y: number } {
-  const doc = createPdfDoc();
+  const doc = createPdfDoc({ orientation: options?.orientation });
   let y = drawOthHeader(doc, {
     subjectLine: project.name,
     lecturers: project.lecturers,
