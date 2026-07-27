@@ -53,6 +53,7 @@ import {
 import {
   averageLecturerGradesForComponent,
   computePortfolioRawAverageForProject,
+  criterionPointsTotals,
   disabledCriteriaForGroup,
   effectivePortfolioGrades,
   gradeFromUnitAvg,
@@ -1675,6 +1676,7 @@ export default function AssessmentPage() {
                                       (scale === "points" ||
                                         scale === "percent")
                                     ) {
+                                      const pctLabel = `${(unit * 100).toFixed(0)}\u00a0%`;
                                       const crits = (c.criteria ?? []).map(
                                         (k) => ({ ...k, scale })
                                       );
@@ -1686,36 +1688,14 @@ export default function AssessmentPage() {
                                         : rec?.portfolioCriterionValues?.[
                                             c.id
                                           ];
-                                      let raw = 0;
-                                      let max = 0;
-                                      let ok = true;
-                                      for (const k of crits) {
-                                        if (
-                                          disabledIds.includes(k.id)
-                                        )
-                                          continue;
-                                        const m =
-                                          scale === "points"
-                                            ? k.maxPoints && k.maxPoints > 0
-                                              ? k.maxPoints
-                                              : 0
-                                            : 100;
-                                        if (m <= 0) {
-                                          ok = false;
-                                          break;
-                                        }
-                                        const v = vals?.[k.id];
-                                        if (v == null || !Number.isFinite(v)) {
-                                          ok = false;
-                                          break;
-                                        }
-                                        raw += v;
-                                        max += m;
-                                      }
-                                      if (ok && max > 0) {
-                                        ptsLabel = `${String(raw).replace(".", ",")}/${String(max).replace(".", ",")} · ${((unit * 100).toFixed(0))}\u00a0%`;
+                                      const tot = criterionPointsTotals(vals, crits, {
+                                        disabledCriterionIds: disabledIds,
+                                      });
+                                      if (tot && tot.max > 0) {
+                                        // formatPoints vermeidet Gleitkomma-Müll (z. B. 19.599999…)
+                                        ptsLabel = `${formatPoints(tot.raw)}/${formatPoints(tot.max)} · ${pctLabel}`;
                                       } else {
-                                        ptsLabel = `${((unit * 100).toFixed(0))}\u00a0%`;
+                                        ptsLabel = pctLabel;
                                       }
                                     }
                                     return (
