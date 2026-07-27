@@ -209,20 +209,70 @@ export function portfolioUsesGradeScenarios(
 }
 
 /**
- * Unit 0…1 → Teilnote.
- * grade: 5−4·unit; points/percent: calculateGrade(unit·max, schema).
+ * Unit 0…1 → Teilnote (lineare Qualitätsskala).
+ * unit 1 → Note 1,0; unit 0 → Note 5,0.
+ * Unabhängig vom Klausur-Szenario (Szenarien nur Vergleich, siehe gradeFromUnitWithScenario).
  */
 export function gradeFromUnitAvg(
   unitAvg: number,
-  scale: CriterionScale,
-  schema?: GradeSchema | null
+  _scale?: CriterionScale,
+  _schema?: GradeSchema | null
+): number {
+  void _scale;
+  void _schema;
+  const u = Math.min(1, Math.max(0, unitAvg));
+  return roundToNearestGermanGrade(5 - 4 * u);
+}
+
+/**
+ * Vergleichsnote über Notenszenario (Bestehen ab X %): unit × max → calculateGrade.
+ * Nur für Szenario-Analyse, nicht für die aktive TL-Note in der Matrix.
+ */
+export function gradeFromUnitWithScenario(
+  unitAvg: number,
+  schema: GradeSchema
 ): number {
   const u = Math.min(1, Math.max(0, unitAvg));
-  if (scale === "grade" || !schema || schema.maxPoints <= 0) {
-    return roundToNearestGermanGrade(5 - 4 * u);
+  if (!(schema.maxPoints > 0)) {
+    return gradeFromUnitAvg(u);
   }
-  const score = u * schema.maxPoints;
-  return calculateGrade(score, schema);
+  return calculateGrade(u * schema.maxPoints, schema);
+}
+
+/** Rohpunkte-Summe und Max einer TL (nur scale points). */
+export function criterionPointsTotals(
+  values: Record<string, number | null | undefined> | undefined,
+  criteria: AssessmentCriterion[] | undefined | null,
+  options?: GradeFromCriteriaOptions
+): { raw: number; max: number } | null {
+  const disabled = options?.disabledCriterionIds
+    ? options.disabledCriterionIds instanceof Set
+      ? options.disabledCriterionIds
+      : new Set(options.disabledCriterionIds)
+    : null;
+  const list = (criteria ?? []).filter((c) => !disabled?.has(c.id));
+  if (!list.length) return null;
+  const vals = values ?? {};
+  let raw = 0;
+  let max = 0;
+  let any = false;
+  for (const c of list) {
+    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 1;
+    const cMax =
+      c.scale === "points" && c.maxPoints != null && c.maxPoints > 0
+        ? c.maxPoints
+        : c.scale === "percent"
+          ? 100
+          : null;
+    if (cMax == null) continue;
+    const v = vals[c.id];
+    if (v == null || !Number.isFinite(v)) return null;
+    any = true;
+    raw += Math.min(cMax, Math.max(0, v)) * w;
+    max += cMax * w;
+  }
+  if (!any || max <= 0) return null;
+  return { raw: Math.round(raw * 100) / 100, max: Math.round(max * 100) / 100 };
 }
 
 /**
@@ -389,7 +439,7 @@ export function unitAvgForPortfolioComponent(
 
 /**
  * Effektive Teilnoten pro Teilleistung
- * (Note direkt, Dozenten-Mittel, oder aus Kriterien ± Szenario-Schema).
+ * (Note direkt, Dozenten-Mittel, oder aus Kriterien linear 5−4·unit).
  */
 export function effectivePortfolioGrades(
   project: PortfolioProjectSlice,
@@ -399,15 +449,13 @@ export function effectivePortfolioGrades(
   const components = project.portfolioComponents ?? [];
   const criteriaMode = project.portfolioCriteriaMode === true;
   const groupId = ctx?.groupId;
-  const schema = ctx?.schema;
   const out: Record<string, number | null> = {};
 
   if (criteriaMode) {
     for (const c of components) {
       const scale = resolveComponentCriteriaScale(c);
       const unit = unitAvgForPortfolioComponent(project, rec, c, groupId);
-      out[c.id] =
-        unit == null ? null : gradeFromUnitAvg(unit, scale, schema);
+      out[c.id] = unit == null ? null : gradeFromUnitAvg(unit, scale);
     }
     return out;
   }
@@ -609,6 +657,139 @@ export function computePortfolioGradeForProject(
     effectivePortfolioGrades(project, rec, ctx),
     project.portfolioComponents ?? []
   );
+}
+
+/**
+ * Vergleichs-Gesamtnote über Szenario (unit×max → calculateGrade),
+ * falls Punkte/Prozent-TLs existieren; sonst lineare Gesamtnote.
+ */
+export function computePortfolioScenarioGrade(
+  project: PortfolioProjectSlice,
+  rec: PointsRecord | undefined | null,
+  schema: GradeSchema,
+  groupId?: string | null
+): number | null {
+  if (!portfolioUsesGradeScenarios(project as ExamProject)) {
+    return computePortfolioGradeForProject(project, rec, { groupId });
+  }
+  const ful = computePortfolioFulfillment(project, rec, { groupId });
+  if (ful == null) return null;
+  return gradeFromUnitWithScenario(ful.unitAvg, schema);
+}
+
+export type PortfolioComponentDetail = {
+  grade: number | null;
+  percent: number | null;
+  pointsRaw?: number | null;
+  pointsMax?: number | null;
+  pointsToNext: number | null;
+  nextGrade: number | null;
+  nextGradeDirection: "better" | "worse" | null;
+};
+
+/** Details je TL für Notenübersicht (Note, %, optional Pkt., bis nächste Note). */
+export function computePortfolioComponentDetails(
+  project: PortfolioProjectSlice,
+  rec: PointsRecord | undefined | null,
+  groupId?: string | null,
+  getAdjacent?: (raw: number) => {
+    pointsNeeded: number | null;
+    nextGrade: number | null;
+    direction: "better" | "worse" | null;
+  }
+): Record<string, PortfolioComponentDetail> {
+  const out: Record<string, PortfolioComponentDetail> = {};
+  const components = project.portfolioComponents ?? [];
+  const criteriaMode = project.portfolioCriteriaMode === true;
+  const grades = effectivePortfolioGrades(project, rec, { groupId });
+
+  for (const c of components) {
+    const grade = grades[c.id] ?? null;
+    let percent: number | null = null;
+    let pointsRaw: number | null | undefined;
+    let pointsMax: number | null | undefined;
+
+    if (criteriaMode) {
+      const unit = unitAvgForPortfolioComponent(project, rec, c, groupId);
+      percent = unit;
+      const scale = resolveComponentCriteriaScale(c);
+      if (scale === "points" || scale === "percent") {
+        const disabled = disabledCriteriaForGroup(project, groupId, c.id);
+        const crits = (c.criteria ?? []).map((k) => ({
+          ...k,
+          scale,
+        }));
+        if (!project.portfolioPerLecturerGrading) {
+          const tot = criterionPointsTotals(
+            rec?.portfolioCriterionValues?.[c.id],
+            crits,
+            { disabledCriterionIds: disabled }
+          );
+          if (tot) {
+            pointsRaw = tot.raw;
+            pointsMax = tot.max;
+          }
+        } else {
+          const lecturers = (project.lecturers ?? [])
+            .map((l) => l.trim())
+            .filter(Boolean);
+          if (lecturers.length) {
+            let rAcc = 0;
+            let mAcc = 0;
+            let ok = true;
+            for (const name of lecturers) {
+              const tot = criterionPointsTotals(
+                rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name],
+                crits,
+                { disabledCriterionIds: disabled }
+              );
+              if (!tot) {
+                ok = false;
+                break;
+              }
+              rAcc += tot.raw;
+              mAcc += tot.max;
+            }
+            if (ok && lecturers.length) {
+              pointsRaw = Math.round((rAcc / lecturers.length) * 100) / 100;
+              pointsMax = Math.round((mAcc / lecturers.length) * 100) / 100;
+            }
+          }
+        }
+      }
+    } else if (grade != null) {
+      percent = gradeToUnit(grade);
+    }
+
+    let pointsToNext: number | null = null;
+    let nextGrade: number | null = null;
+    let nextGradeDirection: "better" | "worse" | null = null;
+    // Rohnote der TL für Adjacent: linear ungerundet 5-4*unit
+    const unitForRaw =
+      percent != null
+        ? percent
+        : grade != null
+          ? gradeToUnit(grade)
+          : null;
+    if (unitForRaw != null && getAdjacent) {
+      const rawNote = 5 - 4 * unitForRaw;
+      const adj = getAdjacent(rawNote);
+      pointsToNext = adj.pointsNeeded;
+      nextGrade = adj.nextGrade;
+      nextGradeDirection = adj.direction;
+    }
+
+    out[c.id] = {
+      grade,
+      percent,
+      pointsRaw,
+      pointsMax,
+      pointsToNext,
+      nextGrade,
+      nextGradeDirection,
+    };
+  }
+  return out;
 }
 
 export function computePortfolioRawAverageForProject(

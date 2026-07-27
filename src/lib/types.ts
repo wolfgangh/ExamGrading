@@ -505,6 +505,22 @@ export interface EnrichedStudentRow {
   nextGradeUnit?: "points" | "grade";
   /** Portfolio: effektive Teilnoten je Teilleistungs-Id */
   portfolioComponentGrades?: Record<string, number | null>;
+  /**
+   * Portfolio: Detail je Teilleistung (% vom Max, optional Rohpunkte, bis nächste Note).
+   */
+  portfolioComponentDetails?: Record<
+    string,
+    {
+      grade: number | null;
+      /** 0…1 Erfüllung */
+      percent: number | null;
+      pointsRaw?: number | null;
+      pointsMax?: number | null;
+      pointsToNext: number | null;
+      nextGrade: number | null;
+      nextGradeDirection: "better" | "worse" | null;
+    }
+  >;
   /** Note > 4,0 und mit Bewertung */
   isFailed: boolean;
   /** Abstand zur Bestehensgrenze (positiv = darunter) */

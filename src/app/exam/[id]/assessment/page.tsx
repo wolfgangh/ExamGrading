@@ -1554,11 +1554,57 @@ export default function AssessmentPage() {
                                     const note =
                                       unit == null
                                         ? null
-                                        : gradeFromUnitAvg(
-                                            unit,
-                                            scale,
-                                            project.gradeSchema
-                                          );
+                                        : gradeFromUnitAvg(unit, scale);
+                                    // Rohpunkte-Summe für Anzeige (Punkte-Skala)
+                                    let ptsLabel = "";
+                                    if (
+                                      unit != null &&
+                                      (scale === "points" ||
+                                        scale === "percent")
+                                    ) {
+                                      const crits = (c.criteria ?? []).map(
+                                        (k) => ({ ...k, scale })
+                                      );
+                                      const vals = activeLecturer
+                                        ? rec
+                                            ?.portfolioCriterionValuesByLecturer?.[
+                                            c.id
+                                          ]?.[activeLecturer]
+                                        : rec?.portfolioCriterionValues?.[
+                                            c.id
+                                          ];
+                                      let raw = 0;
+                                      let max = 0;
+                                      let ok = true;
+                                      for (const k of crits) {
+                                        if (
+                                          disabledIds.includes(k.id)
+                                        )
+                                          continue;
+                                        const m =
+                                          scale === "points"
+                                            ? k.maxPoints && k.maxPoints > 0
+                                              ? k.maxPoints
+                                              : 0
+                                            : 100;
+                                        if (m <= 0) {
+                                          ok = false;
+                                          break;
+                                        }
+                                        const v = vals?.[k.id];
+                                        if (v == null || !Number.isFinite(v)) {
+                                          ok = false;
+                                          break;
+                                        }
+                                        raw += v;
+                                        max += m;
+                                      }
+                                      if (ok && max > 0) {
+                                        ptsLabel = `${String(raw).replace(".", ",")}/${String(max).replace(".", ",")} · ${((unit * 100).toFixed(0))}\u00a0%`;
+                                      } else {
+                                        ptsLabel = `${((unit * 100).toFixed(0))}\u00a0%`;
+                                      }
+                                    }
                                     return (
                                       <TableCell
                                         key={`${c.id}::note`}
@@ -1567,7 +1613,14 @@ export default function AssessmentPage() {
                                           rowBg
                                         )}
                                       >
-                                        {formatGrade(note)}
+                                        <div className="flex flex-col items-center gap-0.5">
+                                          <span>{formatGrade(note)}</span>
+                                          {ptsLabel ? (
+                                            <span className="text-[10px] font-normal text-muted-foreground">
+                                              {ptsLabel}
+                                            </span>
+                                          ) : null}
+                                        </div>
                                       </TableCell>
                                     );
                                   }),

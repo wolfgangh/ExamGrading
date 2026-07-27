@@ -10,9 +10,11 @@ import {
 import { ensureScenarios, getActiveScenario } from "@/lib/grades/scenarios";
 import { countMissingCriteria } from "@/lib/grades/sta-criteria";
 import {
+  computePortfolioComponentDetails,
   computePortfolioFulfillment,
   computePortfolioGradeForProject,
   computePortfolioRawAverageForProject,
+  computePortfolioScenarioGrade,
   countMissingPortfolioCells,
   effectivePortfolioGrades,
   portfolioUsesGradeScenarios,
@@ -51,10 +53,8 @@ function calculatedGradeForRecord(
   groupId?: string | null
 ): number | null {
   if (isPortfolioExam(project.examType)) {
-    return computePortfolioGradeForProject(project, pointsRec, {
-      groupId,
-      schema: gradeSchema,
-    });
+    // Aktive Note: lineare Kriteriennote (5−4·unit), nicht Klausur-Szenario
+    return computePortfolioGradeForProject(project, pointsRec, { groupId });
   }
   if (totalPoints != null) {
     return calculateGrade(totalPoints, gradeSchema);
@@ -80,20 +80,21 @@ function scenarioGradesForPoints(
         grade: gradeOverride,
       }));
     }
-    // Punkte/Prozent-TLs: Note je Szenario neu; reine Noten-TLs: alle gleich
+    // Vergleichsnoten: bei points/percent über Szenario-Schlüssel; aktiv = linear
     if (portfolioUsesGradeScenarios(project)) {
       return scenarios.map((sc) => ({
         scenarioId: sc.id,
         name: sc.name,
-        grade: computePortfolioGradeForProject(project, pointsRec, {
-          groupId,
-          schema: sc.schema,
-        }),
+        grade: computePortfolioScenarioGrade(
+          project,
+          pointsRec,
+          sc.schema,
+          groupId
+        ),
       }));
     }
     const g = computePortfolioGradeForProject(project, pointsRec, {
       groupId,
-      schema: scenarios[0]?.schema,
     });
     return scenarios.map((sc) => ({
       scenarioId: sc.id,
@@ -126,26 +127,6 @@ function gradeExtras(
 ) {
   if (isPortfolioExam(project.examType)) {
     const raw = opts?.portfolioRawAverage ?? null;
-    const usesScenarios = portfolioUsesGradeScenarios(project);
-    // Szenario-TLs: Abstand in Schema-Punkten; sonst Notengrade
-    if (usesScenarios && totalPoints != null) {
-      const next = getNextGradeInfo(totalPoints, schema);
-      return {
-        pointsToNext: next.pointsNeeded,
-        nextGrade: next.nextGrade,
-        nextGradeDirection: "better" as const,
-        nextGradeUnit: "points" as const,
-        isFailed: finalGrade != null && isFailedGrade(finalGrade),
-        pointsBelowPass: pointsBelowPass(totalPoints, schema),
-        scenarioGrades: scenarioGradesForPoints(
-          project,
-          totalPoints,
-          gradeOverride,
-          opts?.groupId,
-          opts?.pointsRec
-        ),
-      };
-    }
     const next =
       raw != null
         ? getAdjacentGermanGradeInfo(raw)
@@ -222,23 +203,16 @@ function resolveOverviewMetrics(
   rawAverage: number | null;
 } {
   if (isPortfolioExam(project.examType)) {
-    const ctx = { groupId, schema: gradeSchema };
+    const ctx = { groupId };
     const ful = computePortfolioFulfillment(project, pointsRec, ctx);
     const rawAverage = computePortfolioRawAverageForProject(
       project,
       pointsRec,
       ctx
     );
-    const maxPoints = gradeSchema.maxPoints;
-    // Bei Szenario-TLs: Schema-Punkte (unit·max) für next-grade in Punkten
-    const totalPoints =
-      ful == null
-        ? null
-        : portfolioUsesGradeScenarios(project) && maxPoints > 0
-          ? Math.round(ful.unitAvg * maxPoints * 10) / 10
-          : ful.displayPoints;
     return {
-      totalPoints,
+      // Erfüllungsäquivalent 0–100 (linear), unabhängig vom Szenario-Schema
+      totalPoints: ful?.displayPoints ?? null,
       percent: ful?.percent ?? null,
       rawAverage,
     };
@@ -257,12 +231,33 @@ function resolveOverviewMetrics(
 function portfolioComponentGradesForRow(
   project: ExamProject,
   pointsRec: PointsRecord | undefined,
-  groupId: string | null | undefined,
-  schema: GradeSchema
+  groupId: string | null | undefined
 ): Record<string, number | null> | undefined {
   if (!isPortfolioExam(project.examType)) return undefined;
   if (!(project.portfolioComponents?.length)) return undefined;
-  return effectivePortfolioGrades(project, pointsRec, { groupId, schema });
+  return effectivePortfolioGrades(project, pointsRec, { groupId });
+}
+
+function portfolioComponentDetailsForRow(
+  project: ExamProject,
+  pointsRec: PointsRecord | undefined,
+  groupId: string | null | undefined
+) {
+  if (!isPortfolioExam(project.examType)) return undefined;
+  if (!(project.portfolioComponents?.length)) return undefined;
+  return computePortfolioComponentDetails(
+    project,
+    pointsRec,
+    groupId,
+    (raw) => {
+      const adj = getAdjacentGermanGradeInfo(raw);
+      return {
+        pointsNeeded: adj.pointsNeeded,
+        nextGrade: adj.nextGrade,
+        direction: adj.direction,
+      };
+    }
+  );
 }
 
 /**
@@ -498,8 +493,12 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       portfolioComponentGrades: portfolioComponentGradesForRow(
         project,
         pointsRec,
-        student.groupId,
-        gradeSchema
+        student.groupId
+      ),
+      portfolioComponentDetails: portfolioComponentDetailsForRow(
+        project,
+        pointsRec,
+        student.groupId
       ),
       ...gradeExtras(
         totalPoints,
@@ -573,8 +572,12 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       portfolioComponentGrades: portfolioComponentGradesForRow(
         project,
         pointsRec,
-        student.groupId,
-        gradeSchema
+        student.groupId
+      ),
+      portfolioComponentDetails: portfolioComponentDetailsForRow(
+        project,
+        pointsRec,
+        student.groupId
       ),
       ...gradeExtras(
         totalPoints,
@@ -649,8 +652,12 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       portfolioComponentGrades: portfolioComponentGradesForRow(
         project,
         pointsRec,
-        student.groupId,
-        gradeSchema
+        student.groupId
+      ),
+      portfolioComponentDetails: portfolioComponentDetailsForRow(
+        project,
+        pointsRec,
+        student.groupId
       ),
       ...gradeExtras(
         totalPoints,
@@ -753,8 +760,12 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       portfolioComponentGrades: portfolioComponentGradesForRow(
         project,
         pointsRec,
-        stored.groupId,
-        gradeSchema
+        stored.groupId
+      ),
+      portfolioComponentDetails: portfolioComponentDetailsForRow(
+        project,
+        pointsRec,
+        stored.groupId
       ),
       ...gradeExtras(
         totalPoints,

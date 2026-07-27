@@ -389,7 +389,7 @@ export function StudentsTable({
       },
     ];
 
-    // Teilnoten links von der Gesamtnote
+    // Teilnoten links von der Gesamtnote (+ % vom Max, bis nächste Note)
     for (const pc of portfolioComponents) {
       cols.push({
         id: `pc-${pc.id}`,
@@ -400,11 +400,48 @@ export function StudentsTable({
           </span>
         ),
         cell: ({ row }) => {
-          const g = row.original.portfolioComponentGrades?.[pc.id];
+          const d = row.original.portfolioComponentDetails?.[pc.id];
+          const g =
+            d?.grade ?? row.original.portfolioComponentGrades?.[pc.id] ?? null;
+          const pct = d?.percent;
+          const next =
+            d?.pointsToNext != null && d.nextGrade != null
+              ? d
+              : null;
+          const isWorse = next?.nextGradeDirection === "worse";
           return (
-            <span className="tabular-nums" title={pc.name}>
-              {formatGrade(g ?? null)}
-            </span>
+            <div className="flex min-w-[5.5rem] flex-col gap-0.5 py-0.5" title={pc.name}>
+              <span className="tabular-nums font-semibold">
+                {formatGrade(g)}
+              </span>
+              {pct != null && (
+                <span className="text-[10px] tabular-nums text-muted-foreground">
+                  {formatPercent(pct)}
+                  {d?.pointsRaw != null && d?.pointsMax != null
+                    ? ` · ${formatPoints(d.pointsRaw, 1)}/${formatPoints(d.pointsMax, 0)}`
+                    : ""}
+                </span>
+              )}
+              {next && (
+                <span
+                  className={cn(
+                    "inline-flex w-fit max-w-full items-center rounded border px-1 py-px text-[9px] font-semibold tabular-nums",
+                    isWorse
+                      ? "border-rose-400 bg-rose-50 text-rose-900 dark:border-rose-500 dark:bg-rose-950/60 dark:text-rose-50"
+                      : "border-emerald-400 bg-emerald-50 text-emerald-900 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-50"
+                  )}
+                  title={
+                    isWorse
+                      ? "Abstand zur nächstschlechteren Note (Notengrade)"
+                      : "Abstand zur nächstbesseren Note (Notengrade)"
+                  }
+                >
+                  {isWorse ? "↓" : "↑"}
+                  {formatPoints(next.pointsToNext, 1)}→
+                  {formatGrade(next.nextGrade)}
+                </span>
+              )}
+            </div>
           );
         },
       });
