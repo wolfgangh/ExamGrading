@@ -26,7 +26,9 @@ import type { MoodlePointsRoundStep } from "@/lib/types";
 import {
   collapseLecturerGradesToSimple,
   defaultPortfolioComponents,
+  resolveComponentCriteriaScale,
   seedLecturerGradesFromSimple,
+  withComponentCriteriaScale,
 } from "@/lib/grades/portfolio";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -114,9 +116,16 @@ export default function SettingsPage() {
   ) => {
     setProject((prev) => ({
       ...prev,
-      portfolioComponents: (prev.portfolioComponents ?? []).map((c) =>
-        c.id === cid ? { ...c, ...patch } : c
-      ),
+      portfolioComponents: (prev.portfolioComponents ?? []).map((c) => {
+        if (c.id !== cid) return c;
+        if (patch.criteriaScale) {
+          return withComponentCriteriaScale(
+            { ...c, ...patch },
+            patch.criteriaScale
+          );
+        }
+        return { ...c, ...patch };
+      }),
     }));
   };
 
@@ -662,9 +671,10 @@ export default function SettingsPage() {
                     ...prev,
                     portfolioCriteriaMode: on,
                     portfolioComponents: (prev.portfolioComponents ?? []).map(
-                      (pc) =>
-                        on && !(pc.criteria?.length)
-                          ? {
+                      (pc) => {
+                        if (on && !(pc.criteria?.length)) {
+                          return withComponentCriteriaScale(
+                            {
                               ...pc,
                               criteria: [
                                 {
@@ -672,12 +682,22 @@ export default function SettingsPage() {
                                   name: "Inhalt",
                                   code: "K1",
                                   weight: 1,
-                                  scale: "percent" as CriterionScale,
-                                  maxPoints: 100,
+                                  scale: "points",
+                                  maxPoints: 6,
                                 },
                               ],
-                            }
-                          : pc
+                            },
+                            "points"
+                          );
+                        }
+                        if (on) {
+                          return withComponentCriteriaScale(
+                            pc,
+                            resolveComponentCriteriaScale(pc)
+                          );
+                        }
+                        return pc;
+                      }
                     ),
                   }))
                 }
@@ -777,6 +797,48 @@ export default function SettingsPage() {
                 </div>
                 {project.portfolioCriteriaMode && (
                   <div className="space-y-2 border-t pt-3">
+                    <div className="grid max-w-md gap-1.5">
+                      <Label className="text-xs">
+                        Bewertungsart dieser Teilleistung
+                      </Label>
+                      <Select
+                        value={resolveComponentCriteriaScale(c)}
+                        onValueChange={(v) => {
+                          if (!v) return;
+                          updatePortfolioComponent(c.id, {
+                            criteriaScale: v as CriterionScale,
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue>
+                            {
+                              CRITERION_SCALE_LABELS[
+                                resolveComponentCriteriaScale(c)
+                              ]
+                            }
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(
+                            Object.keys(
+                              CRITERION_SCALE_LABELS
+                            ) as CriterionScale[]
+                          ).map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {CRITERION_SCALE_LABELS[s]}
+                              {s === "grade"
+                                ? " (ohne Szenarien)"
+                                : " (Szenarien anwendbar)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        Gilt für alle Kriterien dieser TL. Punkte/Prozent:
+                        Noten über Notenszenarien; Note: feste Umrechnung.
+                      </p>
+                    </div>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs font-medium text-muted-foreground">
                         Kriterien für {c.code || c.name}
@@ -785,7 +847,8 @@ export default function SettingsPage() {
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() =>
+                        onClick={() => {
+                          const scale = resolveComponentCriteriaScale(c);
                           setProject((prev) => ({
                             ...prev,
                             portfolioComponents: (
@@ -794,6 +857,7 @@ export default function SettingsPage() {
                               pc.id === c.id
                                 ? {
                                     ...pc,
+                                    criteriaScale: scale,
                                     criteria: [
                                       ...(pc.criteria ?? []),
                                       {
@@ -801,15 +865,16 @@ export default function SettingsPage() {
                                         name: "Kriterium",
                                         code: `K${(pc.criteria?.length ?? 0) + 1}`,
                                         weight: 1,
-                                        scale: "percent" as CriterionScale,
-                                        maxPoints: 100,
+                                        scale,
+                                        maxPoints:
+                                          scale === "points" ? 6 : 100,
                                       },
                                     ],
                                   }
                                 : pc
                             ),
-                          }))
-                        }
+                          }));
+                        }}
                       >
                         <Plus className="size-3.5" />
                         Kriterium
@@ -825,7 +890,14 @@ export default function SettingsPage() {
                           key={crit.id}
                           className="space-y-2 rounded-md border bg-muted/20 p-2"
                         >
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_4rem_4rem_8rem_4.5rem_auto]">
+                          <div
+                            className={cn(
+                              "grid grid-cols-1 gap-2",
+                              resolveComponentCriteriaScale(c) === "points"
+                                ? "sm:grid-cols-[1fr_4rem_4rem_4.5rem_auto]"
+                                : "sm:grid-cols-[1fr_4rem_4rem_auto]"
+                            )}
+                          >
                             <Input
                               value={crit.name}
                               placeholder="Name"
@@ -911,82 +983,40 @@ export default function SettingsPage() {
                                 }))
                               }
                             />
-                            <Select
-                              value={crit.scale}
-                              onValueChange={(v) => {
-                                if (!v) return;
-                                setProject((prev) => ({
-                                  ...prev,
-                                  portfolioComponents: (
-                                    prev.portfolioComponents ?? []
-                                  ).map((pc) =>
-                                    pc.id === c.id
-                                      ? {
-                                          ...pc,
-                                          criteria: (pc.criteria ?? []).map(
-                                            (k) =>
-                                              k.id === crit.id
-                                                ? {
-                                                    ...k,
-                                                    scale: v as CriterionScale,
-                                                  }
-                                                : k
-                                          ),
-                                        }
-                                      : pc
-                                  ),
-                                }));
-                              }}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue>
-                                  {CRITERION_SCALE_LABELS[crit.scale]}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(
-                                  Object.keys(
-                                    CRITERION_SCALE_LABELS
-                                  ) as CriterionScale[]
-                                ).map((s) => (
-                                  <SelectItem key={s} value={s}>
-                                    {CRITERION_SCALE_LABELS[s]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              type="number"
-                              value={crit.maxPoints ?? ""}
-                              placeholder="Max"
-                              disabled={crit.scale !== "points"}
-                              title="Max. Punkte (nur bei Skala Punkte)"
-                              onChange={(e) =>
-                                setProject((prev) => ({
-                                  ...prev,
-                                  portfolioComponents: (
-                                    prev.portfolioComponents ?? []
-                                  ).map((pc) =>
-                                    pc.id === c.id
-                                      ? {
-                                          ...pc,
-                                          criteria: (pc.criteria ?? []).map(
-                                            (k) =>
-                                              k.id === crit.id
-                                                ? {
-                                                    ...k,
-                                                    maxPoints:
-                                                      Number(e.target.value) ||
-                                                      0,
-                                                  }
-                                                : k
-                                          ),
-                                        }
-                                      : pc
-                                  ),
-                                }))
-                              }
-                            />
+                            {resolveComponentCriteriaScale(c) === "points" && (
+                              <Input
+                                type="number"
+                                value={crit.maxPoints ?? ""}
+                                placeholder="Max"
+                                title="Max. Punkte dieses Kriteriums"
+                                onChange={(e) =>
+                                  setProject((prev) => ({
+                                    ...prev,
+                                    portfolioComponents: (
+                                      prev.portfolioComponents ?? []
+                                    ).map((pc) =>
+                                      pc.id === c.id
+                                        ? {
+                                            ...pc,
+                                            criteria: (pc.criteria ?? []).map(
+                                              (k) =>
+                                                k.id === crit.id
+                                                  ? {
+                                                      ...k,
+                                                      maxPoints:
+                                                        Number(
+                                                          e.target.value
+                                                        ) || 0,
+                                                    }
+                                                  : k
+                                            ),
+                                          }
+                                        : pc
+                                    ),
+                                  }))
+                                }
+                              />
+                            )}
                             <Button
                               type="button"
                               variant="ghost"

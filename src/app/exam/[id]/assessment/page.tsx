@@ -46,13 +46,15 @@ import {
 } from "@/components/ui/tooltip";
 import {
   averageLecturerGradesForComponent,
-  componentGradeFromCriteria,
   computePortfolioRawAverageForProject,
   disabledCriteriaForGroup,
   effectivePortfolioGrades,
-  gradeFromCriterionValues,
+  gradeFromUnitAvg,
   groupPortfolioFillStatus,
+  resolveComponentCriteriaScale,
   shortLecturerLabel,
+  unitAvgFromCriterionValues,
+  unitAvgForPortfolioComponent,
 } from "@/lib/grades/portfolio";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import {
@@ -1527,24 +1529,36 @@ export default function AssessmentPage() {
                                         rowGroupId,
                                         c.id
                                       );
-                                    const note = activeLecturer
-                                      ? gradeFromCriterionValues(
+                                    const scale =
+                                      resolveComponentCriteriaScale(c);
+                                    const unit = activeLecturer
+                                      ? unitAvgFromCriterionValues(
                                           rec
                                             ?.portfolioCriterionValuesByLecturer?.[
                                             c.id
                                           ]?.[activeLecturer],
-                                          c.criteria,
+                                          (c.criteria ?? []).map((k) => ({
+                                            ...k,
+                                            scale,
+                                          })),
                                           {
                                             disabledCriterionIds: disabledIds,
                                           }
                                         )
-                                      : componentGradeFromCriteria(
+                                      : unitAvgForPortfolioComponent(
+                                          project,
+                                          rec,
                                           c,
-                                          rec?.portfolioCriterionValues?.[c.id],
-                                          {
-                                            disabledCriterionIds: disabledIds,
-                                          }
+                                          rowGroupId
                                         );
+                                    const note =
+                                      unit == null
+                                        ? null
+                                        : gradeFromUnitAvg(
+                                            unit,
+                                            scale,
+                                            project.gradeSchema
+                                          );
                                     return (
                                       <TableCell
                                         key={`${c.id}::note`}

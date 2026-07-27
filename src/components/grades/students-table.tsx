@@ -387,26 +387,9 @@ export function StudentsTable({
           </span>
         ),
       },
-      {
-        id: "grade",
-        accessorFn: (r) => r.finalGrade ?? 99,
-        header: "Note",
-        cell: ({ row }) => (
-          <button
-            type="button"
-            className="tabular-nums font-semibold hover:underline disabled:no-underline"
-            disabled={!onEditGrade}
-            onClick={() => onEditGrade?.(row.original.key)}
-          >
-            {formatGrade(row.original.finalGrade)}
-            {row.original.gradeOverride != null && (
-              <span className="ml-1 text-xs text-amber-700">*</span>
-            )}
-          </button>
-        ),
-      },
     ];
 
+    // Teilnoten links von der Gesamtnote
     for (const pc of portfolioComponents) {
       cols.push({
         id: `pc-${pc.id}`,
@@ -426,6 +409,25 @@ export function StudentsTable({
         },
       });
     }
+
+    cols.push({
+      id: "grade",
+      accessorFn: (r) => r.finalGrade ?? 99,
+      header: "Note",
+      cell: ({ row }) => (
+        <button
+          type="button"
+          className="tabular-nums font-semibold hover:underline disabled:no-underline"
+          disabled={!onEditGrade}
+          onClick={() => onEditGrade?.(row.original.key)}
+        >
+          {formatGrade(row.original.finalGrade)}
+          {row.original.gradeOverride != null && (
+            <span className="ml-1 text-xs text-amber-700">*</span>
+          )}
+        </button>
+      ),
+    });
 
     if (showNextGrade) {
       const unitFromRows = rows.find((r) => r.nextGradeUnit)?.nextGradeUnit;
@@ -462,19 +464,32 @@ export function StudentsTable({
           const dir = r.nextGradeDirection ?? "better";
           const dirLabel =
             dir === "worse" ? "nächstschlechtere Note" : "nächstbessere Note";
+          const isWorse = dir === "worse";
           return (
             <span
               className={cn(
-                "tabular-nums",
-                dir === "worse" &&
-                  "font-medium text-amber-800 dark:text-amber-200"
+                "inline-flex max-w-full flex-wrap items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-semibold tabular-nums shadow-sm",
+                isWorse
+                  ? "border-rose-500/80 bg-rose-100 text-rose-950 dark:border-rose-400 dark:bg-rose-950/70 dark:text-rose-50"
+                  : "border-emerald-500/80 bg-emerald-100 text-emerald-950 dark:border-emerald-400 dark:bg-emerald-950/70 dark:text-emerald-50"
               )}
               title={`${dirLabel} · Abstand in ${unit}`}
             >
-              {formatPoints(r.pointsToNext, 1)} → {formatGrade(r.nextGrade)}
-              <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+              <span
+                className={cn(
+                  "rounded px-1 py-px text-[10px] font-bold uppercase tracking-wide",
+                  isWorse
+                    ? "bg-rose-600 text-white dark:bg-rose-500"
+                    : "bg-emerald-700 text-white dark:bg-emerald-500"
+                )}
+              >
+                {isWorse ? "schlechter ↓" : "besser ↑"}
+              </span>
+              <span>
+                {formatPoints(r.pointsToNext, 1)} → {formatGrade(r.nextGrade)}
+              </span>
+              <span className="text-[10px] font-medium opacity-80">
                 {unit === "Notengrade" ? "N" : "P"}
-                {dir === "worse" ? "↓" : "↑"}
               </span>
             </span>
           );

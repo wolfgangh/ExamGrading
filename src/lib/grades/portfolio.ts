@@ -1,10 +1,13 @@
 import type {
   AssessmentCriterion,
+  CriterionScale,
   ExamProject,
+  GradeSchema,
   PointsRecord,
   PortfolioComponent,
 } from "@/lib/types";
 import { GERMAN_GRADES } from "@/lib/types";
+import { calculateGrade } from "@/lib/grades/schema";
 import {
   countMissingCriteria,
   gradeToUnit,
@@ -133,7 +136,94 @@ export type PortfolioGradeContext = {
   groupId?: string | null;
   /** Optional: nur diese Teilleistung (Füllstand / Missing) */
   componentId?: string | null;
+  /**
+   * Notenschlüssel für TL mit criteriaScale points/percent.
+   * Ohne Schema: Fallback 5−4·unit (wie grade-Skala).
+   */
+  schema?: GradeSchema | null;
 };
+
+/** Einheitliche Kriterien-Skala einer TL (Migration + Default). */
+export function resolveComponentCriteriaScale(
+  component: PortfolioComponent
+): CriterionScale {
+  if (
+    component.criteriaScale === "percent" ||
+    component.criteriaScale === "points" ||
+    component.criteriaScale === "grade"
+  ) {
+    return component.criteriaScale;
+  }
+  const scales = (component.criteria ?? []).map((k) => k.scale);
+  if (scales.length === 0) return "grade";
+  const counts: Record<string, number> = {};
+  for (const s of scales) {
+    counts[s] = (counts[s] ?? 0) + 1;
+  }
+  let best: CriterionScale = scales[0];
+  let bestN = 0;
+  for (const [s, n] of Object.entries(counts)) {
+    if (n > bestN) {
+      bestN = n;
+      best = s as CriterionScale;
+    }
+  }
+  return best;
+}
+
+/** Skala auf TL und alle Kriterien schreiben (eine Bewertungsart je TL). */
+export function withComponentCriteriaScale(
+  component: PortfolioComponent,
+  scale: CriterionScale
+): PortfolioComponent {
+  const defaultMax = scale === "points" ? 6 : undefined;
+  return {
+    ...component,
+    criteriaScale: scale,
+    criteria: (component.criteria ?? []).map((k) => ({
+      ...k,
+      scale,
+      maxPoints:
+        scale === "points"
+          ? k.maxPoints != null && k.maxPoints > 0
+            ? k.maxPoints
+            : defaultMax
+          : k.maxPoints,
+    })),
+  };
+}
+
+/** Portfolio nutzt Szenarien, wenn mind. eine TL Punkte/Prozent-Kriterien hat. */
+export function portfolioUsesGradeScenarios(
+  project: Pick<
+    ExamProject,
+    "examType" | "portfolioCriteriaMode" | "portfolioComponents"
+  >
+): boolean {
+  if (project.examType !== "portfolio") return false;
+  if (project.portfolioCriteriaMode !== true) return false;
+  return (project.portfolioComponents ?? []).some((c) => {
+    const s = resolveComponentCriteriaScale(c);
+    return s === "points" || s === "percent";
+  });
+}
+
+/**
+ * Unit 0…1 → Teilnote.
+ * grade: 5−4·unit; points/percent: calculateGrade(unit·max, schema).
+ */
+export function gradeFromUnitAvg(
+  unitAvg: number,
+  scale: CriterionScale,
+  schema?: GradeSchema | null
+): number {
+  const u = Math.min(1, Math.max(0, unitAvg));
+  if (scale === "grade" || !schema || schema.maxPoints <= 0) {
+    return roundToNearestGermanGrade(5 - 4 * u);
+  }
+  const score = u * schema.maxPoints;
+  return calculateGrade(score, schema);
+}
 
 /**
  * Gewichteter Unit-Mittelwert 0…1 aus Kriterienwerten
@@ -261,9 +351,45 @@ export function disabledCriteriaForGroup(
   return g?.disabledPortfolioCriteria?.[componentId] ?? [];
 }
 
+/** Unit 0…1 einer TL (Kriterien ± Dozenten). */
+export function unitAvgForPortfolioComponent(
+  project: PortfolioProjectSlice,
+  rec: PointsRecord | undefined | null,
+  component: PortfolioComponent,
+  groupId?: string | null
+): number | null {
+  const disabled = disabledCriteriaForGroup(project, groupId, component.id);
+  const crits = (component.criteria ?? []).map((k) => ({
+    ...k,
+    scale: resolveComponentCriteriaScale(component),
+  }));
+  if (!project.portfolioPerLecturerGrading) {
+    return unitAvgFromCriterionValues(
+      rec?.portfolioCriterionValues?.[component.id],
+      crits,
+      { disabledCriterionIds: disabled }
+    );
+  }
+  const lecturers = (project.lecturers ?? [])
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (!lecturers.length) return null;
+  let acc = 0;
+  for (const name of lecturers) {
+    const u = unitAvgFromCriterionValues(
+      rec?.portfolioCriterionValuesByLecturer?.[component.id]?.[name],
+      crits,
+      { disabledCriterionIds: disabled }
+    );
+    if (u == null) return null;
+    acc += u;
+  }
+  return acc / lecturers.length;
+}
+
 /**
  * Effektive Teilnoten pro Teilleistung
- * (Note direkt, Dozenten-Mittel, oder aus Kriterien).
+ * (Note direkt, Dozenten-Mittel, oder aus Kriterien ± Szenario-Schema).
  */
 export function effectivePortfolioGrades(
   project: PortfolioProjectSlice,
@@ -273,54 +399,15 @@ export function effectivePortfolioGrades(
   const components = project.portfolioComponents ?? [];
   const criteriaMode = project.portfolioCriteriaMode === true;
   const groupId = ctx?.groupId;
+  const schema = ctx?.schema;
   const out: Record<string, number | null> = {};
 
   if (criteriaMode) {
-    if (!project.portfolioPerLecturerGrading) {
-      for (const c of components) {
-        out[c.id] = gradeFromCriterionValues(
-          rec?.portfolioCriterionValues?.[c.id],
-          c.criteria,
-          {
-            disabledCriterionIds: disabledCriteriaForGroup(
-              project,
-              groupId,
-              c.id
-            ),
-          }
-        );
-      }
-      return out;
-    }
-    const lecturers = (project.lecturers ?? [])
-      .map((l) => l.trim())
-      .filter(Boolean);
     for (const c of components) {
-      const disabled = disabledCriteriaForGroup(project, groupId, c.id);
-      const activeCrits = (c.criteria ?? []).filter(
-        (k) => !disabled.includes(k.id)
-      );
-      if (!lecturers.length || !activeCrits.length) {
-        out[c.id] = null;
-        continue;
-      }
-      let acc = 0;
-      let ok = true;
-      for (const name of lecturers) {
-        const g = gradeFromCriterionValues(
-          rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name],
-          c.criteria,
-          { disabledCriterionIds: disabled }
-        );
-        if (g == null) {
-          ok = false;
-          break;
-        }
-        acc += g;
-      }
-      out[c.id] = ok
-        ? Math.round((acc / lecturers.length) * 1000) / 1000
-        : null;
+      const scale = resolveComponentCriteriaScale(c);
+      const unit = unitAvgForPortfolioComponent(project, rec, c, groupId);
+      out[c.id] =
+        unit == null ? null : gradeFromUnitAvg(unit, scale, schema);
     }
     return out;
   }

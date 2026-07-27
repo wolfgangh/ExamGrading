@@ -55,6 +55,11 @@ export interface PortfolioComponent {
   /** Relatives Gewicht (z. B. 1 und 1 = je 50 %) */
   weight: number;
   /**
+   * Einheitliche Bewertungsart aller Kriterien dieser TL (Kriterienmodus).
+   * points/percent → Noten über Szenario-Schema; grade → feste Umrechnung.
+   */
+  criteriaScale?: CriterionScale;
+  /**
    * Optional: Bewertungskriterien dieser Teilleistung
    * (wenn project.portfolioCriteriaMode aktiv).
    */
