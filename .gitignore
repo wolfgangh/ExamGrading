@@ -40,3 +40,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local screenshots / drafts
+01_*.png
+02_*.png
+03_*.png
+*.docx
+Noten*.pdf
+notenmeldung.pdf
+oth_hoessl_header.*
