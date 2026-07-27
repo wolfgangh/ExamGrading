@@ -109,22 +109,29 @@ export function buildWorkflowSteps(
   const subMapNeeded = needsSubAreaMapping(project);
   const subMapOk = isSubAreaMappingComplete(project);
   const hisInRows = rows.filter((r) => r.inHis);
+  /** Bewertet oder explizit/importiert No-Show */
+  const isPersonAssessmentComplete = (r: (typeof rows)[0]) =>
+    r.status === "no_show" ||
+    (r.finalGrade != null &&
+      (r.status === "export_ready" || r.status === "graded"));
   const staCriteriaReady =
     isStaCriteriaExam(project.examType) &&
     (project.criteria?.length ?? 0) > 0 &&
     hisInRows.length > 0 &&
-    hisInRows.every((r) => r.finalGrade != null && r.status === "export_ready");
+    hisInRows.every(isPersonAssessmentComplete);
   const staManualReady =
     isStaManualExam(project.examType) &&
     hisInRows.length > 0 &&
     hisInRows.every(
-      (r) => r.finalGrade != null && (r.gradeOverride != null || r.hasPoints)
+      (r) =>
+        r.status === "no_show" ||
+        (r.finalGrade != null && (r.gradeOverride != null || r.hasPoints))
     );
   const portfolioReady =
     isPortfolioExam(project.examType) &&
     (project.portfolioComponents?.length ?? 0) > 0 &&
     hisInRows.length > 0 &&
-    hisInRows.every((r) => r.finalGrade != null && r.status === "export_ready");
+    hisInRows.every(isPersonAssessmentComplete);
   const pointsDone = isHisManual
     ? isStaCriteriaExam(project.examType)
       ? staCriteriaReady

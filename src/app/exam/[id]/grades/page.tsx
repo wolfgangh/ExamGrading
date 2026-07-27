@@ -92,6 +92,7 @@ import {
 } from "@/components/ui/table";
 import { FileSpreadsheet, FileText, ListChecks } from "lucide-react";
 import {
+  isHisManualAssessmentExam,
   isPortfolioExam,
   isStaCriteriaExam,
   isStaManualExam,
@@ -103,6 +104,7 @@ import {
   sortedStudentGroups,
   type GroupFilterId,
 } from "@/lib/student-groups";
+import { setStudentNotAttended } from "@/lib/grades/not-attended";
 
 export default function GradesPage() {
   const { id } = useParams<{ id: string }>();
@@ -318,6 +320,20 @@ export default function GradesPage() {
       return { ...prev, points };
     });
     setEditKey(null);
+  };
+
+  const editIsNotAttended = useMemo(() => {
+    if (!editKey || !project) return false;
+    const rec = project.points.find(
+      (p) => normalizeMatriculation(p.matriculationNumber) === editKey
+    );
+    return rec?.notAttended === true;
+  }, [editKey, project]);
+
+  const toggleNotAttended = (value: boolean) => {
+    if (!editKey) return;
+    setProject((prev) => setStudentNotAttended(prev, editKey, value));
+    if (value) setEditKey(null);
   };
 
   return (
@@ -999,10 +1015,33 @@ export default function GradesPage() {
               />
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:justify-between">
-            <Button type="button" variant="outline" onClick={clearOverride}>
-              Override entfernen
-            </Button>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={clearOverride}>
+                Override entfernen
+              </Button>
+              {project && isHisManualAssessmentExam(project.examType) && (
+                <Button
+                  type="button"
+                  variant={editIsNotAttended ? "secondary" : "outline"}
+                  className={
+                    editIsNotAttended
+                      ? undefined
+                      : "border-orange-400 text-orange-950 dark:text-orange-100"
+                  }
+                  onClick={() => toggleNotAttended(!editIsNotAttended)}
+                  title={
+                    editIsNotAttended
+                      ? "Person wieder als zu bewerten führen"
+                      : "Keine Teilnoten nötig – zählt als No-Show im Export"
+                  }
+                >
+                  {editIsNotAttended
+                    ? "Nicht-angetreten aufheben"
+                    : "Als nicht angetreten markieren"}
+                </Button>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -1011,7 +1050,11 @@ export default function GradesPage() {
               >
                 Abbrechen
               </Button>
-              <Button type="button" onClick={saveOverride}>
+              <Button
+                type="button"
+                onClick={saveOverride}
+                disabled={editIsNotAttended}
+              >
                 Speichern
               </Button>
             </div>

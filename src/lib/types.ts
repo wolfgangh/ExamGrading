@@ -185,6 +185,11 @@ export interface PointsRecord {
    * Wird beim ersten Setzen von gradeOverride aus der berechneten Note übernommen.
    */
   previousGrade?: number | null;
+  /**
+   * Portfolio/StA: Person nicht angetreten.
+   * Keine Teilnoten/Kriterien nötig; Status no_show (leere Note im HIS-Export).
+   */
+  notAttended?: boolean;
   comment?: string;
   source: PointsSource;
   /** Punkte pro Aufgabe (questionId) */

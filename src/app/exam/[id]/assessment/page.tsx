@@ -95,6 +95,7 @@ import {
   sortedStudentGroups,
   type GroupFilterId,
 } from "@/lib/student-groups";
+import { setStudentNotAttended } from "@/lib/grades/not-attended";
 
 /** Ein Begriff oder mehrere (Komma/Semikolon/Zeilenumbruch = ODER) */
 function matchesNameSearch(row: EnrichedStudentRow, query: string): boolean {
@@ -1532,23 +1533,61 @@ export default function AssessmentPage() {
                               stickyBg
                             )}
                           >
-                            {r.student.lastName}, {r.student.firstName}
-                            {ungrouped && (
-                              <Badge
-                                variant="outline"
-                                className="ml-1 border-amber-500/60 bg-amber-100/80 text-[0.625rem] text-amber-950 dark:bg-amber-900 dark:text-amber-50"
-                              >
-                                ohne Gruppe
-                              </Badge>
-                            )}
-                            {!r.inHis && (
-                              <Badge
-                                variant="outline"
-                                className="ml-1 text-[0.625rem]"
-                              >
-                                manuell
-                              </Badge>
-                            )}
+                            <div className="flex flex-col items-start gap-1">
+                              <span>
+                                {r.student.lastName}, {r.student.firstName}
+                                {ungrouped && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-1 border-amber-500/60 bg-amber-100/80 text-[0.625rem] text-amber-950 dark:bg-amber-900 dark:text-amber-50"
+                                  >
+                                    ohne Gruppe
+                                  </Badge>
+                                )}
+                                {!r.inHis && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-1 text-[0.625rem]"
+                                  >
+                                    manuell
+                                  </Badge>
+                                )}
+                                {r.status === "no_show" && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-1 border-orange-400/70 bg-orange-50 text-[0.625rem] text-orange-950 dark:bg-orange-950/50 dark:text-orange-100"
+                                  >
+                                    nicht angetreten
+                                  </Badge>
+                                )}
+                              </span>
+                              {r.inHis && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-1.5 text-[0.625rem] text-muted-foreground"
+                                  title={
+                                    r.status === "no_show"
+                                      ? "Wieder bewerten (Teilnoten erforderlich)"
+                                      : "Keine Teilnoten – Workflow/Export freigeben (No-Show)"
+                                  }
+                                  onClick={() =>
+                                    setProject((prev) =>
+                                      setStudentNotAttended(
+                                        prev,
+                                        r.key,
+                                        r.status !== "no_show"
+                                      )
+                                    )
+                                  }
+                                >
+                                  {r.status === "no_show"
+                                    ? "Antritt markieren"
+                                    : "Nicht angetreten"}
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className={cn("font-mono text-xs", rowBg)}>
                             {r.key}

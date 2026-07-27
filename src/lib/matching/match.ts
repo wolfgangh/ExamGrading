@@ -413,11 +413,15 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       calculatedGrade != null ||
       (isHisManualAssessmentExam(project.examType) && gradeOverride != null);
     const needsGradingCount = pointsRec?.needsGrading?.length ?? 0;
+    const notAttended = pointsRec?.notAttended === true;
     const missingCriteria =
-      isStaCriteriaExam(project.examType) && project.criteria?.length
+      !notAttended &&
+      isStaCriteriaExam(project.examType) &&
+      project.criteria?.length
         ? countMissingCriteria(pointsRec?.criterionValues, project.criteria)
         : 0;
     const missingPortfolio =
+      !notAttended &&
       isPortfolioExam(project.examType) &&
       (project.portfolioComponents?.length ?? 0) > 0
         ? countMissingPortfolioCells(project, pointsRec, {
@@ -425,27 +429,34 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
           })
         : 0;
     const hasOpenGrading =
-      needsGradingCount > 0 || missingCriteria > 0 || missingPortfolio > 0;
+      !notAttended &&
+      (needsGradingCount > 0 || missingCriteria > 0 || missingPortfolio > 0);
     // Punkte retten Antritt (z. B. Moodle-Antritt fehlt, THE aber geschrieben)
-    if (hasPoints && attended !== true) {
+    if (hasPoints && attended !== true && !notAttended) {
       attended = true;
     }
-    // StA / Portfolio: kein No-Show über Antrittsliste
-    const effectiveAttended = isHisManualAssessmentExam(project.examType)
-      ? true
-      : attended;
+    // StA / Portfolio: standardmäßig als angetreten; manuell „nicht angetreten“ ausnehmen
+    const effectiveAttended = notAttended
+      ? false
+      : isHisManualAssessmentExam(project.examType)
+        ? true
+        : attended;
 
     const status = deriveStudentStatus({
       inHis: true,
       attended: effectiveAttended,
-      hasPoints,
-      finalGrade,
+      hasPoints: notAttended ? false : hasPoints,
+      finalGrade: notAttended ? null : finalGrade,
       hasGradeOverride: gradeOverride != null,
       hasOpenGrading,
       skipNoShow: isHisManualAssessmentExam(project.examType),
+      notAttended,
     });
 
     const warnings: string[] = [];
+    if (notAttended) {
+      warnings.push("Als nicht angetreten markiert – keine Teilnoten nötig");
+    }
     if (
       !isPortfolioExam(project.examType) &&
       totalPoints != null &&
@@ -460,7 +471,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     ) {
       warnings.push("Negative Punkte");
     }
-    if (effectiveAttended === true && !hasPoints) {
+    if (!notAttended && effectiveAttended === true && !hasPoints) {
       warnings.push(
         isPortfolioExam(project.examType)
           ? "Teilnoten unvollständig"
@@ -470,7 +481,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     if (gradeOverride != null) {
       warnings.push("Note manuell überschrieben");
     }
-    if (needsGradingCount > 0) {
+    if (needsGradingCount > 0 && !notAttended) {
       warnings.push(
         `${needsGradingCount} Aufgabe(n) „Bewertung notwendig“ – nicht exportbereit`
       );
@@ -501,15 +512,15 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       student,
       inHis: true,
       attended: effectiveAttended,
-      hasPoints,
-      totalPoints,
-      percent,
-      calculatedGrade,
-      finalGrade,
+      hasPoints: notAttended ? false : hasPoints,
+      totalPoints: notAttended ? null : totalPoints,
+      percent: notAttended ? null : percent,
+      calculatedGrade: notAttended ? null : calculatedGrade,
+      finalGrade: notAttended ? null : finalGrade,
       status,
       warnings,
       subAreaPoints,
-      gradeOverride,
+      gradeOverride: notAttended ? null : gradeOverride,
       comment: pointsRec?.comment,
       attempt: student.attempt ?? null,
       orderIndex: rows.length,
@@ -519,7 +530,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       mergedFromMatriculation: mergedFrom?.[0],
       multiProgram,
       attendanceWithoutHis: false,
-      needsGradingCount,
+      needsGradingCount: notAttended ? 0 : needsGradingCount,
       portfolioComponentGrades: portfolioComponentGradesForRow(
         project,
         pointsRec,
@@ -741,11 +752,15 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     );
     const finalGrade =
       gradeOverride != null ? gradeOverride : calculatedGrade;
+    const notAttended = pointsRec?.notAttended === true;
     const missingCriteria =
-      isStaCriteriaExam(project.examType) && project.criteria?.length
+      !notAttended &&
+      isStaCriteriaExam(project.examType) &&
+      project.criteria?.length
         ? countMissingCriteria(pointsRec?.criterionValues, project.criteria)
         : 0;
     const missingPortfolio =
+      !notAttended &&
       isPortfolioExam(project.examType) &&
       (project.portfolioComponents?.length ?? 0) > 0
         ? countMissingPortfolioCells(project, pointsRec, {
@@ -753,6 +768,9 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
           })
         : 0;
     const warnings = ["Manuell hinzugefügt – nicht in HISinOne-Masterliste"];
+    if (notAttended) {
+      warnings.push("Als nicht angetreten markiert");
+    }
     if (missingCriteria > 0) {
       warnings.push(`${missingCriteria} Kriterium/Kriterien ohne Wert`);
     }
@@ -764,26 +782,30 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       key,
       student: stored,
       inHis: false,
-      attended: true,
-      hasPoints:
-        totalPoints != null ||
-        calculatedGrade != null ||
-        gradeOverride != null,
-      totalPoints,
-      percent,
-      calculatedGrade,
-      finalGrade,
-      status: deriveStudentStatus({
-        inHis: false,
-        attended: true,
-        hasPoints:
-          totalPoints != null ||
+      attended: notAttended ? false : true,
+      hasPoints: notAttended
+        ? false
+        : totalPoints != null ||
           calculatedGrade != null ||
           gradeOverride != null,
-        finalGrade,
+      totalPoints: notAttended ? null : totalPoints,
+      percent: notAttended ? null : percent,
+      calculatedGrade: notAttended ? null : calculatedGrade,
+      finalGrade: notAttended ? null : finalGrade,
+      status: deriveStudentStatus({
+        inHis: false,
+        attended: notAttended ? false : true,
+        hasPoints: notAttended
+          ? false
+          : totalPoints != null ||
+            calculatedGrade != null ||
+            gradeOverride != null,
+        finalGrade: notAttended ? null : finalGrade,
         hasGradeOverride: gradeOverride != null,
-        hasOpenGrading: missingCriteria > 0 || missingPortfolio > 0,
+        hasOpenGrading:
+          !notAttended && (missingCriteria > 0 || missingPortfolio > 0),
         skipNoShow: true,
+        notAttended,
       }),
       warnings,
       subAreaPoints,

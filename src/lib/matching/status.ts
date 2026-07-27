@@ -10,6 +10,8 @@ export function deriveStudentStatus(input: {
   hasOpenGrading?: boolean;
   /** Studienarbeit o. Ä.: kein No-Show-Konzept über Antrittsliste */
   skipNoShow?: boolean;
+  /** Manuell: nicht angetreten (Portfolio/StA) */
+  notAttended?: boolean;
 }): StudentStatus {
   const {
     inHis,
@@ -19,6 +21,7 @@ export function deriveStudentStatus(input: {
     hasGradeOverride,
     hasOpenGrading,
     skipNoShow,
+    notAttended,
   } = input;
 
   if (!inHis) {
@@ -26,6 +29,11 @@ export function deriveStudentStatus(input: {
     if (finalGrade != null && !hasOpenGrading) return "graded";
     if (hasPoints || attended) return "mismatch";
     return "mismatch";
+  }
+
+  // Explizit markiert (auch bei Portfolio/StA mit skipNoShow)
+  if (notAttended) {
+    return "no_show";
   }
 
   if (!skipNoShow && attended === false) {
