@@ -23,6 +23,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { exportGradesListPdf } from "@/lib/pdf/export-grades-pdf";
+import { isPortfolioExam, isStaCriteriaExam } from "@/lib/types";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   exportManualGradesPdf,
   filterManualGradeRows,
@@ -101,6 +103,7 @@ export default function DocumentsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [includeCriterionRaw, setIncludeCriterionRaw] = useState(false);
 
   const manualRows = useMemo(
     () => (rows ? filterManualGradeRows(rows) : []),
@@ -304,10 +307,35 @@ export default function DocumentsPage() {
             <CardTitle className="text-base">1. Notenliste</CardTitle>
             <CardDescription>
               Alle Teilnehmer inkl. No-Shows, mit Unterschriftsfeldern und
-              dokumentierten Matrikel-Prüfungen.
+              dokumentierten Matrikel-Prüfungen. Teilnoten je Teilleistung in der
+              Haupttabelle; Rohwerte optional.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {project &&
+              ((isPortfolioExam(project.examType) &&
+                project.portfolioCriteriaMode) ||
+                (isStaCriteriaExam(project.examType) &&
+                  (project.criteria?.length ?? 0) > 0)) && (
+                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={includeCriterionRaw}
+                    onCheckedChange={(v) =>
+                      setIncludeCriterionRaw(v === true)
+                    }
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-medium">
+                      Rohwerte der Teilkriterien anhängen
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Zusätzliche Tabelle(n) mit K1, K2, … (bei vielen Kriterien
+                      in Abschnitten, ohne horizontalen Überlauf).
+                    </span>
+                  </span>
+                </label>
+              )}
             <Button
               size="sm"
               variant="outline"
@@ -315,7 +343,10 @@ export default function DocumentsPage() {
               onClick={() =>
                 run(
                   "grades",
-                  () => exportGradesListPdf(project, rows),
+                  () =>
+                    exportGradesListPdf(project, rows, {
+                      includeCriterionRawValues: includeCriterionRaw,
+                    }),
                   "Notenliste heruntergeladen."
                 )
               }

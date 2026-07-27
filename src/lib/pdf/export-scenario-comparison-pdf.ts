@@ -316,7 +316,8 @@ export function exportScenarioComparisonPdf(
 
   savePdf(
     doc,
-    `ExamGrade_${project.name || "Pruefung"}_Szenarienvergleich`
+    `ExamGrade_${project.name || "Pruefung"}_Szenarienvergleich`,
+    { examName: project.name, examNumber: project.examNumber }
   );
 }
 

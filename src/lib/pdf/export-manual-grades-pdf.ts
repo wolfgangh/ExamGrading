@@ -83,7 +83,10 @@ export function exportManualGradesPdf(
       PDF_MARGIN,
       y + 6
     );
-    savePdf(doc, `Manuelle_Notenmeldung_${project.name || "Pruefung"}`);
+    savePdf(doc, `Manuelle_Notenmeldung_${project.name || "Pruefung"}`, {
+      examName: project.name,
+      examNumber: project.examNumber,
+    });
     return;
   }
 
@@ -135,5 +138,8 @@ export function exportManualGradesPdf(
 
   drawSignatureBlock(doc, project.lecturers ?? [], finalY + 6);
 
-  savePdf(doc, `Manuelle_Notenmeldung_${project.name || "Pruefung"}`);
+  savePdf(doc, `Manuelle_Notenmeldung_${project.name || "Pruefung"}`, {
+    examName: project.name,
+    examNumber: project.examNumber,
+  });
 }

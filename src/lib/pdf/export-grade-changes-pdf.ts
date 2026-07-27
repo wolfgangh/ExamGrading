@@ -178,5 +178,8 @@ export function exportGradeChangesPdf(
     extraLines: ["PK-Vorsitzende/r"],
   });
 
-  savePdf(doc, `Notenaenderung_${project.name || "Pruefung"}`);
+  savePdf(doc, `Notenaenderung_${project.name || "Pruefung"}`, {
+    examName: project.name,
+    examNumber: project.examNumber,
+  });
 }

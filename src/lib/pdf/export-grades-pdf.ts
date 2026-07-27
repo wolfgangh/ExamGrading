@@ -11,6 +11,7 @@ import {
   examHeaderLines,
   findPointsRecord,
   getLastTableY,
+  pdfFooterFromProject,
   pdfGrade,
   pdfPoints,
   pdfText,
@@ -52,7 +53,10 @@ function meanFinite(values: (number | null | undefined)[]): number | null {
   return Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100;
 }
 
-function formatCellValue(v: number | null, kind: "points" | "percent" | "grade"): string {
+function formatCellValue(
+  v: number | null,
+  kind: "points" | "percent" | "grade"
+): string {
   if (v == null || !Number.isFinite(v)) return "–";
   if (kind === "grade") return pdfText(formatGrade(v));
   if (kind === "percent") return pdfText(formatPoints(v, 0));
@@ -64,8 +68,25 @@ type ExtraCol = {
   value: (r: EnrichedStudentRow, rec: PointsRecord | undefined) => string;
 };
 
-/** Kriterien- und TL-Spalten für Portfolio-Kriterienmodus */
-function portfolioCriteriaExtraColumns(project: ExamProject): ExtraCol[] {
+/** Nur TL-Noten (keine Rohwerte) */
+function portfolioTlNoteColumns(project: ExamProject): ExtraCol[] {
+  if (!isPortfolioExam(project.examType)) return [];
+  const components = project.portfolioComponents ?? [];
+  return components.map((c) => ({
+    header: pdfText(c.code || c.name).slice(0, 14),
+    value: (r) => {
+      if (r.status === "no_show" || r.attended === false) return "–";
+      const g =
+        r.portfolioComponentDetails?.[c.id]?.grade ??
+        r.portfolioComponentGrades?.[c.id] ??
+        null;
+      return g != null ? pdfGrade(g) : "–";
+    },
+  }));
+}
+
+/** Rohwert-Spalten Teilkriterien (Portfolio) */
+function portfolioRawCriterionColumns(project: ExamProject): ExtraCol[] {
   if (
     !isPortfolioExam(project.examType) ||
     project.portfolioCriteriaMode !== true
@@ -80,8 +101,7 @@ function portfolioCriteriaExtraColumns(project: ExamProject): ExtraCol[] {
   const cols: ExtraCol[] = [];
 
   for (const c of components) {
-    const crits = c.criteria ?? [];
-    for (const k of crits) {
+    for (const k of c.criteria ?? []) {
       const header = multiTl
         ? `${c.code || c.name}·${k.code || k.name}`
         : k.code || k.name;
@@ -92,7 +112,7 @@ function portfolioCriteriaExtraColumns(project: ExamProject): ExtraCol[] {
             ? ("percent" as const)
             : ("points" as const);
       cols.push({
-        header: pdfText(header).slice(0, 18),
+        header: pdfText(header).slice(0, 16),
         value: (r, rec) => {
           if (r.status === "no_show" || r.attended === false) return "–";
           if (!rec) return "–";
@@ -113,27 +133,13 @@ function portfolioCriteriaExtraColumns(project: ExamProject): ExtraCol[] {
         },
       });
     }
-    // TL-Note nach den Kriterien der TL
-    cols.push({
-      header: pdfText(`N.${c.code || c.name}`).slice(0, 12),
-      value: (r) => {
-        if (r.status === "no_show" || r.attended === false) return "–";
-        const g =
-          r.portfolioComponentDetails?.[c.id]?.grade ??
-          r.portfolioComponentGrades?.[c.id] ??
-          null;
-        return g != null ? pdfGrade(g) : "–";
-      },
-    });
   }
   return cols;
 }
 
-/** StA-Kriterien-Spalten */
-function staCriteriaExtraColumns(project: ExamProject): ExtraCol[] {
+function staRawCriterionColumns(project: ExamProject): ExtraCol[] {
   if (!isStaCriteriaExam(project.examType)) return [];
-  const criteria = project.criteria ?? [];
-  return criteria.map((k) => {
+  return (project.criteria ?? []).map((k) => {
     const kind =
       k.scale === "grade"
         ? ("grade" as const)
@@ -154,50 +160,73 @@ function staCriteriaExtraColumns(project: ExamProject): ExtraCol[] {
   });
 }
 
+const RAW_CHUNK = 9;
+
+function chunkColumns<T>(cols: T[], size: number): T[][] {
+  if (cols.length === 0) return [];
+  const out: T[][] = [];
+  for (let i = 0; i < cols.length; i += size) {
+    out.push(cols.slice(i, i + size));
+  }
+  return out;
+}
+
+export type GradesListPdfOptions = {
+  /** Rohwerte der Teilkriterien als weitere Tabelle(n) anhängen */
+  includeCriterionRawValues?: boolean;
+};
+
 /** Gesamte Notenliste inkl. No-Shows und ohne HISinOne */
 export function exportGradesListPdf(
   project: ExamProject,
-  rows: EnrichedStudentRow[]
+  rows: EnrichedStudentRow[],
+  options?: GradesListPdfOptions
 ): void {
-  const extraCols = [
-    ...portfolioCriteriaExtraColumns(project),
-    ...staCriteriaExtraColumns(project),
-  ];
-  const useLandscape = extraCols.length >= 4;
+  const includeRaw = options?.includeCriterionRawValues === true;
+  const tlCols = portfolioTlNoteColumns(project);
+  const rawCols = includeRaw
+    ? [...portfolioRawCriterionColumns(project), ...staRawCriterionColumns(project)]
+    : [];
 
   const { doc, y: y0 } = startPdfWithHeader(project, "Notenliste", {
-    orientation: useLandscape ? "landscape" : "portrait",
+    orientation: "portrait",
   });
   let y = drawKeyValueBlock(doc, examHeaderLines(project), y0);
 
   doc.setFontSize(8);
   doc.setTextColor(80);
-  const note =
-    extraCols.length > 0
-      ? `Alle Teilnehmenden. Spalten der Teilkriterien: Rohwerte` +
-        (project.portfolioPerLecturerGrading
-          ? " (Mittel der Korrektoren)"
+  doc.text(
+    pdfText(
+      `Alle Prüfungsteilnehmer einschließlich No-Shows und Kandidaten ohne ${HISINONE_LABEL}-Anmeldung.` +
+        (tlCols.length
+          ? " Spalten der Teilleistungen: berechnete Teilnoten."
           : "") +
-        `; N.* = berechnete Teilnote.`
-      : `Alle Prüfungsteilnehmer einschließlich No-Shows und Kandidaten ohne ${HISINONE_LABEL}-Anmeldung.`;
-  doc.text(pdfText(note), PDF_MARGIN, y, { maxWidth: 260 });
+        (includeRaw && rawCols.length
+          ? " Rohwerte der Teilkriterien in separater Tabelle."
+          : "")
+    ),
+    PDF_MARGIN,
+    y,
+    { maxWidth: 180 }
+  );
   doc.setTextColor(0);
-  y += extraCols.length > 0 ? 6 : 4;
+  y += 6;
 
-  const head = [
+  const sorted = sortRows(rows);
+
+  // ——— Haupttabelle: Ident + TL-Noten + Punkte/Note/Status ———
+  const mainHead = [
     "Nachname",
     "Vorname",
     "Matrikel-Nr.",
-    ...(useLandscape && extraCols.length > 6 ? [] : ["Studiengang"]),
-    ...extraCols.map((c) => c.header),
+    "Studiengang",
+    ...tlCols.map((c) => c.header),
     "Punkte",
     "Note",
     "Status",
   ];
 
-  const includeProgram = !(useLandscape && extraCols.length > 6);
-
-  const data = sortRows(rows).map((r) => {
+  const mainBody = sorted.map((r) => {
     const isNoShow = r.status === "no_show" || r.attended === false;
     let status = shortStatus(r);
     if (r.mergedFromMatriculation) {
@@ -205,67 +234,157 @@ export function exportGradesListPdf(
     }
     const program = resolveProgramCode(r, project);
     const rec = findPointsRecord(project, r.key);
-    const cells: string[] = [
+    return [
       pdfText(r.student.lastName),
       pdfText(r.student.firstName),
       pdfText(r.key),
-    ];
-    if (includeProgram) {
-      cells.push(pdfText(program || "–"));
-    }
-    for (const col of extraCols) {
-      cells.push(col.value(r, rec));
-    }
-    cells.push(
+      pdfText(program || "–"),
+      ...tlCols.map((c) => c.value(r, rec)),
       isNoShow ? "–" : pdfPoints(r.totalPoints),
       isNoShow ? "–" : pdfGrade(r.finalGrade),
-      pdfText(status)
-    );
-    return cells;
+      pdfText(status),
+    ];
   });
 
-  const nExtra = extraCols.length;
-  const fontSize = nExtra > 10 ? 6 : nExtra > 5 ? 6.5 : 7.5;
-  const critW =
-    nExtra > 0
-      ? Math.min(14, Math.max(8, Math.floor(160 / Math.max(nExtra, 1))))
-      : 12;
-
-  const columnStyles: Record<number, { cellWidth?: number; halign?: "left" | "right" | "center" }> = {
-    0: { cellWidth: useLandscape ? 22 : 28 },
-    1: { cellWidth: useLandscape ? 18 : 24 },
-    2: { cellWidth: useLandscape ? 22 : 26 },
+  const mainColStyles: Record<
+    number,
+    { cellWidth?: number; halign?: "left" | "right" | "center" }
+  > = {
+    0: { cellWidth: 28 },
+    1: { cellWidth: 24 },
+    2: { cellWidth: 26 },
+    3: { cellWidth: 20 },
   };
-  let idx = 3;
-  if (includeProgram) {
-    columnStyles[idx] = { cellWidth: useLandscape ? 16 : 22 };
-    idx++;
+  let ci = 4;
+  for (let i = 0; i < tlCols.length; i++) {
+    mainColStyles[ci + i] = { cellWidth: 14, halign: "right" };
   }
-  for (let i = 0; i < nExtra; i++) {
-    columnStyles[idx + i] = { cellWidth: critW, halign: "right" };
-  }
-  const afterExtra = idx + nExtra;
-  columnStyles[afterExtra] = { cellWidth: 14, halign: "right" };
-  columnStyles[afterExtra + 1] = { cellWidth: 12, halign: "right" };
-  columnStyles[afterExtra + 2] = { cellWidth: useLandscape ? 18 : 26 };
+  ci += tlCols.length;
+  mainColStyles[ci] = { cellWidth: 16, halign: "right" };
+  mainColStyles[ci + 1] = { cellWidth: 14, halign: "right" };
+  mainColStyles[ci + 2] = { cellWidth: 22 };
 
   autoTable(doc, {
     startY: y + 2,
-    head: [head],
-    body: data,
-    styles: { font: "helvetica", fontSize, cellPadding: 1.1 },
+    head: [mainHead],
+    body: mainBody,
+    styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.3 },
     headStyles: {
       fillColor: [68, 112, 153],
       textColor: 255,
       fontStyle: "bold",
-      fontSize: Math.max(5.5, fontSize - 0.5),
     },
     alternateRowStyles: { fillColor: [245, 247, 250] },
-    columnStyles,
+    columnStyles: mainColStyles,
     margin: { left: PDF_MARGIN, right: PDF_MARGIN },
   });
 
   let finalY = getLastTableY(doc, 200);
+
+  // ——— Optionale Rohwert-Tabellen (gechunkt, kein horizontaler Überlauf) ———
+  if (includeRaw && rawCols.length > 0) {
+    const chunks = chunkColumns(rawCols, RAW_CHUNK);
+    let ay = finalY + 10;
+    const pageH = doc.internal.pageSize.getHeight();
+
+    if (ay > pageH - 60) {
+      doc.addPage();
+      ay = PDF_MARGIN + 14;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(pdfText("Rohwerte der Teilkriterien"), PDF_MARGIN, ay);
+    ay += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(80);
+    doc.text(
+      pdfText(
+        project.portfolioPerLecturerGrading
+          ? "Mittel der Korrektoren je Kriterium. Bei vielen Kriterien mehrere Tabellenabschnitte."
+          : "Rohwerte je Kriterium. Bei vielen Kriterien mehrere Tabellenabschnitte."
+      ),
+      PDF_MARGIN,
+      ay,
+      { maxWidth: 180 }
+    );
+    doc.setTextColor(0);
+    ay += 6;
+
+    chunks.forEach((chunk, chunkIdx) => {
+      if (ay > pageH - 50) {
+        doc.addPage();
+        ay = PDF_MARGIN + 14;
+      }
+      if (chunks.length > 1) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(
+          pdfText(
+            `Abschnitt ${chunkIdx + 1} von ${chunks.length} (Kriterien)`
+          ),
+          PDF_MARGIN,
+          ay
+        );
+        ay += 3;
+      }
+
+      const head = [
+        "Nachname",
+        "Vorname",
+        "Matrikel-Nr.",
+        ...chunk.map((c) => c.header),
+      ];
+      const body = sorted.map((r) => {
+        const rec = findPointsRecord(project, r.key);
+        return [
+          pdfText(r.student.lastName),
+          pdfText(r.student.firstName),
+          pdfText(r.key),
+          ...chunk.map((c) => c.value(r, rec)),
+        ];
+      });
+
+      const critW = Math.min(
+        16,
+        Math.max(9, Math.floor(120 / Math.max(chunk.length, 1)))
+      );
+      const colStyles: Record<
+        number,
+        { cellWidth?: number; halign?: "left" | "right" }
+      > = {
+        0: { cellWidth: 26 },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 24 },
+      };
+      for (let i = 0; i < chunk.length; i++) {
+        colStyles[3 + i] = { cellWidth: critW, halign: "right" };
+      }
+
+      autoTable(doc, {
+        startY: ay + 2,
+        head: [head],
+        body,
+        styles: {
+          font: "helvetica",
+          fontSize: chunk.length > 7 ? 6.5 : 7,
+          cellPadding: 1.1,
+        },
+        headStyles: {
+          fillColor: [68, 112, 153],
+          textColor: 255,
+          fontStyle: "bold",
+          fontSize: 6.5,
+        },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+        columnStyles: colStyles,
+        margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+      });
+      ay = getLastTableY(doc, ay) + 8;
+    });
+    finalY = ay;
+  }
 
   const merges = (project.identityMerges ?? []).filter((m) => m.active);
   const undoneMerges = (project.identityMerges ?? []).filter(
@@ -500,5 +619,9 @@ export function exportGradesListPdf(
   doc.setTextColor(0);
   drawSignatureBlock(doc, project.lecturers ?? [], sigY + 4);
 
-  savePdf(doc, `Notenliste_${project.name || "Pruefung"}`);
+  savePdf(
+    doc,
+    `Notenliste_${project.name || "Pruefung"}`,
+    pdfFooterFromProject(project)
+  );
 }

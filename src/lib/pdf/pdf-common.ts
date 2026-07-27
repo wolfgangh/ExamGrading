@@ -311,17 +311,32 @@ export function drawSignatureBlock(
   return y;
 }
 
-export function addPageNumbers(doc: jsPDF): void {
+export type PdfFooterMeta = {
+  examName?: string;
+  examNumber?: string;
+};
+
+export function addPageNumbers(doc: jsPDF, meta?: PdfFooterMeta): void {
   const total = doc.getNumberOfPages();
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setTextColor(100);
+  const leftParts: string[] = [];
+  if (meta?.examName?.trim()) leftParts.push(pdfText(meta.examName.trim()));
+  if (meta?.examNumber?.trim()) {
+    leftParts.push(`Nr. ${pdfText(meta.examNumber.trim())}`);
+  }
+  const leftLabel = leftParts.join(" · ");
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
     const w = pdfPageWidth(doc);
     const h = doc.internal.pageSize.getHeight();
-    doc.text(`Seite ${i} von ${total}`, w / 2, h - 8, {
-      align: "center",
+    if (leftLabel) {
+      const lines = doc.splitTextToSize(leftLabel, w * 0.45) as string[];
+      doc.text(lines[0] ?? leftLabel, PDF_MARGIN, h - 8);
+    }
+    doc.text(`Seite ${i} von ${total}`, w - PDF_MARGIN, h - 8, {
+      align: "right",
     });
   }
   doc.setTextColor(0);
@@ -332,10 +347,21 @@ export function getLastTableY(doc: jsPDF, fallback: number): number {
   return ext.lastAutoTable?.finalY ?? fallback;
 }
 
-export function savePdf(doc: jsPDF, baseName: string): void {
-  addPageNumbers(doc);
+export function savePdf(
+  doc: jsPDF,
+  baseName: string,
+  footer?: PdfFooterMeta
+): void {
+  addPageNumbers(doc, footer);
   const blob = doc.output("blob");
   void downloadBlob(datedExportFilename(baseName, "pdf"), blob);
+}
+
+export function pdfFooterFromProject(project: ExamProject): PdfFooterMeta {
+  return {
+    examName: project.name,
+    examNumber: project.examNumber,
+  };
 }
 
 export function shortStatus(row: {

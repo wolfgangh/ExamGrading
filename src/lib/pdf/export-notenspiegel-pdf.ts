@@ -503,5 +503,8 @@ export function exportNotenspiegelPdf(
   );
   doc.setTextColor(0);
 
-  savePdf(doc, `Notenspiegel_${project.name || "Pruefung"}`);
+  savePdf(doc, `Notenspiegel_${project.name || "Pruefung"}`, {
+    examName: project.name,
+    examNumber: project.examNumber,
+  });
 }

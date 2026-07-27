@@ -177,5 +177,9 @@ export function exportFailersPdf(
     label: "Unterschriften der Prüfer",
   });
 
-  savePdf(doc, `Zweitkorrektur_Durchfaller_${project.name || "Pruefung"}`);
+  savePdf(
+    doc,
+    `Zweitkorrektur_Durchfaller_${project.name || "Pruefung"}`,
+    { examName: project.name, examNumber: project.examNumber }
+  );
 }
