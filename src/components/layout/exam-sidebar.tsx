@@ -1,10 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeft,
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   FileSpreadsheet,
   FileText,
@@ -31,8 +34,10 @@ import {
   buildWorkflowSteps,
   workflowProgress,
 } from "@/lib/workflow-steps";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
+
+const SIDEBAR_COLLAPSED_KEY = "examgrade-sidebar-collapsed";
 
 type NavItem = {
   href: string;
@@ -109,6 +114,28 @@ export function ExamSidebar({
   const base = `/exam/${examId}`;
   const { project, rows, stats } = useExamContext();
   const nav = buildNav(examType ?? project?.examType, project);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      if (v === "1") setCollapsed(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   const steps =
     project && stats
@@ -117,26 +144,53 @@ export function ExamSidebar({
   const progress = steps.length > 0 ? workflowProgress(steps) : null;
 
   return (
-    <aside className="surface-panel flex h-full min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r">
-      <div className="shrink-0 border-b p-2">
-        <Link
-          href="/"
-          className={cn(
-            buttonVariants({ variant: "outline", size: "sm" }),
-            "w-full justify-start gap-2"
-          )}
-          title="Zur Übersicht aller Prüfungen"
+    <aside
+      className={cn(
+        "surface-panel flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-r transition-[width] duration-200",
+        collapsed ? "w-14" : "w-56"
+      )}
+    >
+      <div className="flex shrink-0 items-center gap-1 border-b p-2">
+        {!collapsed && (
+          <Link
+            href="/"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "min-w-0 flex-1 justify-start gap-2"
+            )}
+            title="Zur Übersicht aller Prüfungen"
+          >
+            <ArrowLeft className="size-4 shrink-0" />
+            Zurück
+          </Link>
+        )}
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="outline"
+          className={cn(collapsed && "mx-auto")}
+          onClick={toggleCollapsed}
+          title={collapsed ? "Navigation einblenden" : "Navigation ausblenden"}
+          aria-expanded={!collapsed}
+          aria-label={
+            collapsed ? "Navigation einblenden" : "Navigation ausblenden"
+          }
         >
-          <ArrowLeft className="size-4 shrink-0" />
-          Zurück
-        </Link>
+          {collapsed ? (
+            <ChevronRight className="size-4" />
+          ) : (
+            <ChevronLeft className="size-4" />
+          )}
+        </Button>
       </div>
-      <div className="shrink-0 border-b px-3 py-2">
-        <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <ClipboardList className="size-3.5" />
-          Prüfung
-        </p>
-      </div>
+      {!collapsed && (
+        <div className="shrink-0 border-b px-3 py-2">
+          <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <ClipboardList className="size-3.5" />
+            Prüfung
+          </p>
+        </div>
+      )}
       <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
         {nav.map(({ href, label, icon: Icon }) => {
           const path = `${base}/${href}`;
@@ -145,21 +199,23 @@ export function ExamSidebar({
             <Link
               key={href}
               href={path}
+              title={label}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                "flex items-center gap-2 rounded-lg text-sm transition-colors",
+                collapsed ? "justify-center px-2 py-2.5" : "px-2.5 py-2",
                 active
                   ? "bg-primary text-primary-foreground"
                   : "text-foreground hover:bg-muted"
               )}
             >
               <Icon className="size-4 shrink-0" />
-              {label}
+              {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      {progress && (
+      {progress && !collapsed && (
         <div className="shrink-0 border-t bg-card/80 p-3 backdrop-blur-sm">
           <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <ListChecks className="size-3.5" />

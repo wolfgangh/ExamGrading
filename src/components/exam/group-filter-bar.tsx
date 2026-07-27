@@ -30,6 +30,7 @@ export function GroupFilterBar({
   groupFillStatus,
   showFillLegend = false,
   fillScopeLabel,
+  onAfterNavigate,
 }: {
   project: ExamProject;
   rows: EnrichedStudentRow[];
@@ -41,6 +42,8 @@ export function GroupFilterBar({
   showFillLegend?: boolean;
   /** z. B. „TL1“ für Tooltip */
   fillScopeLabel?: string;
+  /** Nach Vor/Zurück (z. B. Matrix horizontal scrollen) */
+  onAfterNavigate?: (delta: -1 | 1) => void;
 }) {
   const groups = sortedStudentGroups(project);
   if (groups.length === 0) {
@@ -79,9 +82,10 @@ export function GroupFilterBar({
 
   const ids = pills.map((p) => p.id);
   const idx = Math.max(0, ids.indexOf(value));
-  const go = (delta: number) => {
+  const go = (delta: -1 | 1) => {
     const next = ids[(idx + delta + ids.length) % ids.length];
     onChange(next);
+    onAfterNavigate?.(delta);
   };
 
   const scopeHint = fillScopeLabel ? ` (${fillScopeLabel})` : "";

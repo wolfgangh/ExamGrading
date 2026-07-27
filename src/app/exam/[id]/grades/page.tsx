@@ -380,6 +380,12 @@ export default function GradesPage() {
         >
           Notenszenarien verwalten
         </Link>
+        {portfolioUsesGradeScenarios(project) && (
+          <p className="w-full text-xs text-muted-foreground">
+            Aktives Szenario steuert Teilnoten und Gesamtnote bei Punkte-/Prozent-TLs
+            (Klausur-Schlüssel auf Erfüllung %).
+          </p>
+        )}
       </div>
 
       {scenarioChartSeries.length > 0 && (

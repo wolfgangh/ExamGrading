@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
 } from "react";
@@ -71,6 +72,7 @@ import {
 import { cn, formatGrade, formatPoints } from "@/lib/utils";
 import {
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CircleHelp,
   Search,
@@ -156,6 +158,16 @@ export default function AssessmentPage() {
   /** Kriterien-Deaktivierung pro Gruppe: Panel standardmäßig zu */
   const [criteriaDisableOpen, setCriteriaDisableOpen] = useState(false);
   const [highlightMat, setHighlightMat] = useState<string | null>(null);
+  const matrixScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollMatrix = (dir: "left" | "right") => {
+    const el = matrixScrollRef.current;
+    if (!el) return;
+    el.scrollBy({
+      left: dir === "right" ? 320 : -320,
+      behavior: "smooth",
+    });
+  };
 
   // Deep-Link aus Notenübersicht: ?mat=&group=
   useEffect(() => {
@@ -707,6 +719,10 @@ export default function AssessmentPage() {
                 groupFillStatus={groupFillStatus}
                 showFillLegend
                 fillScopeLabel={fillScopeLabel}
+                onAfterNavigate={(delta) => {
+                  if (delta === 1) scrollMatrix("right");
+                  else scrollMatrix("left");
+                }}
               />
             </CardContent>
           </Card>
@@ -1011,6 +1027,10 @@ export default function AssessmentPage() {
               groupFillStatus={isPortfolio ? groupFillStatus : undefined}
               showFillLegend={isPortfolio}
               fillScopeLabel={isPortfolio ? fillScopeLabel : undefined}
+              onAfterNavigate={(delta) => {
+                if (delta === 1) scrollMatrix("right");
+                else scrollMatrix("left");
+              }}
             />
             {isPortfolio && concreteGroupSelected && (
               <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2.5">
@@ -1147,6 +1167,26 @@ export default function AssessmentPage() {
                   Sammelzuordnung.
                 </p>
               </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="outline"
+                  title="Matrix nach links scrollen"
+                  onClick={() => scrollMatrix("left")}
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="outline"
+                  title="Matrix nach rechts scrollen"
+                  onClick={() => scrollMatrix("right")}
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
             </div>
             {hasGroups && selectedKeys.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
@@ -1183,7 +1223,10 @@ export default function AssessmentPage() {
             )}
           </CardHeader>
           <CardContent className="p-0">
-            <div className="max-h-[min(70vh,720px)] overflow-auto">
+            <div
+              ref={matrixScrollRef}
+              className="max-h-[min(70vh,720px)] overflow-auto"
+            >
               <Table className="min-w-max">
                 <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                   <TableRow>
@@ -1617,7 +1660,11 @@ export default function AssessmentPage() {
                                     const note =
                                       unit == null
                                         ? null
-                                        : gradeFromUnitAvg(unit, scale);
+                                        : gradeFromUnitAvg(
+                                            unit,
+                                            scale,
+                                            project.gradeSchema
+                                          );
                                     // Rohpunkte-Summe für Anzeige (Punkte-Skala)
                                     let ptsLabel = "";
                                     if (

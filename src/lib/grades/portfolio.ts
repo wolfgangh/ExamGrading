@@ -209,34 +209,31 @@ export function portfolioUsesGradeScenarios(
 }
 
 /**
- * Unit 0…1 → Teilnote (lineare Qualitätsskala).
- * unit 1 → Note 1,0; unit 0 → Note 5,0.
- * Unabhängig vom Klausur-Szenario (Szenarien nur Vergleich, siehe gradeFromUnitWithScenario).
+ * Unit 0…1 → Teilnote.
+ * - scale grade (oder ohne Schema): linear 5−4·unit
+ * - scale points/percent + Schema: calculateGrade(unit·max, schema) = aktives Szenario
  */
 export function gradeFromUnitAvg(
   unitAvg: number,
-  _scale?: CriterionScale,
-  _schema?: GradeSchema | null
+  scale?: CriterionScale,
+  schema?: GradeSchema | null
 ): number {
-  void _scale;
-  void _schema;
   const u = Math.min(1, Math.max(0, unitAvg));
-  return roundToNearestGermanGrade(5 - 4 * u);
+  if (scale === "grade" || !schema || schema.maxPoints <= 0) {
+    return roundToNearestGermanGrade(5 - 4 * u);
+  }
+  // points / percent: Notenschlüssel des aktiven Szenarios
+  return calculateGrade(u * schema.maxPoints, schema);
 }
 
 /**
- * Vergleichsnote über Notenszenario (Bestehen ab X %): unit × max → calculateGrade.
- * Nur für Szenario-Analyse, nicht für die aktive TL-Note in der Matrix.
+ * Vergleichsnote über Notenszenario (unit × max → calculateGrade).
  */
 export function gradeFromUnitWithScenario(
   unitAvg: number,
   schema: GradeSchema
 ): number {
-  const u = Math.min(1, Math.max(0, unitAvg));
-  if (!(schema.maxPoints > 0)) {
-    return gradeFromUnitAvg(u);
-  }
-  return calculateGrade(u * schema.maxPoints, schema);
+  return gradeFromUnitAvg(unitAvg, "points", schema);
 }
 
 /** Rohpunkte-Summe und Max einer TL (nur scale points). */
@@ -452,10 +449,12 @@ export function effectivePortfolioGrades(
   const out: Record<string, number | null> = {};
 
   if (criteriaMode) {
+    const schema = ctx?.schema;
     for (const c of components) {
       const scale = resolveComponentCriteriaScale(c);
       const unit = unitAvgForPortfolioComponent(project, rec, c, groupId);
-      out[c.id] = unit == null ? null : gradeFromUnitAvg(unit, scale);
+      out[c.id] =
+        unit == null ? null : gradeFromUnitAvg(unit, scale, schema);
     }
     return out;
   }
@@ -696,12 +695,13 @@ export function computePortfolioComponentDetails(
     pointsNeeded: number | null;
     nextGrade: number | null;
     direction: "better" | "worse" | null;
-  }
+  },
+  schema?: GradeSchema | null
 ): Record<string, PortfolioComponentDetail> {
   const out: Record<string, PortfolioComponentDetail> = {};
   const components = project.portfolioComponents ?? [];
   const criteriaMode = project.portfolioCriteriaMode === true;
-  const grades = effectivePortfolioGrades(project, rec, { groupId });
+  const grades = effectivePortfolioGrades(project, rec, { groupId, schema });
 
   for (const c of components) {
     const grade = grades[c.id] ?? null;
