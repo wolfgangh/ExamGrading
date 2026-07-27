@@ -156,6 +156,7 @@ export function StudentsTable({
   orphanOnly = false,
   highlightBorderlineMax = 1,
   portfolioComponents = [],
+  assessmentHrefForRow,
 }: {
   rows: EnrichedStudentRow[];
   editable?: boolean;
@@ -174,6 +175,8 @@ export function StudentsTable({
   highlightBorderlineMax?: number;
   /** Portfolio: Teilleistungen für Spalten in der Übersicht */
   portfolioComponents?: { id: string; code: string; name: string }[];
+  /** Link zur Teilnoten-/Kriterienbewertung für diese Person */
+  assessmentHrefForRow?: (row: EnrichedStudentRow) => string | null;
 }) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "orderIndex", desc: false },
@@ -292,15 +295,31 @@ export function StudentsTable({
         accessorFn: (r) =>
           `${r.student.lastName}, ${r.student.firstName}`,
         header: "Name",
-        cell: ({ row }) => (
-          <span>
-            {row.original.student.lastName}
-            {row.original.student.lastName || row.original.student.firstName
-              ? ", "
-              : ""}
-            {row.original.student.firstName}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const label = (
+            <>
+              {row.original.student.lastName}
+              {row.original.student.lastName ||
+              row.original.student.firstName
+                ? ", "
+                : ""}
+              {row.original.student.firstName}
+            </>
+          );
+          const href = assessmentHrefForRow?.(row.original);
+          if (href) {
+            return (
+              <a
+                href={href}
+                className="font-medium text-primary underline-offset-2 hover:underline"
+                title="Zu Teilnoten / Kriterienbewertung dieser Person"
+              >
+                {label}
+              </a>
+            );
+          }
+          return <span>{label}</span>;
+        },
       },
       {
         id: "program",
@@ -432,13 +451,14 @@ export function StudentsTable({
                   )}
                   title={
                     isWorse
-                      ? "Abstand zur nächstschlechteren Note (Notengrade)"
-                      : "Abstand zur nächstbesseren Note (Notengrade)"
+                      ? `Nur Teilleistung ${pc.code || pc.name}: Abstand zur nächstschlechteren TL-Note (Notengrade)`
+                      : `Nur Teilleistung ${pc.code || pc.name}: Abstand zur nächstbesseren TL-Note (Notengrade)`
                   }
                 >
                   {isWorse ? "↓" : "↑"}
                   {formatPoints(next.pointsToNext, 1)}→
                   {formatGrade(next.nextGrade)}
+                  <span className="ml-0.5 opacity-70">TL</span>
                 </span>
               )}
             </div>
@@ -580,6 +600,7 @@ export function StudentsTable({
     showNextGrade,
     portfolioComponents,
     rows,
+    assessmentHrefForRow,
   ]);
 
   const table = useReactTable({

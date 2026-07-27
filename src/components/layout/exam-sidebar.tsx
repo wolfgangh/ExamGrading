@@ -23,6 +23,7 @@ import {
   isPortfolioExam,
   isStaCriteriaExam,
   isStaManualExam,
+  type ExamProject,
   type ExamType,
 } from "@/lib/types";
 import { useExamContext } from "@/components/exam/exam-context";
@@ -31,6 +32,7 @@ import {
   workflowProgress,
 } from "@/lib/workflow-steps";
 import { buttonVariants } from "@/components/ui/button";
+import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
 
 type NavItem = {
   href: string;
@@ -38,7 +40,10 @@ type NavItem = {
   icon: typeof BarChart3;
 };
 
-function buildNav(examType?: ExamType): NavItem[] {
+function buildNav(
+  examType?: ExamType,
+  project?: ExamProject | null
+): NavItem[] {
   const items: NavItem[] = [
     { href: "overview", label: "Übersicht", icon: BarChart3 },
     { href: "import", label: "Importe", icon: FileSpreadsheet },
@@ -71,9 +76,16 @@ function buildNav(examType?: ExamType): NavItem[] {
 
   items.push({ href: "grades", label: "Notenübersicht", icon: Table2 });
 
-  if (
-    !(examType && (isStaManualExam(examType) || isPortfolioExam(examType)))
-  ) {
+  // Notenszenarien: Klausur/THE/StA-Kriterien + Portfolio mit Punkte/Prozent-TLs
+  const showScenarios =
+    examType &&
+    !isStaManualExam(examType) &&
+    (!isPortfolioExam(examType) ||
+      (project != null && portfolioUsesGradeScenarios(project)) ||
+      // Portfolio ohne geladenes Project: Link trotzdem zeigen wenn Kriterienmodus
+      (isPortfolioExam(examType) && project?.portfolioCriteriaMode === true));
+
+  if (showScenarios) {
     items.push({ href: "scenarios", label: "Notenszenarien", icon: Layers });
   }
 
@@ -96,7 +108,7 @@ export function ExamSidebar({
   const pathname = usePathname();
   const base = `/exam/${examId}`;
   const { project, rows, stats } = useExamContext();
-  const nav = buildNav(examType ?? project?.examType);
+  const nav = buildNav(examType ?? project?.examType, project);
 
   const steps =
     project && stats

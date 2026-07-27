@@ -160,7 +160,9 @@ export default function SettingsPage() {
   };
 
   const showScenariosCard =
-    !isStaManualExam(project.examType) && !isPortfolio;
+    !isStaManualExam(project.examType) &&
+    (!isPortfolio ||
+      project.portfolioCriteriaMode === true);
 
   const metaCard = (
       <Card className="surface-panel">
@@ -228,10 +230,16 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">Notenszenarien</CardTitle>
           <CardDescription>
-            {isStaCrit
-              ? "Notenschlüssel für den berechneten Gesamtwert der Kriterien. "
-              : "Szenarien 45 / 40 / frei – Vergleich und aktives Szenario unter Notenszenarien. "}
-            Aktive Bestehensgrenze: {project.gradeSchema.passThreshold} Punkte.
+            {isPortfolio
+              ? "Portfolio mit Punkte/Prozent-TLs: 50 % / 40 % / frei / eigene Grenzen. Aktives Szenario unter Notenszenarien wählen. "
+              : isStaCrit
+                ? "Notenschlüssel für den berechneten Gesamtwert der Kriterien. "
+                : "Szenarien 45 / 40 / frei – Vergleich und aktives Szenario unter Notenszenarien. "}
+            Aktive Bestehensgrenze: {project.gradeSchema.passThreshold} Punkte
+            {project.gradeSchema.maxPoints > 0
+              ? ` (${Math.round((project.gradeSchema.passThreshold / project.gradeSchema.maxPoints) * 1000) / 10} %)`
+              : ""}
+            .
             {gradingLocked && (
               <>
                 {" "}
@@ -1193,8 +1201,27 @@ export default function SettingsPage() {
       </Card>
       )}
 
-      {/* THE/Klausur: Szenarien unterhalb; bei STA bereits neben Metadaten */}
+      {/* THE/Klausur/Portfolio: Szenarien unterhalb; bei STA bereits neben Metadaten */}
       {!isStaCrit && scenariosCard}
+      {isPortfolio && !scenariosCard && project.portfolioCriteriaMode && (
+        <Card className="surface-panel">
+          <CardHeader>
+            <CardTitle className="text-base">Notenszenarien</CardTitle>
+            <CardDescription>
+              Für Punkte- oder Prozent-Teilleistungen: Szenarien unter
+              „Notenszenarien“ wählen (50 % / 40 % / frei / eigene Grenzen).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href={`/exam/${id}/scenarios`}
+              className={cn(buttonVariants())}
+            >
+              Notenszenarien öffnen
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

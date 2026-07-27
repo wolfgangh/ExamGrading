@@ -86,7 +86,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FileSpreadsheet, FileText, ListChecks } from "lucide-react";
-import { isStaManualExam, supportsStudentGroups } from "@/lib/types";
+import {
+  isPortfolioExam,
+  isStaCriteriaExam,
+  isStaManualExam,
+  supportsStudentGroups,
+} from "@/lib/types";
 import { GroupFilterBar } from "@/components/exam/group-filter-bar";
 import {
   filterRowsByGroup,
@@ -366,6 +371,15 @@ export default function GradesPage() {
             </Button>
           );
         })}
+        <Link
+          href={`/exam/${id}/scenarios`}
+          className={cn(
+            buttonVariants({ size: "sm", variant: "outline" }),
+            "gap-1"
+          )}
+        >
+          Notenszenarien verwalten
+        </Link>
       </div>
 
       {scenarioChartSeries.length > 0 && (
@@ -787,6 +801,21 @@ export default function GradesPage() {
                 name: c.name,
               }))
             : []
+        }
+        assessmentHrefForRow={
+          isPortfolioExam(project.examType) ||
+          isStaCriteriaExam(project.examType)
+            ? (r) => {
+                const params = new URLSearchParams();
+                params.set("mat", r.key);
+                if (r.student.groupId) {
+                  params.set("group", r.student.groupId);
+                } else if (supportsStudentGroups(project.examType)) {
+                  params.set("group", "none");
+                }
+                return `/exam/${id}/assessment?${params.toString()}`;
+              }
+            : undefined
         }
       />
       </div>

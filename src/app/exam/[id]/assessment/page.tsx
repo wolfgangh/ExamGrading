@@ -1,8 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,8 +117,32 @@ function matchesNameSearch(row: EnrichedStudentRow, query: string): boolean {
   );
 }
 
+/** Tab/Shift+Tab: nächstes Kriterium in der Matrix-Zeile (nicht nächste Person). */
+function handleMatrixInputKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+  if (e.key !== "Tab") return;
+  const current = e.currentTarget;
+  const row = current.closest("tr");
+  if (!row) return;
+  const inputs = [
+    ...row.querySelectorAll<HTMLInputElement>(
+      "input[data-matrix-input]:not([disabled])"
+    ),
+  ];
+  if (inputs.length < 2) return;
+  const idx = inputs.indexOf(current);
+  if (idx < 0) return;
+  e.preventDefault();
+  const nextIdx = e.shiftKey
+    ? (idx - 1 + inputs.length) % inputs.length
+    : (idx + 1) % inputs.length;
+  const next = inputs[nextIdx];
+  next.focus();
+  next.select?.();
+}
+
 export default function AssessmentPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const { project, setProject, rows } = useExamContext();
   const [groupFilter, setGroupFilter] = useState<GroupFilterId>("all");
   const [nameQuery, setNameQuery] = useState("");
@@ -126,6 +155,30 @@ export default function AssessmentPage() {
   const [groupPerformance, setGroupPerformance] = useState(false);
   /** Kriterien-Deaktivierung pro Gruppe: Panel standardmäßig zu */
   const [criteriaDisableOpen, setCriteriaDisableOpen] = useState(false);
+  const [highlightMat, setHighlightMat] = useState<string | null>(null);
+
+  // Deep-Link aus Notenübersicht: ?mat=&group=
+  useEffect(() => {
+    const mat = searchParams.get("mat")?.trim() || null;
+    const group = searchParams.get("group")?.trim() || null;
+    if (group === "all" || group === "none" || (group && group.length > 0)) {
+      setGroupFilter(group as GroupFilterId);
+      if (group && group !== "all" && group !== "none") {
+        setGroupPerformance(true);
+      }
+    }
+    if (mat) {
+      setHighlightMat(mat);
+      setNameQuery("");
+      const t = window.setTimeout(() => {
+        const el = document.querySelector(
+          `[data-mat-row="${CSS.escape(mat)}"]`
+        );
+        el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 150);
+      return () => window.clearTimeout(t);
+    }
+  }, [searchParams]);
 
   const criteria = project?.criteria ?? [];
   const components = project?.portfolioComponents ?? [];
@@ -1401,10 +1454,18 @@ export default function AssessmentPage() {
                           ? "bg-primary/5"
                           : "bg-card";
 
+                      const isHighlight = highlightMat === r.key;
+
                       return (
                         <TableRow
                           key={r.key}
-                          className={cn(rowBg, ungrouped && "border-l-2 border-l-amber-500")}
+                          data-mat-row={r.key}
+                          className={cn(
+                            rowBg,
+                            ungrouped && "border-l-2 border-l-amber-500",
+                            isHighlight &&
+                              "ring-2 ring-primary ring-inset bg-primary/10"
+                          )}
                         >
                           {hasGroups && (
                             <TableCell className={cn("w-10 px-2", rowBg)}>
@@ -1508,6 +1569,8 @@ export default function AssessmentPage() {
                                               col.criterion
                                             )}
                                             inputMode="decimal"
+                                            data-matrix-input
+                                            onKeyDown={handleMatrixInputKeyDown}
                                             onBlur={(e) =>
                                               setPortfolioCriterionValue(
                                                 r.key,
@@ -1650,6 +1713,8 @@ export default function AssessmentPage() {
                                             key={`${r.key}-${c.id}-${lec}-${project.updatedAt}`}
                                             placeholder="–"
                                             title={`${c.name} · ${lec}`}
+                                            data-matrix-input
+                                            onKeyDown={handleMatrixInputKeyDown}
                                             onBlur={(e) =>
                                               setPortfolioLecturerGrade(
                                                 r.key,
@@ -1700,6 +1765,8 @@ export default function AssessmentPage() {
                                           }
                                           key={`${r.key}-${c.id}-${project.updatedAt}`}
                                           placeholder="–"
+                                          data-matrix-input
+                                          onKeyDown={handleMatrixInputKeyDown}
                                           onBlur={(e) =>
                                             setPortfolioGrade(
                                               r.key,
@@ -1731,6 +1798,8 @@ export default function AssessmentPage() {
                                       title={hint}
                                       aria-label={`${c.name || c.code}: ${criterionScaleShort(c)}`}
                                       inputMode="decimal"
+                                      data-matrix-input
+                                      onKeyDown={handleMatrixInputKeyDown}
                                       onBlur={(e) =>
                                         setCriterionValue(
                                           r.key,
