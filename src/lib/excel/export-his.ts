@@ -208,17 +208,29 @@ async function exportOneSourceFromTemplate(
   await downloadBlob(fileName, blob);
 }
 
+/** Final-Noten-Export: Suffix, damit kein Namenskonflikt mit der Importdatei entsteht */
+const EXPORT_NOTEN_SUFFIX = "_Noten";
+
+function withNotenSuffix(fileName: string): string {
+  const safe = fileName.replace(/[\\/:*?"<>|]+/g, "_");
+  // bereits mit Suffix (auch bei erneutem Export)
+  if (new RegExp(`${EXPORT_NOTEN_SUFFIX}\\.xlsx?$`, "i").test(safe)) {
+    return safe;
+  }
+  return safe.replace(/(\.xlsx?)$/i, `${EXPORT_NOTEN_SUFFIX}$1`);
+}
+
 function exportFileName(source: HisSource): string {
   const original = source.originalFileName?.trim();
   if (original && /\.xlsx?$/i.test(original)) {
-    // Originalname beibehalten (HisinOne-Workflow), optional Präfix entbehrlich
-    return original.replace(/[\\/:*?"<>|]+/g, "_");
+    // Basis = Originalname (HisinOne-Workflow) + Suffix „_Noten“
+    return withNotenSuffix(original);
   }
   const safeCode = source.programCode || "HIS";
   const safeNum = (source.examNumber || "export")
     .replace(/[^\w\-]+/g, "_")
     .slice(0, 40);
-  return `Noteneintrag_${safeCode}_${safeNum}.xlsx`;
+  return withNotenSuffix(`Noteneintrag_${safeCode}_${safeNum}.xlsx`);
 }
 
 /**
