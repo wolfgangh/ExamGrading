@@ -176,7 +176,12 @@ function matchesNameSearch(row: EnrichedStudentRow, query: string): boolean {
 /** Tab/Shift+Tab: nächstes Kriterium in der Matrix-Zeile (nicht nächste Person). */
 function handleMatrixInputKeyDown(e: KeyboardEvent<HTMLInputElement>) {
   if (e.key !== "Tab") return;
-  const current = e.currentTarget;
+  // Base-UI / Event-Target: robust über closest, nicht nur currentTarget
+  const current =
+    (e.target instanceof Element
+      ? e.target.closest("input[data-matrix-input]")
+      : null) ?? e.currentTarget;
+  if (!(current instanceof HTMLInputElement)) return;
   const row = current.closest("tr");
   if (!row) return;
   const inputs = [
@@ -188,12 +193,19 @@ function handleMatrixInputKeyDown(e: KeyboardEvent<HTMLInputElement>) {
   const idx = inputs.indexOf(current);
   if (idx < 0) return;
   e.preventDefault();
+  e.stopPropagation();
   const nextIdx = e.shiftKey
     ? (idx - 1 + inputs.length) % inputs.length
     : (idx + 1) % inputs.length;
   const next = inputs[nextIdx];
-  next.focus();
-  next.select?.();
+  // Nach Blur/setState kann der Fokus verloren gehen – microtask + rAF absichern
+  const focusNext = () => {
+    next.focus({ preventScroll: true });
+    next.select?.();
+  };
+  focusNext();
+  queueMicrotask(focusNext);
+  requestAnimationFrame(focusNext);
 }
 
 export default function AssessmentPage() {
@@ -1757,7 +1769,7 @@ export default function AssessmentPage() {
                                                 ? String(v).replace(".", ",")
                                                 : ""
                                             }
-                                            key={`${r.key}-${col.componentId}-${col.criterion.id}-${activeLecturer}-${project.updatedAt}`}
+                                            key={`${r.key}-${col.componentId}-${col.criterion.id}-${activeLecturer || "all"}`}
                                             placeholder={criterionPlaceholder(
                                               col.criterion
                                             )}
@@ -1919,7 +1931,7 @@ export default function AssessmentPage() {
                                                 ? String(v).replace(".", ",")
                                                 : ""
                                             }
-                                            key={`${r.key}-${c.id}-${lec}-${project.updatedAt}`}
+                                            key={`${r.key}-${c.id}-${lec}`}
                                             placeholder="–"
                                             title={`${c.name} · ${lec}`}
                                             data-matrix-input
@@ -2007,7 +2019,7 @@ export default function AssessmentPage() {
                                               ? String(v).replace(".", ",")
                                               : ""
                                           }
-                                          key={`${r.key}-${c.id}-${project.updatedAt}`}
+                                          key={`${r.key}-${c.id}`}
                                           placeholder="–"
                                           data-matrix-input
                                           onKeyDown={handleMatrixInputKeyDown}
@@ -2037,7 +2049,7 @@ export default function AssessmentPage() {
                                           ? String(v).replace(".", ",")
                                           : ""
                                       }
-                                      key={`${r.key}-${c.id}-${project.updatedAt}`}
+                                      key={`${r.key}-${c.id}`}
                                       placeholder={criterionPlaceholder(c)}
                                       title={hint}
                                       aria-label={`${c.name || c.code}: ${criterionScaleShort(c)}`}
