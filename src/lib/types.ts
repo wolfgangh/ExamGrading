@@ -478,6 +478,16 @@ export interface ExamProject {
    * Backup ist veraltet, wenn `updatedAt !== lastBackupSyncedUpdatedAt`.
    */
   lastBackupSyncedUpdatedAt?: string;
+
+  /**
+   * Beim Import als zusätzliche Version angelegt (nicht ersetzt).
+   * Ermöglicht Erkennung auf der Startseite ohne die Prüfung zu öffnen.
+   */
+  importedAsCopyAt?: string;
+  /** Anzeigename der lokalen Prüfung, die beim Import als Duplikat erkannt wurde */
+  importedAsCopyOfName?: string;
+  /** Id der lokalen Prüfung, die beim Import als Duplikat erkannt wurde */
+  importedAsCopyOfId?: string;
 }
 
 /** Abgeleitetes Zeilenmodell für Tabellen/Export (nicht persistiert) */

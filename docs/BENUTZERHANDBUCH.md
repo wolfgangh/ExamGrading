@@ -2,7 +2,7 @@
 
 Vollständige Anleitung für Prüferinnen und Prüfer – Einstieg und Nachschlagewerk.
 
-**App-Version:** 0.4.53  
+**App-Version:** 0.4.57  
 **Zielgruppe:** Personen, die Prüfungen bewerten und Noten an HISinOne bzw. die Studienabteilung melden  
 **Datenschutz:** Alle Prüfungsdaten bleiben **im Browser** (IndexedDB). Es gibt **keine** Übertragung von Notenlisten an einen App-Server.
 
@@ -121,8 +121,15 @@ Typische Felder:
 
 ### 3.3 Sicherung von der Startseite
 
-- **JSON importieren** (eine oder mehrere Dateien) – legt **Kopien** der Prüfungen in **diesem** Browser an  
-- **Semester-ZIP** importieren / Semester sichern – mehrere Projekte auf einmal  
+- **JSON importieren** (eine oder mehrere Dateien) bzw. **Semester-ZIP** – stellt Projekte in **diesem** Browser wieder her  
+- **Semester sichern** – alle Prüfungen des aktuellen Semesters als ZIP  
+
+Existiert die Prüfung bereits im Browser (gleiche Projekt-ID oder gleicher Name + Semester + Prüfungsform), öffnet sich ein **Konflikt-Dialog**:
+
+1. Gegenüberstellung **Browser jetzt** vs. **Sicherung** (Änderungszeit mit Kennzeichnung „aktueller“, Zähler zu HIS, Punkten, Noten, …)  
+2. **Als neue Version importieren** – zusätzliche Prüfung mit Namenszusatz `(Import …)` und Badge **Import-Kopie** auf der Karte  
+3. **Bestehende ersetzen** – nur nach ausdrücklicher Bestätigung (Checkbox); die lokale Version wird überschrieben  
+4. **Überspringen** bzw. bei mehreren Konflikten **Alle verbleibenden abbrechen**  
 
 Dateinamen der Sicherung typisch: Datum + Name + Schritt (z. B. `…_nach-Noten.json`), ohne Uhrzeit.
 
@@ -492,8 +499,10 @@ Nach Änderungen meldet die App ggf. **„Sicherung veraltet“** – dann erneu
 ### 14.2 Wiederherstellen
 
 1. Startseite → JSON und/oder Semester-ZIP importieren  
-2. Jede Datei wird als **neue Kopie** in **diesem** Browser angelegt  
-3. Auf einem neuen PC: nur über diese Dateien  
+2. **Neue** Prüfungen (noch nicht im Browser): werden als neues Projekt angelegt  
+3. **Bereits vorhandene** Prüfungen: Konflikt-Dialog (neue Version / ersetzen / überspringen) – siehe [§3.3](#33-sicherung-von-der-startseite)  
+4. Auf einem neuen PC (leerer Browser): Import legt die Projekte ohne Konflikt an  
+
 
 ---
 

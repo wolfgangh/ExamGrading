@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { useExams } from "@/hooks/use-exams";
 import { NewExamDialog } from "@/components/exams/new-exam-dialog";
+import {
+  ImportConflictDialog,
+  type ImportConflictResolution,
+} from "@/components/exams/import-conflict-dialog";
 import { AppHeader } from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +49,7 @@ import {
 import { downloadBlob, downloadJson } from "@/lib/download";
 import {
   exportExamJson,
+  listExams,
   parseExamJson,
   saveExam,
 } from "@/lib/storage";
@@ -63,6 +68,12 @@ import {
   MAX_PROJECT_ARCHIVE_BYTES,
   MAX_SEMESTER_ZIP_BYTES,
 } from "@/lib/import-limits";
+import {
+  clearImportedCopyMeta,
+  findExistingExamMatches,
+  formatImportDateTime,
+  labelImportedCopy,
+} from "@/lib/project-import-conflict";
 import { createId } from "@/lib/id";
 import {
   currentSemesterLabel,
@@ -71,6 +82,22 @@ import {
 import { datedExportFilename, cn } from "@/lib/utils";
 import { getExamWorkflowSummary } from "@/lib/workflow-steps";
 import { buildEnrichedRows } from "@/lib/matching/match";
+
+type PendingImportConflict = {
+  fileLabel: string;
+  project: ExamProject;
+  matches: ExamProject[];
+  byId: boolean;
+};
+
+type ImportBatchResults = {
+  asCopy: string[];
+  replaced: string[];
+  plain: string[];
+  skipped: string[];
+  fail: string[];
+  lastId: string | null;
+};
 
 /** Personen mit erfassten Punkten (nicht: Länge des points-Arrays). */
 function countPeopleWithPoints(exam: ExamProject): number {
@@ -117,6 +144,17 @@ function examListCountsLabel(exam: ExamProject): string {
 const SEMESTER_FILTER_ALL = "__all__";
 const SEMESTER_FILTER_NONE = "__none__";
 
+function emptyImportResults(): ImportBatchResults {
+  return {
+    asCopy: [],
+    replaced: [],
+    plain: [],
+    skipped: [],
+    fail: [],
+    lastId: null,
+  };
+}
+
 export function ExamList() {
   const { exams, loading, error, refresh, remove, duplicate } = useExams();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -124,6 +162,15 @@ export function ExamList() {
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [conflictQueue, setConflictQueue] = useState<PendingImportConflict[]>(
+    []
+  );
+  const [conflictIndex, setConflictIndex] = useState(0);
+  const [importResults, setImportResults] = useState<ImportBatchResults>(
+    emptyImportResults
+  );
+  const workingExamsRef = useRef<ExamProject[]>([]);
   /** Default: aktuelles Semester; „Alle“ / „ohne Semester“ wählbar */
   const [semesterFilter, setSemesterFilter] = useState<string>(() =>
     currentSemesterLabel()
@@ -160,23 +207,6 @@ export function ExamList() {
     [exams]
   );
 
-  const importOneProjectJson = async (
-    text: string,
-    sourceLabel: string
-  ): Promise<{ summary: string; id: string }> => {
-    assertFileSizeLimit(
-      { size: new TextEncoder().encode(text).length, name: sourceLabel },
-      MAX_PROJECT_ARCHIVE_BYTES,
-      "JSON-Sicherung"
-    );
-    let project = parseExamJson(text);
-    project.id = createId("exam");
-    project.createdAt = new Date().toISOString();
-    project = markProjectRestoredFromBackup(project);
-    await saveExam(project);
-    return { summary: projectArchiveSummary(project), id: project.id };
-  };
-
   const isZipFile = (file: File): boolean => {
     const n = file.name.toLowerCase();
     return (
@@ -186,89 +216,306 @@ export function ExamList() {
     );
   };
 
+  const saveAsNewCopy = async (
+    imported: ExamProject,
+    match: ExamProject | null
+  ): Promise<{ summary: string; id: string; project: ExamProject }> => {
+    let project = { ...imported };
+    project.id = createId("exam");
+    project.createdAt = new Date().toISOString();
+    if (match) {
+      project = labelImportedCopy(project, match.name, match.id);
+    } else {
+      project = clearImportedCopyMeta(project);
+    }
+    project = markProjectRestoredFromBackup(project);
+    await saveExam(project);
+    return {
+      summary: projectArchiveSummary(project),
+      id: project.id,
+      project,
+    };
+  };
+
+  const saveReplacing = async (
+    imported: ExamProject,
+    match: ExamProject
+  ): Promise<{ summary: string; id: string; project: ExamProject }> => {
+    let project = clearImportedCopyMeta({ ...imported });
+    project.id = match.id;
+    project.createdAt = match.createdAt;
+    project = markProjectRestoredFromBackup(project);
+    await saveExam(project);
+    return {
+      summary: projectArchiveSummary(project),
+      id: project.id,
+      project,
+    };
+  };
+
+  const finishImportBatch = async (results: ImportBatchResults) => {
+    setConflictQueue([]);
+    setConflictIndex(0);
+    setImportBusy(false);
+    await refresh();
+
+    const parts: string[] = [];
+    if (results.plain.length > 0) {
+      parts.push(
+        results.plain.length === 1
+          ? `importiert: ${results.plain[0]}`
+          : `${results.plain.length} neu importiert`
+      );
+    }
+    if (results.asCopy.length > 0) {
+      parts.push(
+        results.asCopy.length === 1
+          ? `als neue Version: ${results.asCopy[0]}`
+          : `${results.asCopy.length} als neue Version`
+      );
+    }
+    if (results.replaced.length > 0) {
+      parts.push(
+        results.replaced.length === 1
+          ? `ersetzt: ${results.replaced[0]}`
+          : `${results.replaced.length} ersetzt`
+      );
+    }
+    if (results.skipped.length > 0) {
+      parts.push(
+        results.skipped.length === 1
+          ? `übersprungen: ${results.skipped[0]}`
+          : `${results.skipped.length} übersprungen`
+      );
+    }
+
+    const successCount =
+      results.plain.length + results.asCopy.length + results.replaced.length;
+
+    if (parts.length > 0) {
+      setImportMsg(
+        `${parts.join(" · ")}. Daten liegen nur in diesem Browser.`
+      );
+    } else if (results.fail.length === 0) {
+      setImportMsg(null);
+    }
+
+    if (results.fail.length > 0) {
+      setImportErr(results.fail.join(" | "));
+    }
+
+    if (
+      successCount === 1 &&
+      results.fail.length === 0 &&
+      results.skipped.length === 0 &&
+      results.lastId
+    ) {
+      router.push(`/exam/${results.lastId}/overview`);
+    }
+  };
+
+  const upsertWorkingExam = (project: ExamProject) => {
+    const list = workingExamsRef.current;
+    const idx = list.findIndex((e) => e.id === project.id);
+    if (idx >= 0) list[idx] = project;
+    else list.push(project);
+  };
+
+  const resolveConflict = async (resolution: ImportConflictResolution) => {
+    const current = conflictQueue[conflictIndex];
+    if (!current) return;
+
+    const results = { ...importResults };
+    results.asCopy = [...results.asCopy];
+    results.replaced = [...results.replaced];
+    results.skipped = [...results.skipped];
+    results.fail = [...results.fail];
+
+    try {
+      if (resolution.action === "copy") {
+        const match =
+          current.matches.find((m) => m.id === resolution.matchId) ??
+          current.matches[0];
+        if (!match) throw new Error("Keine passende Prüfung für die Kopie.");
+        const { summary, id, project } = await saveAsNewCopy(
+          current.project,
+          match
+        );
+        results.asCopy.push(summary);
+        results.lastId = id;
+        upsertWorkingExam(project);
+      } else if (resolution.action === "replace") {
+        const match =
+          current.matches.find((m) => m.id === resolution.matchId) ??
+          current.matches[0];
+        if (!match) throw new Error("Keine passende Prüfung zum Ersetzen.");
+        const { summary, id, project } = await saveReplacing(
+          current.project,
+          match
+        );
+        results.replaced.push(summary);
+        results.lastId = id;
+        upsertWorkingExam(project);
+      } else if (resolution.action === "skip") {
+        results.skipped.push(current.fileLabel);
+      } else if (resolution.action === "abort_remaining") {
+        results.skipped.push(current.fileLabel);
+        for (let i = conflictIndex + 1; i < conflictQueue.length; i++) {
+          results.skipped.push(conflictQueue[i].fileLabel);
+        }
+        setImportResults(results);
+        await finishImportBatch(results);
+        return;
+      }
+    } catch (e) {
+      results.fail.push(
+        `${current.fileLabel}: ${
+          e instanceof Error ? e.message : "Import fehlgeschlagen"
+        }`
+      );
+    }
+
+    const next = conflictIndex + 1;
+    if (next >= conflictQueue.length) {
+      setImportResults(results);
+      await finishImportBatch(results);
+      return;
+    }
+    setImportResults(results);
+    setConflictIndex(next);
+  };
+
   /** JSON-Dateien und Semester-ZIPs (analog „Semester sichern“) importieren */
   const importBackupFiles = async (files: FileList | File[]) => {
+    if (importBusy || conflictQueue.length > 0) return;
     setImportMsg(null);
     setImportErr(null);
     setExportMsg(null);
     const list = Array.from(files);
     if (list.length === 0) return;
 
-    const ok: string[] = [];
-    const fail: string[] = [];
-    let lastId: string | null = null;
+    setImportBusy(true);
+    const results = emptyImportResults();
+    const conflicts: PendingImportConflict[] = [];
 
-    for (const file of list) {
-      try {
-        if (isZipFile(file)) {
-          assertFileSizeLimit(file, MAX_SEMESTER_ZIP_BYTES, "ZIP-Sicherung");
-          const JSZip = (await import("jszip")).default;
-          const zip = await JSZip.loadAsync(await file.arrayBuffer());
-          const jsonEntries = Object.values(zip.files).filter(
-            (e) =>
-              !e.dir &&
-              e.name.toLowerCase().endsWith(".json") &&
-              !e.name.split("/").some((p) => p.startsWith("."))
-          );
-          if (jsonEntries.length === 0) {
-            throw new Error(
-              "ZIP enthält keine .json-Projektsicherungen."
+    try {
+      workingExamsRef.current = await listExams();
+
+      type ParsedItem = { fileLabel: string; project: ExamProject };
+      const parsed: ParsedItem[] = [];
+
+      for (const file of list) {
+        try {
+          if (isZipFile(file)) {
+            assertFileSizeLimit(file, MAX_SEMESTER_ZIP_BYTES, "ZIP-Sicherung");
+            const JSZip = (await import("jszip")).default;
+            const zip = await JSZip.loadAsync(await file.arrayBuffer());
+            const jsonEntries = Object.values(zip.files).filter(
+              (e) =>
+                !e.dir &&
+                e.name.toLowerCase().endsWith(".json") &&
+                !e.name.split("/").some((p) => p.startsWith("."))
             );
-          }
-          // stabile Reihenfolge
-          jsonEntries.sort((a, b) =>
-            a.name.localeCompare(b.name, "de")
-          );
-          for (const entry of jsonEntries) {
-            try {
-              const text = await entry.async("string");
-              const { summary, id } = await importOneProjectJson(
-                text,
-                `${file.name}/${entry.name}`
-              );
-              ok.push(summary);
-              lastId = id;
-            } catch (e) {
-              fail.push(
-                `${file.name}/${entry.name}: ${
-                  e instanceof Error ? e.message : "Import fehlgeschlagen"
-                }`
+            if (jsonEntries.length === 0) {
+              throw new Error(
+                "ZIP enthält keine .json-Projektsicherungen."
               );
             }
+            jsonEntries.sort((a, b) => a.name.localeCompare(b.name, "de"));
+            for (const entry of jsonEntries) {
+              try {
+                const text = await entry.async("string");
+                const label = `${file.name}/${entry.name}`;
+                assertFileSizeLimit(
+                  {
+                    size: new TextEncoder().encode(text).length,
+                    name: label,
+                  },
+                  MAX_PROJECT_ARCHIVE_BYTES,
+                  "JSON-Sicherung"
+                );
+                parsed.push({
+                  fileLabel: label,
+                  project: parseExamJson(text),
+                });
+              } catch (e) {
+                results.fail.push(
+                  `${file.name}/${entry.name}: ${
+                    e instanceof Error ? e.message : "Import fehlgeschlagen"
+                  }`
+                );
+              }
+            }
+          } else {
+            assertFileSizeLimit(
+              file,
+              MAX_PROJECT_ARCHIVE_BYTES,
+              "JSON-Sicherung"
+            );
+            const text = await file.text();
+            parsed.push({
+              fileLabel: file.name,
+              project: parseExamJson(text),
+            });
           }
-        } else {
-          assertFileSizeLimit(file, MAX_PROJECT_ARCHIVE_BYTES, "JSON-Sicherung");
-          const text = await file.text();
-          const { summary, id } = await importOneProjectJson(text, file.name);
-          ok.push(summary);
-          lastId = id;
+        } catch (e) {
+          results.fail.push(
+            `${file.name}: ${
+              e instanceof Error ? e.message : "Import fehlgeschlagen"
+            }`
+          );
         }
-      } catch (e) {
-        fail.push(
-          `${file.name}: ${
-            e instanceof Error ? e.message : "Import fehlgeschlagen"
-          }`
-        );
       }
-    }
 
-    await refresh();
+      for (const item of parsed) {
+        try {
+          const { matches, byId } = findExistingExamMatches(
+            item.project,
+            workingExamsRef.current
+          );
+          if (matches.length === 0) {
+            const { summary, id, project } = await saveAsNewCopy(
+              item.project,
+              null
+            );
+            results.plain.push(summary);
+            results.lastId = id;
+            upsertWorkingExam(project);
+          } else {
+            conflicts.push({
+              fileLabel: item.fileLabel,
+              project: item.project,
+              matches,
+              byId,
+            });
+          }
+        } catch (e) {
+          results.fail.push(
+            `${item.fileLabel}: ${
+              e instanceof Error ? e.message : "Import fehlgeschlagen"
+            }`
+          );
+        }
+      }
 
-    if (ok.length > 0) {
-      setImportMsg(
-        ok.length === 1
-          ? `Sicherung importiert: ${ok[0]}. Daten liegen wieder nur in diesem Browser.`
-          : `${ok.length} Sicherungen importiert: ${ok.join(" · ")}`
+      if (conflicts.length === 0) {
+        await finishImportBatch(results);
+        return;
+      }
+
+      setImportResults(results);
+      setConflictQueue(conflicts);
+      setConflictIndex(0);
+      // Dialog übernimmt; Busy bleibt bis finishImportBatch
+    } catch (e) {
+      setImportBusy(false);
+      setImportErr(
+        e instanceof Error ? e.message : "Import fehlgeschlagen"
       );
     }
-    if (fail.length > 0) {
-      setImportErr(fail.join(" | "));
-    }
-    // Nur bei genau einer erfolgreichen Datei zur Prüfung springen
-    if (ok.length === 1 && fail.length === 0 && lastId) {
-      router.push(`/exam/${lastId}/overview`);
-    }
   };
+
+  const activeConflict = conflictQueue[conflictIndex] ?? null;
 
   const exportBackup = async (exam: ExamProject) => {
     void downloadJson(projectArchiveFilename(exam), exportExamJson(exam));
@@ -326,6 +573,7 @@ export function ExamList() {
               accept="application/json,.json,application/zip,.zip"
               multiple
               className="hidden"
+              disabled={importBusy || conflictQueue.length > 0}
               onChange={(e) => {
                 const files = e.target.files;
                 if (files?.length) void importBackupFiles(files);
@@ -336,9 +584,12 @@ export function ExamList() {
               variant="outline"
               onClick={() => fileRef.current?.click()}
               title="JSON-Projektsicherungen und/oder Semester-ZIP wiederherstellen"
+              disabled={importBusy || conflictQueue.length > 0}
             >
               <HardDrive className="size-4" />
-              Sicherung importieren
+              {importBusy || conflictQueue.length > 0
+                ? "Import läuft…"
+                : "Sicherung importieren"}
             </Button>
             <Button
               variant="outline"
@@ -353,6 +604,19 @@ export function ExamList() {
           </>
         }
       />
+
+      {activeConflict && (
+        <ImportConflictDialog
+          open
+          fileLabel={activeConflict.fileLabel}
+          imported={activeConflict.project}
+          matches={activeConflict.matches}
+          byId={activeConflict.byId}
+          queueIndex={conflictIndex + 1}
+          queueTotal={conflictQueue.length}
+          onResolve={(r) => void resolveConflict(r)}
+        />
+      )}
 
       <main className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-auto px-4 py-8">
         <div className="mb-6 space-y-3">
@@ -583,6 +847,23 @@ export function ExamList() {
                         {" · "}
                         {examListCountsLabel(exam)}
                       </span>
+                      {exam.importedAsCopyAt && (
+                        <span
+                          className="mt-1 inline-block rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-950 dark:bg-sky-900 dark:text-sky-50"
+                          title={
+                            exam.importedAsCopyOfName
+                              ? `Import-Kopie zu „${exam.importedAsCopyOfName}“`
+                              : "Als zusätzliche Version importiert"
+                          }
+                        >
+                          Import-Kopie
+                          {exam.importedAsCopyOfName
+                            ? ` · zu „${exam.importedAsCopyOfName}“`
+                            : ""}
+                          {" · "}
+                          {formatImportDateTime(exam.importedAsCopyAt)}
+                        </span>
+                      )}
                       {stale && (
                         <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-950 dark:bg-amber-900 dark:text-amber-50">
                           Sicherung ausstehend
