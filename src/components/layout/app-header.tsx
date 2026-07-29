@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { AppearanceControls } from "@/components/layout/appearance-controls";
+import { AppLogo } from "@/components/layout/app-logo";
 import { Button } from "@/components/ui/button";
 import { clearAuthentication } from "@/lib/app-auth";
 
@@ -25,9 +26,7 @@ export function AppHeader({
           href="/"
           className="flex min-w-0 max-w-full shrink items-center gap-3 sm:max-w-[min(100%,18rem)] md:max-w-[min(100%,24rem)]"
         >
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-            EG
-          </div>
+          <AppLogo size={36} priority />
           <div className="min-w-0">
             <p className="text-base font-semibold text-foreground">ExamGrade</p>
             <p className="truncate text-sm text-muted-foreground">

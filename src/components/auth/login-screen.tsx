@@ -16,6 +16,7 @@ import {
   setAuthenticated,
   verifyPassword,
 } from "@/lib/app-auth";
+import { AppLogo } from "@/components/layout/app-logo";
 import { Lock, Loader2 } from "lucide-react";
 
 export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
@@ -50,8 +51,8 @@ export function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
     <div className="page-shell flex min-h-screen items-center justify-center p-4">
       <Card className="surface-panel w-full max-w-md shadow-lg">
         <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground">
-            EG
+          <div className="mx-auto">
+            <AppLogo size={56} priority className="rounded-xl" />
           </div>
           <div>
             <CardTitle className="text-xl tracking-tight">ExamGrade</CardTitle>

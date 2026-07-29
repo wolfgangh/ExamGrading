@@ -26,6 +26,10 @@ export const metadata: Metadata = {
   title: "ExamGrade – Prüfungsnoten-Tool",
   description:
     "Client-seitige Notenvergabe und HISinOne-Export für Prüfungen an deutschen Hochschulen.",
+  icons: {
+    icon: [{ url: "/examgrade-logo.jpg", type: "image/jpeg" }],
+    apple: [{ url: "/examgrade-logo.jpg", type: "image/jpeg" }],
+  },
 };
 
 const themeInitScript = `
