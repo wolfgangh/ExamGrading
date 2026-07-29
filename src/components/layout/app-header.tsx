@@ -20,8 +20,11 @@ export function AppHeader({
 
   return (
     <header className="surface-header sticky top-0 z-40 border-b">
-      <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3">
-        <Link href="/" className="flex min-w-0 items-center gap-3">
+      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+        <Link
+          href="/"
+          className="flex min-w-0 max-w-full shrink items-center gap-3 sm:max-w-[min(100%,18rem)] md:max-w-[min(100%,24rem)]"
+        >
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
             EG
           </div>
@@ -32,7 +35,7 @@ export function AppHeader({
             </p>
           </div>
         </Link>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
           {actions}
           <AppearanceControls />
           <Button

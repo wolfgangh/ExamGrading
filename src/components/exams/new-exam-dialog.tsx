@@ -189,9 +189,16 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     >
       <DialogTrigger
         render={
-          <Button>
-            <Plus className="size-4" />
-            Neue Prüfung
+          <Button
+            size="sm"
+            className="max-w-full shrink"
+            title="Neue Prüfung anlegen"
+          >
+            <Plus className="size-4 shrink-0" />
+            <span className="truncate">
+              <span className="sm:hidden">Neu</span>
+              <span className="hidden sm:inline">Neue Prüfung</span>
+            </span>
           </Button>
         }
       />

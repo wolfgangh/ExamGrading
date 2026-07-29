@@ -582,23 +582,39 @@ export function ExamList() {
             />
             <Button
               variant="outline"
+              size="sm"
+              className="max-w-full shrink"
               onClick={() => fileRef.current?.click()}
               title="JSON-Projektsicherungen und/oder Semester-ZIP wiederherstellen"
               disabled={importBusy || conflictQueue.length > 0}
             >
-              <HardDrive className="size-4" />
-              {importBusy || conflictQueue.length > 0
-                ? "Import läuft…"
-                : "Sicherung importieren"}
+              <HardDrive className="size-4 shrink-0" />
+              <span className="truncate">
+                {importBusy || conflictQueue.length > 0 ? (
+                  "Import läuft…"
+                ) : (
+                  <>
+                    <span className="sm:hidden">Import</span>
+                    <span className="hidden sm:inline">
+                      Sicherung importieren
+                    </span>
+                  </>
+                )}
+              </span>
             </Button>
             <Button
               variant="outline"
+              size="sm"
+              className="max-w-full shrink"
               onClick={() => void exportSemesterZip()}
               title={`Alle Prüfungen des Semesters „${semesterNow}“ als ZIP`}
               disabled={loading}
             >
-              <Archive className="size-4" />
-              Semester sichern
+              <Archive className="size-4 shrink-0" />
+              <span className="truncate">
+                <span className="sm:hidden">Semester</span>
+                <span className="hidden sm:inline">Semester sichern</span>
+              </span>
             </Button>
             <NewExamDialog onCreated={() => void refresh()} />
           </>
@@ -626,7 +642,7 @@ export function ExamList() {
                 Prüfungen
               </h1>
               <p className="mt-1 text-muted-foreground">
-                Notenvergabe und HISinOne-Export – ersetzt den Excel-Workflow.
+                Notenvergabe und HISinOne-Export.
                 {semesterFilter === SEMESTER_FILTER_ALL ? (
                   <>
                     {" "}
