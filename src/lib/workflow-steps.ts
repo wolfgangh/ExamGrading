@@ -437,6 +437,11 @@ export type ExamWorkflowSummary = {
   statusLabel: string;
 };
 
+/** Manuell in der Übersicht als abgeschlossen markiert. */
+export function isWorkflowManuallyCompleted(project: ExamProject): boolean {
+  return Boolean(project.workflowManuallyCompletedAt);
+}
+
 /**
  * Workflow-Zusammenfassung für die Prüfungsübersicht (Hauptseite).
  * Berechnet Enriched Rows + Stats pro Projekt – bei üblichen Listengrößen unkritisch.
@@ -449,20 +454,26 @@ export function getExamWorkflowSummary(
   const steps = buildWorkflowSteps(project, rows, stats, project.id);
   const { doneCount, totalCount, progressPct, nextOpen } =
     workflowProgress(steps);
-  const complete = totalCount > 0 && doneCount === totalCount;
-  const statusLabel = complete
-    ? `Abgeschlossen · ${doneCount}/${totalCount}`
-    : nextOpen
-      ? `${nextOpen.label} · ${doneCount}/${totalCount}`
-      : totalCount === 0
-        ? "Kein Workflow"
-        : `${doneCount}/${totalCount}`;
+  const autoComplete = totalCount > 0 && doneCount === totalCount;
+  const manual = isWorkflowManuallyCompleted(project);
+  const complete = autoComplete || manual;
+  const statusLabel = manual
+    ? autoComplete
+      ? `Abgeschlossen · ${doneCount}/${totalCount}`
+      : `Manuell abgeschlossen · ${doneCount}/${totalCount}`
+    : autoComplete
+      ? `Abgeschlossen · ${doneCount}/${totalCount}`
+      : nextOpen
+        ? `${nextOpen.label} · ${doneCount}/${totalCount}`
+        : totalCount === 0
+          ? "Kein Workflow"
+          : `${doneCount}/${totalCount}`;
   return {
     doneCount,
     totalCount,
-    progressPct,
+    progressPct: complete ? 100 : progressPct,
     complete,
-    nextOpen,
+    nextOpen: complete ? undefined : nextOpen,
     statusLabel,
   };
 }

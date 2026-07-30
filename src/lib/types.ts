@@ -466,6 +466,13 @@ export interface ExamProject {
     backupAfterGradesAt?: string;
   };
 
+  /**
+   * Manuell in der Übersicht als Workflow-abgeschlossen markiert
+   * (z. B. wenn Exporte außerhalb der App liefen oder Schritte bewusst entfallen).
+   * Beeinflusst die Statusanzeige, nicht die Export-Gates.
+   */
+  workflowManuallyCompletedAt?: string;
+
   importLogs: ImportLogEntry[];
 
   /**

@@ -15,13 +15,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn, formatGrade, formatPercent } from "@/lib/utils";
 import { orphanCount } from "@/lib/matching/merge-candidates";
 import { listUnresolvedOrphans } from "@/lib/matching/orphan-resolution";
 import { HISINONE_LABEL, isOnlineStyleExam } from "@/lib/types";
 import {
   buildWorkflowSteps,
+  isWorkflowManuallyCompleted,
   workflowProgress,
 } from "@/lib/workflow-steps";
 import {
@@ -36,7 +37,7 @@ import {
 
 export default function OverviewPage() {
   const { id } = useParams<{ id: string }>();
-  const { project, stats, rows } = useExamContext();
+  const { project, stats, rows, setProject } = useExamContext();
   if (!project || !stats) return null;
 
   const onlineStyle = isOnlineStyleExam(project.examType);
@@ -52,6 +53,24 @@ export default function OverviewPage() {
   const steps = buildWorkflowSteps(project, rows, stats, id);
   const { doneCount, totalCount, progressPct, nextOpen } =
     workflowProgress(steps);
+  const autoComplete = totalCount > 0 && doneCount === totalCount;
+  const manualComplete = isWorkflowManuallyCompleted(project);
+  const displayComplete = autoComplete || manualComplete;
+
+  const markWorkflowComplete = () => {
+    setProject((prev) => ({
+      ...prev,
+      workflowManuallyCompletedAt: new Date().toISOString(),
+    }));
+  };
+
+  const clearWorkflowComplete = () => {
+    setProject((prev) => {
+      const next = { ...prev };
+      delete next.workflowManuallyCompletedAt;
+      return next;
+    });
+  };
 
   const orphans = rows.filter((r) => r.attendanceWithoutHis);
   const noShows = rows.filter((r) => r.status === "no_show");
@@ -320,13 +339,14 @@ export default function OverviewPage() {
                 className="tabular-nums font-medium"
               >
                 {doneCount} von {totalCount} erledigt
+                {manualComplete && !autoComplete ? " · manuell" : ""}
               </Badge>
             </div>
             <div className="mt-3 space-y-1.5">
               <div
                 className="h-2.5 w-full overflow-hidden rounded-full bg-muted"
                 role="progressbar"
-                aria-valuenow={doneCount}
+                aria-valuenow={displayComplete ? totalCount : doneCount}
                 aria-valuemin={0}
                 aria-valuemax={totalCount}
                 aria-label="Workflow-Fortschritt"
@@ -334,14 +354,25 @@ export default function OverviewPage() {
                 <div
                   className={cn(
                     "h-full rounded-full transition-all",
-                    doneCount === totalCount
-                      ? "bg-emerald-600"
-                      : "bg-primary"
+                    displayComplete ? "bg-emerald-600" : "bg-primary"
                   )}
-                  style={{ width: `${progressPct}%` }}
+                  style={{
+                    width: `${displayComplete ? 100 : progressPct}%`,
+                  }}
                 />
               </div>
-              {nextOpen ? (
+              {manualComplete && !autoComplete ? (
+                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                  Manuell als abgeschlossen markiert
+                  {project.workflowManuallyCompletedAt
+                    ? ` · ${new Date(
+                        project.workflowManuallyCompletedAt
+                      ).toLocaleString("de-DE")}`
+                    : ""}
+                  . Offene Schritte bleiben sichtbar; Export-Regeln sind
+                  unverändert.
+                </p>
+              ) : nextOpen ? (
                 <p className="text-xs text-muted-foreground">
                   Als Nächstes:{" "}
                   <span className="font-medium text-foreground">
@@ -354,6 +385,31 @@ export default function OverviewPage() {
                   Alle Schritte erledigt – bereit für den Export.
                 </p>
               )}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {!displayComplete || (manualComplete && !autoComplete) ? (
+                  manualComplete && !autoComplete ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={clearWorkflowComplete}
+                    >
+                      Manuelle Markierung aufheben
+                    </Button>
+                  ) : !autoComplete ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={markWorkflowComplete}
+                      title="Prüfung auf der Startseite als abgeschlossen anzeigen, auch wenn noch Schritte offen sind"
+                    >
+                      <CheckCircle2 className="size-3.5" />
+                      Als abgeschlossen markieren
+                    </Button>
+                  ) : null
+                ) : null}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-2">

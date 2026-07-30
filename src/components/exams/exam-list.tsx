@@ -7,9 +7,9 @@ import {
   Archive,
   Copy,
   FileJson,
-  HardDrive,
   MoreHorizontal,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { useExams } from "@/hooks/use-exams";
 import { NewExamDialog } from "@/components/exams/new-exam-dialog";
@@ -581,22 +581,22 @@ export function ExamList() {
               }}
             />
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               className="max-w-full shrink"
               onClick={() => fileRef.current?.click()}
-              title="JSON-Projektsicherungen und/oder Semester-ZIP wiederherstellen"
+              title="Gesicherte Prüfungen aus .json oder Semester-.zip in diesen Browser laden"
               disabled={importBusy || conflictQueue.length > 0}
             >
-              <HardDrive className="size-4 shrink-0" />
+              <Upload className="size-4 shrink-0" />
               <span className="truncate">
                 {importBusy || conflictQueue.length > 0 ? (
-                  "Import läuft…"
+                  "Laden läuft…"
                 ) : (
                   <>
-                    <span className="sm:hidden">Import</span>
+                    <span className="sm:hidden">JSON/ZIP laden</span>
                     <span className="hidden sm:inline">
-                      Sicherung importieren
+                      JSON/ZIP laden
                     </span>
                   </>
                 )}
@@ -607,13 +607,15 @@ export function ExamList() {
               size="sm"
               className="max-w-full shrink"
               onClick={() => void exportSemesterZip()}
-              title={`Alle Prüfungen des Semesters „${semesterNow}“ als ZIP`}
+              title={`Alle Prüfungen mit Semester „${semesterNow}“ als ZIP herunterladen (Sicherung)`}
               disabled={loading}
             >
               <Archive className="size-4 shrink-0" />
               <span className="truncate">
-                <span className="sm:hidden">Semester</span>
-                <span className="hidden sm:inline">Semester sichern</span>
+                <span className="sm:hidden">Sem.-ZIP</span>
+                <span className="hidden sm:inline">
+                  Semester-ZIP speichern
+                </span>
               </span>
             </Button>
             <NewExamDialog onCreated={() => void refresh()} />
@@ -713,7 +715,7 @@ export function ExamList() {
               dem Server. Nach Importen und vor dem HISinOne-/PDF-Export:{" "}
               <strong>JSON-Sicherung</strong> herunterladen. Mehrere JSON-Dateien
               oder eine <strong>Semester-ZIP</strong> können importiert werden.
-              „Semester sichern“ packt alle Prüfungen mit Semester „
+              „Semester-ZIP speichern“ packt alle Prüfungen mit Semester „
               {semesterNow}“ in eine ZIP-Datei.
             </p>
           </div>
@@ -750,11 +752,12 @@ export function ExamList() {
             <CardContent className="flex flex-wrap gap-2">
               <NewExamDialog onCreated={() => void refresh()} />
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => fileRef.current?.click()}
+                title="Gesicherte Prüfungen aus .json oder Semester-.zip laden"
               >
-                <HardDrive className="size-4" />
-                Sicherung importieren
+                <Upload className="size-4" />
+                JSON/ZIP laden
               </Button>
             </CardContent>
           </Card>
