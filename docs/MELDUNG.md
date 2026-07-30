@@ -10,7 +10,8 @@ Issues werden über **GitHub** entgegengenommen. Strukturierte Formulare erschei
 | Feature | [Feature vorschlagen](https://github.com/wolfgangh/ExamGrading/issues/new?template=feature_request.yml) |
 | Frage | [Frage stellen](https://github.com/wolfgangh/ExamGrading/issues/new?template=question.yml) |
 
-In der laufenden App: Footer → **Feedback & Fehler melden** (kopiert Umgebungsinfos und öffnet die passende GitHub-Vorlage).
+In der laufenden App (ab v0.4.60): Footer → **Feedback & Fehler melden**  
+→ Dialog mit Buttons zu den GitHub-Vorlagen und **Kopieren** der Umgebungsinfos (App-Version, Browser, Viewport, …).
 
 ---
 
