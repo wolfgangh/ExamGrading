@@ -316,16 +316,68 @@ function on(
   return sections[id] !== false;
 }
 
-function shortLecturer(name: string, index: number, total: number): string {
-  const t = pdfText(name).trim();
-  if (total <= 2) return t.length > 22 ? `${t.slice(0, 20)}…` : t;
-  // Nachname oder Kürzel
-  const parts = t.split(/\s+/);
-  if (parts.length >= 2) {
-    const last = parts[parts.length - 1];
-    return last.length > 14 ? `${last.slice(0, 12)}…` : last;
+/** Nachname (letztes Wort); bei Doppel-Nachnamen reicht der letzte Token. */
+function lecturerLastName(full: string): string {
+  const parts = pdfText(full)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return "–";
+  // Titel am Ende vermeiden
+  const skip = new Set(["jr.", "sen.", "jun."]);
+  let i = parts.length - 1;
+  while (i > 0 && skip.has(parts[i].toLowerCase())) i -= 1;
+  return parts[i] || parts[parts.length - 1];
+}
+
+/**
+ * Spaltenkopf: nur Nachname. Bei doppelten Nachnamen mit Initial;
+ * sehr lange Namen werden gekürzt (Vollname in Legende).
+ */
+function lecturerColumnLabels(lecturers: string[]): {
+  labels: string[];
+  legendNeeded: boolean;
+} {
+  const lasts = lecturers.map(lecturerLastName);
+  let legendNeeded = false;
+  const labels = lecturers.map((full, i) => {
+    const last = lasts[i];
+    const dup = lasts.filter((l) => l === last).length > 1;
+    let label = last;
+    if (dup) {
+      const first = pdfText(full).trim().split(/\s+/).find((p) => {
+        const low = p.toLowerCase().replace(/\./g, "");
+        return !["prof", "dr", "dipl", "ing", "pd", "apl"].includes(low);
+      });
+      const initial = first?.[0] ? `${first[0]}.` : "";
+      label = initial ? `${initial} ${last}` : last;
+      legendNeeded = true;
+    }
+    if (label.length > 14) {
+      legendNeeded = true;
+      label = `${label.slice(0, 12)}…`;
+    }
+    return label;
+  });
+  // Eindeutigkeit erzwingen
+  const seen = new Map<string, number>();
+  for (let i = 0; i < labels.length; i++) {
+    const base = labels[i];
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+    if (n > 1) {
+      labels[i] = `${base} (${n})`;
+      legendNeeded = true;
+    }
   }
-  return t.length > 14 ? `${t.slice(0, 12)}…` : t || `D${index + 1}`;
+  if (lecturers.some((l, i) => lecturerLastName(l) !== labels[i])) {
+    legendNeeded = true;
+  }
+  // Legende, wenn Spaltenkopf ≠ voller Name
+  legendNeeded =
+    legendNeeded ||
+    lecturers.some((full, i) => labels[i] !== pdfText(full).trim());
+  return { labels, legendNeeded };
 }
 
 /** Mehr als ein inhaltliches Teilgebiet (nicht nur Platzhalter „Gesamt“). */
@@ -549,9 +601,14 @@ export function buildStudentPerformancePdf(
       const passLine =
         examHeaderLines(project).find((l) => l.startsWith("Bestehensgrenze")) ??
         "";
+      // Prüfer: je Name eine Zeile in derselben Zelle
+      const prueferCell =
+        lecturers.length > 0
+          ? lecturers.map((l) => pdfText(l)).join("\n")
+          : "–";
       metaRows.push([
         "Prüfer",
-        pdfText(lecturers.join(", ") || "–"),
+        prueferCell,
         "Bestehen",
         pdfText(passLine.replace(/^Bestehensgrenze:\s*/i, "") || "–"),
       ]);
@@ -559,6 +616,12 @@ export function buildStudentPerformancePdf(
     y = tableY(doc, y, {
       body: metaRows,
       showHead: "never",
+      styles: {
+        fontSize: 8,
+        cellPadding: { top: 1.2, right: 1.5, bottom: 1.2, left: 1.5 },
+        overflow: "linebreak",
+        valign: "top",
+      },
       columnStyles: {
         0: { cellWidth: 28, fontStyle: "bold", textColor: [70, 80, 90] },
         1: { cellWidth: 58 },
@@ -570,12 +633,15 @@ export function buildStudentPerformancePdf(
 
   // —— Ergebnis ——
   if (on(sections, "result")) {
-    y = beginSection(doc, "Ergebnis", y, 22);
+    y = beginSection(doc, "Ergebnis", y, 26);
+    // Gesamtnote = gültige Note (Override oder berechnet)
+    // Systemnote = aus Punkten/Kriterien/Schema
+    // Manuelle Korrektur = gesetzter gradeOverride (z. B. nach Einsicht)
     const resultBody: string[][] = [
-      ["Gesamtnote", pdfGrade(row.finalGrade)],
-      ["Berechnet", pdfGrade(row.calculatedGrade)],
+      ["Gesamtnote (gültig)", pdfGrade(row.finalGrade)],
+      ["Systemnote", pdfGrade(row.calculatedGrade)],
       [
-        "Manuell",
+        "Manuelle Korrektur",
         row.gradeOverride != null ? pdfGrade(row.gradeOverride) : "–",
       ],
     ];
@@ -596,22 +662,33 @@ export function buildStudentPerformancePdf(
       resultBody.push(["Antritt", "No-Show / nicht angetreten"]);
     }
 
-    const paired: string[][] = [];
-    for (let i = 0; i < resultBody.length; i += 2) {
-      const a = resultBody[i];
-      const b = resultBody[i + 1];
-      paired.push([a[0], a[1], b ? b[0] : "", b ? b[1] : ""]);
-    }
+    // Einspaltige Kennzahlen-Tabelle (klarere Labels)
     y = tableY(doc, y, {
-      body: paired,
+      body: resultBody,
       showHead: "never",
       columnStyles: {
-        0: { cellWidth: 36, fontStyle: "bold", textColor: [70, 80, 90] },
-        1: { cellWidth: 28, fontStyle: "bold", fontSize: 10 },
-        2: { cellWidth: 36, fontStyle: "bold", textColor: [70, 80, 90] },
-        3: { cellWidth: 28, fontStyle: "bold", fontSize: 10 },
+        0: { cellWidth: 48, fontStyle: "bold", textColor: [70, 80, 90] },
+        1: { cellWidth: 40, fontStyle: "bold", fontSize: 10 },
       },
     });
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.setTextColor(90);
+    const noteLines = doc.splitTextToSize(
+      pdfText(
+        "Gesamtnote (gültig): Note für Export/Anzeige. " +
+          "Systemnote: aus Punkten, Kriterien bzw. Notenschlüssel berechnet. " +
+          "Manuelle Korrektur: ggf. Override (z. B. nach Einsicht); sonst „–“."
+      ),
+      PDF_CONTENT_WIDTH
+    ) as string[];
+    for (const line of noteLines) {
+      doc.text(line, PDF_MARGIN, y);
+      y += 3.2;
+    }
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "normal");
+    y += 3;
   }
 
   // —— Notenverteilung ——
@@ -767,9 +844,9 @@ export function buildStudentPerformancePdf(
     if (on(sections, "portfolioTl") && components.length > 0) {
       y = beginSection(doc, "Teilleistungen", y, 24);
 
-      const lecHeads = perLecturer
-        ? lecturers.map((l, i) => shortLecturer(l, i, lecturers.length))
-        : [];
+      const { labels: lecHeads, legendNeeded: lecLegend } = perLecturer
+        ? lecturerColumnLabels(lecturers)
+        : { labels: [] as string[], legendNeeded: false };
 
       const head = [
         "Kürzel",
@@ -781,6 +858,7 @@ export function buildStudentPerformancePdf(
         ...lecHeads,
       ];
 
+      let anyPartialTl = false;
       const tlBody = components.map((c) => {
         const d = row.portfolioComponentDetails?.[c.id];
         const disp = resolveTlDisplayForPdf(
@@ -799,18 +877,15 @@ export function buildStudentPerformancePdf(
             rec?.portfolioGrades?.[c.id] ??
             null
         );
+        if (disp.partial) anyPartialTl = true;
         const g = disp.grade;
         const pct =
           disp.percent != null
-            ? `${pdfText(formatPoints(disp.percent * 100, 1))} %${
-                disp.partial ? "*" : ""
-              }`
+            ? `${pdfText(formatPoints(disp.percent * 100, 1))} %`
             : "–";
         const raw =
           disp.pointsRaw != null && disp.pointsMax != null
-            ? `${pdfPoints(disp.pointsRaw)}/${pdfPoints(disp.pointsMax)}${
-                disp.partial ? "*" : ""
-              }`
+            ? `${pdfPoints(disp.pointsRaw)}/${pdfPoints(disp.pointsMax)}`
             : "–";
         const byL = rec?.portfolioGradesByLecturer?.[c.id] ?? {};
         const lecCells = perLecturer
@@ -819,7 +894,6 @@ export function buildStudentPerformancePdf(
               if (direct != null && Number.isFinite(direct)) {
                 return pdfGrade(direct);
               }
-              // Teilbewertung je Dozent aus Kriterien
               if (project.portfolioCriteriaMode && c.criteria?.length) {
                 const scale = resolveComponentCriteriaScale(c);
                 const crits = (c.criteria ?? []).map((k) => ({
@@ -831,7 +905,15 @@ export function buildStudentPerformancePdf(
                   {};
                 const u = unitAvgFromCriterionValuesPartial(vals, crits);
                 if (u != null) {
-                  return `${pdfGrade(gradeFromUnitAvg(u, scale, project.gradeSchema))}*`;
+                  // Teilbewertung: zählt als partial für Hinweis
+                  const filled = crits.filter(
+                    (cr) =>
+                      vals[cr.id] != null && Number.isFinite(vals[cr.id] as number)
+                  ).length;
+                  if (filled < crits.length) anyPartialTl = true;
+                  return pdfGrade(
+                    gradeFromUnitAvg(u, scale, project.gradeSchema)
+                  );
                 }
               }
               return "–";
@@ -841,9 +923,7 @@ export function buildStudentPerformancePdf(
           pdfText(c.code || c.name),
           pdfText(c.name),
           pdfText(String(c.weight ?? 1)),
-          g != null
-            ? `${pdfGrade(g)}${disp.partial ? "*" : ""}`
-            : "–",
+          g != null ? pdfGrade(g) : "–",
           pct,
           raw,
           ...lecCells,
@@ -873,26 +953,53 @@ export function buildStudentPerformancePdf(
         columnStyles: colStyles,
       });
 
-      if (
-        tlBody.some((r) => r.some((cell) => String(cell).includes("*")))
-      ) {
+      if (lecLegend && perLecturer) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(70);
+        const legend = lecturers
+          .map((full, i) => `${lecHeads[i]} = ${pdfText(full)}`)
+          .join(" · ");
+        const lines = doc.splitTextToSize(
+          pdfText(`Dozenten: ${legend}`),
+          PDF_CONTENT_WIDTH
+        ) as string[];
+        for (const line of lines) {
+          y = ensureY(doc, y, 5);
+          doc.text(line, PDF_MARGIN, y);
+          y += 3.2;
+        }
+        doc.setTextColor(0);
+        y += 2;
+      }
+
+      if (anyPartialTl) {
         doc.setFont("helvetica", "italic");
         doc.setFontSize(7);
         doc.setTextColor(80);
-        doc.text(
+        const lines = doc.splitTextToSize(
           pdfText(
-            "* Aus den bisher bewerteten Kriterien berechnet (unvollständig)."
+            "Hinweis: Einzelne Teilleistungen sind nur aus den bisher bewerteten Kriterien berechnet (Bewertung unvollständig)."
           ),
-          PDF_MARGIN,
-          y
-        );
+          PDF_CONTENT_WIDTH
+        ) as string[];
+        for (const line of lines) {
+          y = ensureY(doc, y, 5);
+          doc.text(line, PDF_MARGIN, y);
+          y += 3.2;
+        }
         doc.setTextColor(0);
         doc.setFont("helvetica", "normal");
-        y += 5;
+        y += 3;
       }
     }
 
     if (on(sections, "portfolioCriteria") && critMode) {
+      const { labels: lecCritHeads, legendNeeded: lecCritLegend } =
+        perLecturer
+          ? lecturerColumnLabels(lecturers)
+          : { labels: [] as string[], legendNeeded: false };
+
       for (const c of components) {
         const crits = c.criteria ?? [];
         if (crits.length === 0) continue;
@@ -900,13 +1007,12 @@ export function buildStudentPerformancePdf(
         y = beginSection(doc, `Kriterien · ${c.code || c.name}`, y, 22);
 
         if (perLecturer) {
-          // Eine Tabelle: Kriterien × Dozenten-Spalten
           const head = [
             "Kürzel",
             "Kriterium",
             "Gew.",
             "Skala",
-            ...lecturers.map((l, i) => shortLecturer(l, i, lecturers.length)),
+            ...lecCritHeads,
           ];
           const body = crits.map((cr) => {
             const cells = lecturers.map((lec) => {
@@ -954,6 +1060,26 @@ export function buildStudentPerformancePdf(
             },
           });
         }
+      }
+
+      if (lecCritLegend && perLecturer) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(70);
+        const legend = lecturers
+          .map((full, i) => `${lecCritHeads[i]} = ${pdfText(full)}`)
+          .join(" · ");
+        const lines = doc.splitTextToSize(
+          pdfText(`Dozenten: ${legend}`),
+          PDF_CONTENT_WIDTH
+        ) as string[];
+        for (const line of lines) {
+          y = ensureY(doc, y, 5);
+          doc.text(line, PDF_MARGIN, y);
+          y += 3.2;
+        }
+        doc.setTextColor(0);
+        y += 2;
       }
     }
   }
