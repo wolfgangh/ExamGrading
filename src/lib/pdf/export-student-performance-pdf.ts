@@ -20,6 +20,7 @@ import {
   pdfGrade,
   pdfPoints,
   pdfText,
+  PDF_CONTENT_WIDTH,
   PDF_MARGIN,
   resolveProgramCode,
   savePdf,
@@ -31,6 +32,12 @@ import {
   downloadBlob,
   sanitizeDownloadFilename,
 } from "@/lib/download";
+import {
+  cohortGradesFromRows,
+  computeStudentGradeRank,
+  renderStudentGradeContextChartPng,
+} from "@/lib/charts/student-grade-context-chart";
+import { computeStatistics } from "@/lib/grades/statistics";
 import type { jsPDF } from "jspdf";
 import type { UserOptions } from "jspdf-autotable";
 
@@ -39,11 +46,11 @@ export type StudentPerformanceSectionId =
   | "person"
   | "exam"
   | "result"
+  | "gradeChart"
   | "subAreas"
   | "questions"
   | "staCriteria"
   | "portfolioTl"
-  | "portfolioLecturer"
   | "portfolioCriteria"
   | "secondCorrection"
   | "comment";
@@ -55,9 +62,7 @@ export type StudentPerformancePdfOptions = {
 export type StudentPerformanceSectionMeta = {
   id: StudentPerformanceSectionId;
   label: string;
-  /** Kurzhinweis in der UI */
   hint?: string;
-  /** Immer im PDF (nicht abwählbar) */
   required?: boolean;
 };
 
@@ -155,7 +160,53 @@ function on(
   return sections[id] !== false;
 }
 
-/** Welche Abschnitte für diese Prüfung sinnvoll sind (UI). */
+function shortLecturer(name: string, index: number, total: number): string {
+  const t = pdfText(name).trim();
+  if (total <= 2) return t.length > 22 ? `${t.slice(0, 20)}…` : t;
+  // Nachname oder Kürzel
+  const parts = t.split(/\s+/);
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1];
+    return last.length > 14 ? `${last.slice(0, 12)}…` : last;
+  }
+  return t.length > 14 ? `${t.slice(0, 12)}…` : t || `D${index + 1}`;
+}
+
+/** Mehr als ein inhaltliches Teilgebiet (nicht nur Platzhalter „Gesamt“). */
+function hasMeaningfulSubAreas(project: ExamProject): boolean {
+  const sas = project.subAreas ?? [];
+  if (sas.length > 1) return true;
+  if (sas.length === 1) {
+    const n = (sas[0].name || "").trim().toLowerCase();
+    const c = (sas[0].code || "").trim().toLowerCase();
+    if (n === "gesamt" || c === "g" || c === "ges") return false;
+    return true;
+  }
+  return false;
+}
+
+function hasQuestionData(project: ExamProject): boolean {
+  return (project.questionDefs?.length ?? 0) > 0;
+}
+
+function hasSecondCorrectionAnywhere(project: ExamProject): boolean {
+  return (project.points ?? []).some(
+    (p) =>
+      (p.secondCorrectionPoints != null &&
+        Number.isFinite(p.secondCorrectionPoints)) ||
+      Boolean(p.secondCorrectionNotes?.trim())
+  );
+}
+
+function hasCommentsAnywhere(project: ExamProject): boolean {
+  return (project.points ?? []).some((p) => Boolean(p.comment?.trim()));
+}
+
+function lecturersList(project: ExamProject): string[] {
+  return (project.lecturers ?? []).map((l) => l.trim()).filter(Boolean);
+}
+
+/** Welche Abschnitte für diese Prüfung sinnvoll sind (UI + Defaults). */
 export function availableStudentPerformanceSections(
   project: ExamProject
 ): StudentPerformanceSectionMeta[] {
@@ -178,57 +229,67 @@ export function availableStudentPerformanceSections(
       required: true,
     },
     {
-      id: "comment",
-      label: "Kommentar / Anmerkung",
+      id: "gradeChart",
+      label: "Notenverteilung",
+      hint: "Kohorte mit Ihrer Note und Top-%",
     },
   ];
 
-  if ((project.subAreas?.length ?? 0) > 0) {
+  if (hasCommentsAnywhere(project)) {
+    list.push({ id: "comment", label: "Kommentar / Anmerkung" });
+  }
+  if (hasMeaningfulSubAreas(project)) {
     list.push({
       id: "subAreas",
       label: "Teilgebiete",
       hint: "Punkte je Teilgebiet",
     });
   }
-  if ((project.questionDefs?.length ?? 0) > 0) {
+  if (hasQuestionData(project)) {
     list.push({
       id: "questions",
       label: "Aufgaben / Detailpunkte",
       hint: "Punkte je Aufgabe",
     });
   }
-  if (isStaCriteriaExam(project.examType) && (project.criteria?.length ?? 0) > 0) {
+  if (
+    isStaCriteriaExam(project.examType) &&
+    (project.criteria?.length ?? 0) > 0
+  ) {
     list.push({
       id: "staCriteria",
       label: "StA-Kriterien",
       hint: "Rohwerte und Gewichte",
     });
   }
-  if (isPortfolioExam(project.examType)) {
+  if (
+    isPortfolioExam(project.examType) &&
+    (project.portfolioComponents?.length ?? 0) > 0
+  ) {
     list.push({
       id: "portfolioTl",
       label: "Teilleistungen",
-      hint: "Teilnoten und Gewichte",
+      hint: project.portfolioPerLecturerGrading
+        ? "Teilnoten inkl. Spalten je Dozent"
+        : "Teilnoten und Gewichte",
     });
-    if (project.portfolioPerLecturerGrading) {
-      list.push({
-        id: "portfolioLecturer",
-        label: "Teilnoten je Dozent",
-      });
-    }
     if (project.portfolioCriteriaMode) {
       list.push({
         id: "portfolioCriteria",
         label: "Portfolio-Kriterien",
-        hint: "Rohwerte je Teilleistung",
+        hint: project.portfolioPerLecturerGrading
+          ? "Kriterien mit Dozenten-Spalten"
+          : "Rohwerte je Teilleistung",
       });
     }
   }
-  list.push({
-    id: "secondCorrection",
-    label: "Zweitkorrektur",
-    hint: "Nur wenn erfasst",
-  });
+  if (hasSecondCorrectionAnywhere(project)) {
+    list.push({
+      id: "secondCorrection",
+      label: "Zweitkorrektur",
+      hint: "Nur wenn für die Person erfasst",
+    });
+  }
   return list;
 }
 
@@ -244,22 +305,24 @@ export function defaultStudentPerformanceSections(
 
 /**
  * Baut ein Leistungs-PDF für genau eine Person.
+ * @param allRows Kohorte für Notenverteilung / Rang
  */
 export function buildStudentPerformancePdf(
   project: ExamProject,
   row: EnrichedStudentRow,
-  options?: StudentPerformancePdfOptions
+  options?: StudentPerformancePdfOptions,
+  allRows?: EnrichedStudentRow[]
 ): { doc: jsPDF; baseName: string } {
   const sections =
     options?.sections ?? defaultStudentPerformanceSections(project);
   const rec = findPointsRecord(project, row.key);
+  const cohort = allRows ?? [row];
   const { doc, y: y0 } = startPdfWithHeader(
     project,
     "Leistungsnachweis (Einzeln)"
   );
   let y = y0;
 
-  // Kompakter Hinweis in einer Zeile
   doc.setFont("helvetica", "italic");
   doc.setFontSize(7.5);
   doc.setTextColor(100);
@@ -282,13 +345,23 @@ export function buildStudentPerformancePdf(
     row.student.groupId && project.studentGroups
       ? project.studentGroups.find((g) => g.id === row.student.groupId)?.name
       : undefined;
+  const lecturers = lecturersList(project);
+  const perLecturer =
+    isPortfolioExam(project.examType) &&
+    project.portfolioPerLecturerGrading === true &&
+    lecturers.length > 0;
 
-  // —— Person + Prüfung als kompakte 4-Spalten-Meta ——
+  // —— Stammdaten ——
   if (on(sections, "person") || on(sections, "exam")) {
     y = sectionTitle(doc, "Stammdaten", y);
     const metaRows: string[][] = [];
     if (on(sections, "person")) {
-      metaRows.push(["Name", pdfText(name || "–"), "Matr.-Nr.", pdfText(row.key)]);
+      metaRows.push([
+        "Name",
+        pdfText(name || "–"),
+        "Matr.-Nr.",
+        pdfText(row.key),
+      ]);
       metaRows.push([
         "Studiengang",
         pdfText(prog || "–"),
@@ -317,34 +390,24 @@ export function buildStudentPerformancePdf(
         "Prüfungsnr.",
         pdfText(project.examNumber || "–"),
       ]);
-      const lecturers = (project.lecturers ?? [])
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .join(", ");
-      // Bestehensgrenze aus examHeaderLines-Logik
       const passLine =
         examHeaderLines(project).find((l) => l.startsWith("Bestehensgrenze")) ??
         "";
       metaRows.push([
         "Prüfer",
-        pdfText(lecturers || "–"),
+        pdfText(lecturers.join(", ") || "–"),
         "Bestehen",
         pdfText(passLine.replace(/^Bestehensgrenze:\s*/i, "") || "–"),
       ]);
     }
     y = tableY(doc, y, {
-      head: [["Feld", "Wert", "Feld", "Wert"]],
       body: metaRows,
+      showHead: "never",
       columnStyles: {
         0: { cellWidth: 28, fontStyle: "bold", textColor: [70, 80, 90] },
         1: { cellWidth: 58 },
         2: { cellWidth: 28, fontStyle: "bold", textColor: [70, 80, 90] },
         3: { cellWidth: 58 },
-      },
-      showHead: "never",
-      styles: {
-        fontSize: 8,
-        cellPadding: { top: 1.2, right: 1.5, bottom: 1.2, left: 1.5 },
       },
     });
   }
@@ -377,17 +440,11 @@ export function buildStudentPerformancePdf(
       resultBody.push(["Antritt", "No-Show / nicht angetreten"]);
     }
 
-    // Ergebnis kompakt: 2 Kennzahlen nebeneinander
     const paired: string[][] = [];
     for (let i = 0; i < resultBody.length; i += 2) {
       const a = resultBody[i];
       const b = resultBody[i + 1];
-      paired.push([
-        a[0],
-        a[1],
-        b ? b[0] : "",
-        b ? b[1] : "",
-      ]);
+      paired.push([a[0], a[1], b ? b[0] : "", b ? b[1] : ""]);
     }
     y = tableY(doc, y, {
       body: paired,
@@ -399,6 +456,59 @@ export function buildStudentPerformancePdf(
         3: { cellWidth: 28, fontStyle: "bold", fontSize: 10 },
       },
     });
+  }
+
+  // —— Notenverteilung ——
+  if (on(sections, "gradeChart")) {
+    const grades = cohortGradesFromRows(cohort);
+    const rankInfo = computeStudentGradeRank(row.finalGrade, grades);
+    if (grades.length >= 2 && rankInfo) {
+      y = sectionTitle(doc, "Einordnung in der Kohorte", y);
+      try {
+        const stats = computeStatistics(
+          cohort,
+          project.gradeSchema,
+          undefined,
+          project
+        );
+        const png = renderStudentGradeContextChartPng({
+          distribution: stats.gradeDistribution,
+          studentGrade: rankInfo.studentGrade,
+          rankInfo,
+          averageGrade: stats.averageGrade,
+          width: 1200,
+          height: 400,
+          scale: 2,
+        });
+        const chartH = 52;
+        y = ensureY(doc, y, chartH + 8);
+        doc.addImage(png, "PNG", PDF_MARGIN, y, PDF_CONTENT_WIDTH, chartH);
+        y += chartH + 3;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(50);
+        doc.text(
+          pdfText(
+            `Note ${pdfGrade(rankInfo.studentGrade)} · unter den besten ${rankInfo.topPercent} % der bewerteten Kohorte (Rang ${rankInfo.rank} von ${rankInfo.total}).`
+          ),
+          PDF_MARGIN,
+          y
+        );
+        doc.setTextColor(0);
+        y += 6;
+      } catch {
+        y = tableY(doc, y, {
+          body: [
+            [
+              pdfText(
+                `Note ${pdfGrade(rankInfo.studentGrade)} · unter den besten ${rankInfo.topPercent} % (Rang ${rankInfo.rank}/${rankInfo.total}). Diagramm nicht verfügbar.`
+              ),
+            ],
+          ],
+          showHead: "never",
+        });
+      }
+    }
   }
 
   // —— Kommentar ——
@@ -416,8 +526,8 @@ export function buildStudentPerformancePdf(
     });
   }
 
-  // —— Teilgebiete ——
-  if (on(sections, "subAreas") && (project.subAreas?.length ?? 0) > 0) {
+  // —— Teilgebiete (nur wenn sinnvoll) ——
+  if (on(sections, "subAreas") && hasMeaningfulSubAreas(project)) {
     const saBody = project.subAreas.map((sa) => {
       const pts =
         row.subAreaPoints?.[sa.id] ?? rec?.bySubArea?.[sa.id] ?? null;
@@ -428,7 +538,8 @@ export function buildStudentPerformancePdf(
         sa.maxPoints != null ? pdfPoints(sa.maxPoints) : "–",
       ];
     });
-    if (saBody.some((r) => r[2] !== "–") || saBody.length > 0) {
+    const hasPts = saBody.some((r) => r[2] !== "–");
+    if (hasPts) {
       y = sectionTitle(doc, "Teilgebiete", y);
       y = tableY(doc, y, {
         head: [["Kürzel", "Teilgebiet", "Punkte", "Max."]],
@@ -452,15 +563,17 @@ export function buildStudentPerformancePdf(
         pdfPoints(rec?.byQuestion?.[q.id] ?? null),
         pdfPoints(q.maxPoints),
       ]);
-    y = sectionTitle(doc, "Aufgaben / Detailpunkte", y);
-    y = tableY(doc, y, {
-      head: [["Aufgabe", "Punkte", "Max."]],
-      body: qBody,
-      columnStyles: {
-        1: { cellWidth: 24, halign: "right" },
-        2: { cellWidth: 24, halign: "right" },
-      },
-    });
+    if (qBody.some((r) => r[1] !== "–") || rec?.byQuestion) {
+      y = sectionTitle(doc, "Aufgaben / Detailpunkte", y);
+      y = tableY(doc, y, {
+        head: [["Aufgabe", "Punkte", "Max."]],
+        body: qBody,
+        columnStyles: {
+          1: { cellWidth: 24, halign: "right" },
+          2: { cellWidth: 24, halign: "right" },
+        },
+      });
+    }
   }
 
   // —— StA Kriterien ——
@@ -494,14 +607,29 @@ export function buildStudentPerformancePdf(
   // —— Portfolio ——
   if (isPortfolioExam(project.examType)) {
     const components = project.portfolioComponents ?? [];
-    const lecturers = (project.lecturers ?? [])
-      .map((l) => l.trim())
-      .filter(Boolean);
-    const perLecturer = project.portfolioPerLecturerGrading === true;
     const critMode = project.portfolioCriteriaMode === true;
 
     if (on(sections, "portfolioTl") && components.length > 0) {
-      y = sectionTitle(doc, "Teilleistungen", y);
+      y = sectionTitle(
+        doc,
+        perLecturer ? "Teilleistungen (inkl. Dozenten)" : "Teilleistungen",
+        y
+      );
+
+      const lecHeads = perLecturer
+        ? lecturers.map((l, i) => shortLecturer(l, i, lecturers.length))
+        : [];
+
+      const head = [
+        "Kürzel",
+        "Teilleistung",
+        "Gew.",
+        "Note",
+        "%",
+        "Punkte",
+        ...lecHeads,
+      ];
+
       const tlBody = components.map((c) => {
         const d = row.portfolioComponentDetails?.[c.id];
         const g =
@@ -515,8 +643,12 @@ export function buildStudentPerformancePdf(
             : "–";
         const raw =
           d?.pointsRaw != null && d?.pointsMax != null
-            ? `${pdfPoints(d.pointsRaw)} / ${pdfPoints(d.pointsMax)}`
+            ? `${pdfPoints(d.pointsRaw)}/${pdfPoints(d.pointsMax)}`
             : "–";
+        const byL = rec?.portfolioGradesByLecturer?.[c.id] ?? {};
+        const lecCells = perLecturer
+          ? lecturers.map((l) => pdfGrade(byL[l] ?? null))
+          : [];
         return [
           pdfText(c.code || c.name),
           pdfText(c.name),
@@ -524,40 +656,32 @@ export function buildStudentPerformancePdf(
           pdfGrade(g),
           pct,
           raw,
+          ...lecCells,
         ];
       });
-      y = tableY(doc, y, {
-        head: [["Kürzel", "Teilleistung", "Gew.", "Note", "%", "Punkte"]],
-        body: tlBody,
-        columnStyles: {
-          0: { cellWidth: 18 },
-          2: { cellWidth: 14, halign: "right" },
-          3: { cellWidth: 16, halign: "right", fontStyle: "bold" },
-          4: { cellWidth: 18, halign: "right" },
-          5: { cellWidth: 28, halign: "right" },
-        },
-      });
-    }
 
-    if (on(sections, "portfolioLecturer") && perLecturer && components.length) {
-      // Eine Tabelle: TL × Dozenten
-      const head = ["Teilleistung", ...lecturers.map((l) => pdfText(l).slice(0, 18))];
-      const body = components.map((c) => {
-        const byL = rec?.portfolioGradesByLecturer?.[c.id] ?? {};
-        return [
-          pdfText(c.code || c.name),
-          ...lecturers.map((l) => pdfGrade(byL[l] ?? null)),
-        ];
-      });
-      const hasAny = body.some((r) => r.slice(1).some((v) => v !== "–"));
-      if (hasAny || lecturers.length > 0) {
-        y = sectionTitle(doc, "Teilnoten je Dozent", y);
-        y = tableY(doc, y, {
-          head: [head],
-          body,
-          styles: { fontSize: 7.5 },
-        });
+      const colStyles: UserOptions["columnStyles"] = {
+        0: { cellWidth: 16 },
+        2: { cellWidth: 12, halign: "right" },
+        3: { cellWidth: 14, halign: "right", fontStyle: "bold" },
+        4: { cellWidth: 16, halign: "right" },
+        5: { cellWidth: 22, halign: "right" },
+      };
+      if (perLecturer) {
+        for (let i = 0; i < lecturers.length; i++) {
+          colStyles[6 + i] = {
+            cellWidth: Math.min(22, 80 / Math.max(lecturers.length, 1)),
+            halign: "right",
+          };
+        }
       }
+
+      y = tableY(doc, y, {
+        head: [head],
+        body: tlBody,
+        styles: { fontSize: perLecturer ? 7 : 8 },
+        columnStyles: colStyles,
+      });
     }
 
     if (on(sections, "portfolioCriteria") && critMode) {
@@ -565,38 +689,44 @@ export function buildStudentPerformancePdf(
         const crits = c.criteria ?? [];
         if (crits.length === 0) continue;
 
-        if (perLecturer && lecturers.length > 0) {
-          y = sectionTitle(doc, `Kriterien · ${c.code || c.name}`, y);
-          // flache Tabelle: Dozent | Kürzel | Name | Gew | Skala | Wert
-          const body: string[][] = [];
-          for (const lec of lecturers) {
-            const vals =
-              rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[lec] ?? {};
-            for (const cr of crits) {
-              body.push([
-                pdfText(lec),
-                pdfText(cr.code || cr.name),
-                pdfText(cr.name),
-                pdfText(String(cr.weight ?? 1)),
-                pdfText(criterionScaleLabel(cr)),
-                formatCriterionRaw(vals[cr.id], cr),
-              ]);
-            }
-          }
+        y = sectionTitle(doc, `Kriterien · ${c.code || c.name}`, y);
+
+        if (perLecturer) {
+          // Eine Tabelle: Kriterien × Dozenten-Spalten
+          const head = [
+            "Kürzel",
+            "Kriterium",
+            "Gew.",
+            "Skala",
+            ...lecturers.map((l, i) => shortLecturer(l, i, lecturers.length)),
+          ];
+          const body = crits.map((cr) => {
+            const cells = lecturers.map((lec) => {
+              const v =
+                rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[lec]?.[
+                  cr.id
+                ] ?? null;
+              return formatCriterionRaw(v, cr);
+            });
+            return [
+              pdfText(cr.code || cr.name),
+              pdfText(cr.name),
+              pdfText(String(cr.weight ?? 1)),
+              pdfText(criterionScaleLabel(cr)),
+              ...cells,
+            ];
+          });
           y = tableY(doc, y, {
-            head: [["Dozent/in", "Kürzel", "Kriterium", "Gew.", "Skala", "Wert"]],
+            head: [head],
             body,
             styles: { fontSize: 7 },
             columnStyles: {
-              0: { cellWidth: 32 },
-              1: { cellWidth: 16 },
-              3: { cellWidth: 12, halign: "right" },
-              4: { cellWidth: 22 },
-              5: { cellWidth: 18, halign: "right" },
+              0: { cellWidth: 16 },
+              2: { cellWidth: 12, halign: "right" },
+              3: { cellWidth: 20 },
             },
           });
         } else {
-          y = sectionTitle(doc, `Kriterien · ${c.code || c.name}`, y);
           const vals = rec?.portfolioCriterionValues?.[c.id] ?? {};
           const body = crits.map((cr) => [
             pdfText(cr.code || cr.name),
@@ -649,9 +779,15 @@ export function buildStudentPerformancePdf(
 export function exportStudentPerformancePdf(
   project: ExamProject,
   row: EnrichedStudentRow,
-  options?: StudentPerformancePdfOptions
+  options?: StudentPerformancePdfOptions,
+  allRows?: EnrichedStudentRow[]
 ): void {
-  const { doc, baseName } = buildStudentPerformancePdf(project, row, options);
+  const { doc, baseName } = buildStudentPerformancePdf(
+    project,
+    row,
+    options,
+    allRows
+  );
   savePdf(doc, baseName, pdfFooterFromProject(project));
 }
 
@@ -671,7 +807,7 @@ export async function exportStudentPerformancePdfs(
   }
 
   if (selected.length === 1) {
-    exportStudentPerformancePdf(project, selected[0], options);
+    exportStudentPerformancePdf(project, selected[0], options, rows);
     return { count: 1, mode: "pdf" };
   }
 
@@ -683,7 +819,8 @@ export async function exportStudentPerformancePdfs(
     const { doc, baseName } = buildStudentPerformancePdf(
       project,
       row,
-      options
+      options,
+      rows
     );
     const blob = pdfDocToBlob(doc, pdfFooterFromProject(project));
     let fileName = `${baseName}.pdf`;
