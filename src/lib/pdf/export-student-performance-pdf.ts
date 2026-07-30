@@ -57,7 +57,10 @@ export type StudentPerformanceSectionId =
   | "questions"
   | "staCriteria"
   | "portfolioTl"
+  /** Kriterien: bei Dozenten-Bewertung = Mittel über Dozenten; sonst Rohwerte */
   | "portfolioCriteria"
+  /** Kriterien-Rohwerte je Dozent (Spalten) – nur bei portfolioPerLecturerGrading */
+  | "portfolioCriteriaByLecturer"
   | "secondCorrection"
   | "comment";
 
@@ -299,6 +302,25 @@ function formatCriterionRaw(
   return pdfPoints(v);
 }
 
+/** Mittel der ausgefüllten Dozenten-Rohwerte je Kriterium (Teilbewertung ok). */
+function meanCriterionAcrossLecturers(
+  rec: ReturnType<typeof findPointsRecord>,
+  componentId: string,
+  criterionId: string,
+  lecturers: string[]
+): number | null {
+  const vals: number[] = [];
+  for (const lec of lecturers) {
+    const v =
+      rec?.portfolioCriterionValuesByLecturer?.[componentId]?.[lec]?.[
+        criterionId
+      ];
+    if (v != null && Number.isFinite(v)) vals.push(v);
+  }
+  if (!vals.length) return null;
+  return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
+}
+
 function personFileBase(row: EnrichedStudentRow): string {
   const name = [row.student.lastName, row.student.firstName]
     .filter(Boolean)
@@ -482,13 +504,24 @@ export function availableStudentPerformanceSections(
         : "Teilnoten und Gewichte",
     });
     if (project.portfolioCriteriaMode) {
-      list.push({
-        id: "portfolioCriteria",
-        label: "Portfolio-Kriterien",
-        hint: project.portfolioPerLecturerGrading
-          ? "Kriterien mit Dozenten-Spalten"
-          : "Rohwerte je Teilleistung",
-      });
+      if (project.portfolioPerLecturerGrading) {
+        list.push({
+          id: "portfolioCriteria",
+          label: "Kriterien (über Dozenten gemittelt)",
+          hint: "Je Kriterium Mittelwert der ausgefüllten Dozentenwerte",
+        });
+        list.push({
+          id: "portfolioCriteriaByLecturer",
+          label: "Kriterien je Dozent",
+          hint: "Rohwerte in Spalten pro Dozent",
+        });
+      } else {
+        list.push({
+          id: "portfolioCriteria",
+          label: "Portfolio-Kriterien",
+          hint: "Rohwerte je Teilleistung",
+        });
+      }
     }
   }
   if (hasSecondCorrectionAnywhere(project)) {
@@ -506,7 +539,13 @@ export function defaultStudentPerformanceSections(
 ): Record<StudentPerformanceSectionId, boolean> {
   const out = {} as Record<StudentPerformanceSectionId, boolean>;
   for (const s of availableStudentPerformanceSections(project)) {
-    out[s.id] = true;
+    // Bei Dozenten-Modus: aggregierte Kriterien an, Detail je Dozent aus
+    // (kann bei Bedarf zugeschaltet werden)
+    if (s.id === "portfolioCriteriaByLecturer") {
+      out[s.id] = false;
+    } else {
+      out[s.id] = true;
+    }
   }
   return out;
 }
@@ -994,75 +1033,133 @@ export function buildStudentPerformancePdf(
       }
     }
 
+    // Aggregierte Kriterien (Mittel über Dozenten bzw. einfache Werte)
     if (on(sections, "portfolioCriteria") && critMode) {
+      for (const c of components) {
+        const crits = c.criteria ?? [];
+        if (crits.length === 0) continue;
+
+        y = beginSection(
+          doc,
+          perLecturer
+            ? `Kriterien (Mittel) · ${c.code || c.name}`
+            : `Kriterien · ${c.code || c.name}`,
+          y,
+          22
+        );
+
+        const body = crits.map((cr) => {
+          let v: number | null = null;
+          if (perLecturer) {
+            v = meanCriterionAcrossLecturers(rec, c.id, cr.id, lecturers);
+          } else {
+            const raw = rec?.portfolioCriterionValues?.[c.id]?.[cr.id];
+            v = raw != null && Number.isFinite(raw) ? raw : null;
+          }
+          return [
+            pdfText(cr.code || cr.name),
+            pdfText(cr.name),
+            pdfText(String(cr.weight ?? 1)),
+            pdfText(criterionScaleLabel(cr)),
+            formatCriterionRaw(v, cr),
+          ];
+        });
+        y = tableY(doc, y, {
+          head: [
+            [
+              "Kürzel",
+              "Kriterium",
+              "Gew.",
+              "Skala",
+              perLecturer ? "Mittelwert" : "Wert",
+            ],
+          ],
+          body,
+          columnStyles: {
+            0: { cellWidth: 18 },
+            2: { cellWidth: 14, halign: "right" },
+            3: { cellWidth: 26 },
+            4: { cellWidth: 26, halign: "right", fontStyle: "bold" },
+          },
+        });
+      }
+      if (perLecturer) {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7);
+        doc.setTextColor(80);
+        const lines = doc.splitTextToSize(
+          pdfText(
+            "Mittelwert: arithmetisches Mittel der ausgefüllten Dozentenwerte je Kriterium."
+          ),
+          PDF_CONTENT_WIDTH
+        ) as string[];
+        for (const line of lines) {
+          y = ensureY(doc, y, 5);
+          doc.text(line, PDF_MARGIN, y);
+          y += 3.2;
+        }
+        doc.setTextColor(0);
+        doc.setFont("helvetica", "normal");
+        y += 3;
+      }
+    }
+
+    // Kriterien je Dozent (Spalten)
+    if (
+      on(sections, "portfolioCriteriaByLecturer") &&
+      critMode &&
+      perLecturer
+    ) {
       const { labels: lecCritHeads, legendNeeded: lecCritLegend } =
-        perLecturer
-          ? lecturerColumnLabels(lecturers)
-          : { labels: [] as string[], legendNeeded: false };
+        lecturerColumnLabels(lecturers);
 
       for (const c of components) {
         const crits = c.criteria ?? [];
         if (crits.length === 0) continue;
 
-        y = beginSection(doc, `Kriterien · ${c.code || c.name}`, y, 22);
+        y = beginSection(
+          doc,
+          `Kriterien je Dozent · ${c.code || c.name}`,
+          y,
+          22
+        );
 
-        if (perLecturer) {
-          const head = [
-            "Kürzel",
-            "Kriterium",
-            "Gew.",
-            "Skala",
-            ...lecCritHeads,
-          ];
-          const body = crits.map((cr) => {
-            const cells = lecturers.map((lec) => {
-              const v =
-                rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[lec]?.[
-                  cr.id
-                ] ?? null;
-              return formatCriterionRaw(v, cr);
-            });
-            return [
-              pdfText(cr.code || cr.name),
-              pdfText(cr.name),
-              pdfText(String(cr.weight ?? 1)),
-              pdfText(criterionScaleLabel(cr)),
-              ...cells,
-            ];
+        const head = [
+          "Kürzel",
+          "Kriterium",
+          "Gew.",
+          "Skala",
+          ...lecCritHeads,
+        ];
+        const body = crits.map((cr) => {
+          const cells = lecturers.map((lec) => {
+            const v =
+              rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[lec]?.[
+                cr.id
+              ] ?? null;
+            return formatCriterionRaw(v, cr);
           });
-          y = tableY(doc, y, {
-            head: [head],
-            body,
-            styles: { fontSize: 7 },
-            columnStyles: {
-              0: { cellWidth: 16 },
-              2: { cellWidth: 12, halign: "right" },
-              3: { cellWidth: 20 },
-            },
-          });
-        } else {
-          const vals = rec?.portfolioCriterionValues?.[c.id] ?? {};
-          const body = crits.map((cr) => [
+          return [
             pdfText(cr.code || cr.name),
             pdfText(cr.name),
             pdfText(String(cr.weight ?? 1)),
             pdfText(criterionScaleLabel(cr)),
-            formatCriterionRaw(vals[cr.id], cr),
-          ]);
-          y = tableY(doc, y, {
-            head: [["Kürzel", "Kriterium", "Gew.", "Skala", "Wert"]],
-            body,
-            columnStyles: {
-              0: { cellWidth: 18 },
-              2: { cellWidth: 14, halign: "right" },
-              3: { cellWidth: 26 },
-              4: { cellWidth: 22, halign: "right" },
-            },
-          });
-        }
+            ...cells,
+          ];
+        });
+        y = tableY(doc, y, {
+          head: [head],
+          body,
+          styles: { fontSize: 7 },
+          columnStyles: {
+            0: { cellWidth: 16 },
+            2: { cellWidth: 12, halign: "right" },
+            3: { cellWidth: 20 },
+          },
+        });
       }
 
-      if (lecCritLegend && perLecturer) {
+      if (lecCritLegend) {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
         doc.setTextColor(70);
