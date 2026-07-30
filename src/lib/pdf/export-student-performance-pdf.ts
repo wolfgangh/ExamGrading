@@ -8,11 +8,9 @@ import {
   STUDENT_STATUS_LABELS,
   isPortfolioExam,
   isStaCriteriaExam,
-  isStaManualExam,
 } from "@/lib/types";
 import {
   autoTable,
-  drawKeyValueBlock,
   examHeaderLines,
   findPointsRecord,
   formatDeDate,
@@ -34,33 +32,99 @@ import {
   sanitizeDownloadFilename,
 } from "@/lib/download";
 import type { jsPDF } from "jspdf";
+import type { UserOptions } from "jspdf-autotable";
 
-function ensureY(doc: jsPDF, y: number, need = 36): number {
+/** Wählbare Inhaltsblöcke im Leistungs-PDF */
+export type StudentPerformanceSectionId =
+  | "person"
+  | "exam"
+  | "result"
+  | "subAreas"
+  | "questions"
+  | "staCriteria"
+  | "portfolioTl"
+  | "portfolioLecturer"
+  | "portfolioCriteria"
+  | "secondCorrection"
+  | "comment";
+
+export type StudentPerformancePdfOptions = {
+  sections: Partial<Record<StudentPerformanceSectionId, boolean>>;
+};
+
+export type StudentPerformanceSectionMeta = {
+  id: StudentPerformanceSectionId;
+  label: string;
+  /** Kurzhinweis in der UI */
+  hint?: string;
+  /** Immer im PDF (nicht abwählbar) */
+  required?: boolean;
+};
+
+const TABLE_HEAD: [number, number, number] = [68, 112, 153];
+const SECTION_COLOR: [number, number, number] = [44, 81, 113];
+
+const baseTable: Partial<UserOptions> = {
+  margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+  styles: {
+    fontSize: 8,
+    cellPadding: { top: 1.1, right: 1.4, bottom: 1.1, left: 1.4 },
+    lineColor: [220, 226, 232],
+    lineWidth: 0.15,
+    textColor: [30, 35, 40],
+    overflow: "linebreak",
+  },
+  headStyles: {
+    fillColor: TABLE_HEAD,
+    textColor: 255,
+    fontStyle: "bold",
+    fontSize: 8,
+    cellPadding: { top: 1.3, right: 1.4, bottom: 1.3, left: 1.4 },
+  },
+  alternateRowStyles: { fillColor: [248, 250, 252] },
+  theme: "grid",
+};
+
+function ensureY(doc: jsPDF, y: number, need = 28): number {
   const pageH = doc.internal.pageSize.getHeight();
-  if (y + need > pageH - 16) {
+  if (y + need > pageH - 14) {
     doc.addPage();
-    return PDF_MARGIN + 10;
+    return PDF_MARGIN + 8;
   }
   return y;
 }
 
 function sectionTitle(doc: jsPDF, title: string, y: number): number {
-  y = ensureY(doc, y, 14);
+  y = ensureY(doc, y, 12);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(44, 81, 113);
+  doc.setFontSize(9.5);
+  doc.setTextColor(...SECTION_COLOR);
   doc.text(pdfText(title), PDF_MARGIN, y);
+  const w = doc.getTextWidth(pdfText(title));
+  doc.setDrawColor(...TABLE_HEAD);
+  doc.setLineWidth(0.35);
+  doc.line(PDF_MARGIN, y + 1.2, PDF_MARGIN + Math.max(w, 28), y + 1.2);
   doc.setTextColor(0);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  return y + 5;
+  return y + 4.5;
+}
+
+function tableY(doc: jsPDF, y: number, opts: UserOptions): number {
+  autoTable(doc, {
+    ...baseTable,
+    startY: y,
+    ...opts,
+    styles: { ...baseTable.styles, ...opts.styles },
+    headStyles: { ...baseTable.headStyles, ...opts.headStyles },
+  });
+  return getLastTableY(doc, y) + 4.5;
 }
 
 function criterionScaleLabel(c: AssessmentCriterion): string {
   if (c.scale === "points") {
-    return c.maxPoints != null ? `Punkte (max. ${c.maxPoints})` : "Punkte";
+    return c.maxPoints != null ? `P (max ${c.maxPoints})` : "Punkte";
   }
-  if (c.scale === "percent") return "Prozent";
+  if (c.scale === "percent") return "%";
   return "Note";
 }
 
@@ -84,13 +148,110 @@ function personFileBase(row: EnrichedStudentRow): string {
   );
 }
 
+function on(
+  sections: StudentPerformancePdfOptions["sections"],
+  id: StudentPerformanceSectionId
+): boolean {
+  return sections[id] !== false;
+}
+
+/** Welche Abschnitte für diese Prüfung sinnvoll sind (UI). */
+export function availableStudentPerformanceSections(
+  project: ExamProject
+): StudentPerformanceSectionMeta[] {
+  const list: StudentPerformanceSectionMeta[] = [
+    {
+      id: "person",
+      label: "Person",
+      hint: "Name, Matrikel, Studiengang, Status",
+      required: true,
+    },
+    {
+      id: "exam",
+      label: "Prüfung",
+      hint: "Modul, Semester, Prüfer, Bestehensgrenze",
+    },
+    {
+      id: "result",
+      label: "Ergebnis",
+      hint: "Note, Punkte, Prozent",
+      required: true,
+    },
+    {
+      id: "comment",
+      label: "Kommentar / Anmerkung",
+    },
+  ];
+
+  if ((project.subAreas?.length ?? 0) > 0) {
+    list.push({
+      id: "subAreas",
+      label: "Teilgebiete",
+      hint: "Punkte je Teilgebiet",
+    });
+  }
+  if ((project.questionDefs?.length ?? 0) > 0) {
+    list.push({
+      id: "questions",
+      label: "Aufgaben / Detailpunkte",
+      hint: "Punkte je Aufgabe",
+    });
+  }
+  if (isStaCriteriaExam(project.examType) && (project.criteria?.length ?? 0) > 0) {
+    list.push({
+      id: "staCriteria",
+      label: "StA-Kriterien",
+      hint: "Rohwerte und Gewichte",
+    });
+  }
+  if (isPortfolioExam(project.examType)) {
+    list.push({
+      id: "portfolioTl",
+      label: "Teilleistungen",
+      hint: "Teilnoten und Gewichte",
+    });
+    if (project.portfolioPerLecturerGrading) {
+      list.push({
+        id: "portfolioLecturer",
+        label: "Teilnoten je Dozent",
+      });
+    }
+    if (project.portfolioCriteriaMode) {
+      list.push({
+        id: "portfolioCriteria",
+        label: "Portfolio-Kriterien",
+        hint: "Rohwerte je Teilleistung",
+      });
+    }
+  }
+  list.push({
+    id: "secondCorrection",
+    label: "Zweitkorrektur",
+    hint: "Nur wenn erfasst",
+  });
+  return list;
+}
+
+export function defaultStudentPerformanceSections(
+  project: ExamProject
+): Record<StudentPerformanceSectionId, boolean> {
+  const out = {} as Record<StudentPerformanceSectionId, boolean>;
+  for (const s of availableStudentPerformanceSections(project)) {
+    out[s.id] = true;
+  }
+  return out;
+}
+
 /**
- * Baut ein Leistungs-PDF für genau eine Person (Teilleistungen, Kriterien, …).
+ * Baut ein Leistungs-PDF für genau eine Person.
  */
 export function buildStudentPerformancePdf(
   project: ExamProject,
-  row: EnrichedStudentRow
+  row: EnrichedStudentRow,
+  options?: StudentPerformancePdfOptions
 ): { doc: jsPDF; baseName: string } {
+  const sections =
+    options?.sections ?? defaultStudentPerformanceSections(project);
   const rec = findPointsRecord(project, row.key);
   const { doc, y: y0 } = startPdfWithHeader(
     project,
@@ -98,23 +259,20 @@ export function buildStudentPerformancePdf(
   );
   let y = y0;
 
+  // Kompakter Hinweis in einer Zeile
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(8);
-  doc.setTextColor(80);
-  const disclaimer = doc.splitTextToSize(
+  doc.setFontSize(7.5);
+  doc.setTextColor(100);
+  doc.text(
     pdfText(
-      "Interne Auswertung der erfassten Leistungen. Keine amtliche Notenmeldung. " +
-        "Personenbezogene Daten vertraulich behandeln."
+      `Interne Auswertung · keine amtliche Notenmeldung · vertraulich · ${formatDeDate()}`
     ),
-    180
-  ) as string[];
-  for (const line of disclaimer) {
-    doc.text(line, PDF_MARGIN, y);
-    y += 3.5;
-  }
+    PDF_MARGIN,
+    y
+  );
   doc.setTextColor(0);
   doc.setFont("helvetica", "normal");
-  y += 4;
+  y += 5;
 
   const name = [row.student.lastName, row.student.firstName]
     .filter(Boolean)
@@ -125,76 +283,141 @@ export function buildStudentPerformancePdf(
       ? project.studentGroups.find((g) => g.id === row.student.groupId)?.name
       : undefined;
 
-  y = sectionTitle(doc, "Person", y);
-  y = drawKeyValueBlock(
-    doc,
-    [
-      `Name: ${pdfText(name || "–")}`,
-      `Matrikelnummer: ${pdfText(row.key)}`,
-      `Studiengang: ${pdfText(prog || "–")}`,
-      groupName ? `Gruppe: ${pdfText(groupName)}` : "",
-      row.attempt != null ? `Versuch: ${row.attempt}` : "",
-      `Status: ${pdfText(STUDENT_STATUS_LABELS[row.status] ?? shortStatus(row))}`,
-    ].filter(Boolean),
-    y,
-    4.5
-  );
-  y += 2;
-
-  y = sectionTitle(doc, "Prüfung", y);
-  y = drawKeyValueBlock(
-    doc,
-    [
-      ...examHeaderLines(project),
-      `Prüfungsform: ${pdfText(EXAM_TYPE_LABELS[project.examType] ?? project.examType)}`,
-      `Erstellt: ${formatDeDate()}`,
-    ],
-    y,
-    4.5
-  );
-  y += 2;
-
-  y = sectionTitle(doc, "Ergebnis", y);
-  const resultBody: string[][] = [
-    ["Gesamtnote (final)", pdfGrade(row.finalGrade)],
-    ["Berechnete Note", pdfGrade(row.calculatedGrade)],
-    [
-      "Manuelle Note",
-      row.gradeOverride != null ? pdfGrade(row.gradeOverride) : "–",
-    ],
-  ];
-  if (row.totalPoints != null && Number.isFinite(row.totalPoints)) {
-    resultBody.push(["Punkte / Erfüllung", pdfPoints(row.totalPoints)]);
+  // —— Person + Prüfung als kompakte 4-Spalten-Meta ——
+  if (on(sections, "person") || on(sections, "exam")) {
+    y = sectionTitle(doc, "Stammdaten", y);
+    const metaRows: string[][] = [];
+    if (on(sections, "person")) {
+      metaRows.push(["Name", pdfText(name || "–"), "Matr.-Nr.", pdfText(row.key)]);
+      metaRows.push([
+        "Studiengang",
+        pdfText(prog || "–"),
+        "Status",
+        pdfText(STUDENT_STATUS_LABELS[row.status] ?? shortStatus(row)),
+      ]);
+      if (groupName || row.attempt != null) {
+        metaRows.push([
+          "Gruppe",
+          pdfText(groupName || "–"),
+          "Versuch",
+          row.attempt != null ? String(row.attempt) : "–",
+        ]);
+      }
+    }
+    if (on(sections, "exam")) {
+      metaRows.push([
+        "Prüfung",
+        pdfText(project.name || "–"),
+        "Form",
+        pdfText(EXAM_TYPE_LABELS[project.examType] ?? project.examType),
+      ]);
+      metaRows.push([
+        "Semester",
+        pdfText(project.semester || "–"),
+        "Prüfungsnr.",
+        pdfText(project.examNumber || "–"),
+      ]);
+      const lecturers = (project.lecturers ?? [])
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .join(", ");
+      // Bestehensgrenze aus examHeaderLines-Logik
+      const passLine =
+        examHeaderLines(project).find((l) => l.startsWith("Bestehensgrenze")) ??
+        "";
+      metaRows.push([
+        "Prüfer",
+        pdfText(lecturers || "–"),
+        "Bestehen",
+        pdfText(passLine.replace(/^Bestehensgrenze:\s*/i, "") || "–"),
+      ]);
+    }
+    y = tableY(doc, y, {
+      head: [["Feld", "Wert", "Feld", "Wert"]],
+      body: metaRows,
+      columnStyles: {
+        0: { cellWidth: 28, fontStyle: "bold", textColor: [70, 80, 90] },
+        1: { cellWidth: 58 },
+        2: { cellWidth: 28, fontStyle: "bold", textColor: [70, 80, 90] },
+        3: { cellWidth: 58 },
+      },
+      showHead: "never",
+      styles: {
+        fontSize: 8,
+        cellPadding: { top: 1.2, right: 1.5, bottom: 1.2, left: 1.5 },
+      },
+    });
   }
-  if (row.percent != null && Number.isFinite(row.percent)) {
-    resultBody.push([
-      "Prozent",
-      `${pdfText(formatPoints(row.percent * 100, 1))} %`,
-    ]);
-  }
-  if (row.status === "no_show" || row.attended === false || rec?.notAttended) {
-    resultBody.push(["Antritt", "No-Show / nicht angetreten"]);
-  }
-  if (rec?.comment?.trim() || row.comment?.trim()) {
-    resultBody.push([
-      "Kommentar",
-      pdfText(rec?.comment?.trim() || row.comment || ""),
-    ]);
+
+  // —— Ergebnis ——
+  if (on(sections, "result")) {
+    y = sectionTitle(doc, "Ergebnis", y);
+    const resultBody: string[][] = [
+      ["Gesamtnote", pdfGrade(row.finalGrade)],
+      ["Berechnet", pdfGrade(row.calculatedGrade)],
+      [
+        "Manuell",
+        row.gradeOverride != null ? pdfGrade(row.gradeOverride) : "–",
+      ],
+    ];
+    if (row.totalPoints != null && Number.isFinite(row.totalPoints)) {
+      resultBody.push(["Punkte / Erfüllung", pdfPoints(row.totalPoints)]);
+    }
+    if (row.percent != null && Number.isFinite(row.percent)) {
+      resultBody.push([
+        "Prozent",
+        `${pdfText(formatPoints(row.percent * 100, 1))} %`,
+      ]);
+    }
+    if (
+      row.status === "no_show" ||
+      row.attended === false ||
+      rec?.notAttended
+    ) {
+      resultBody.push(["Antritt", "No-Show / nicht angetreten"]);
+    }
+
+    // Ergebnis kompakt: 2 Kennzahlen nebeneinander
+    const paired: string[][] = [];
+    for (let i = 0; i < resultBody.length; i += 2) {
+      const a = resultBody[i];
+      const b = resultBody[i + 1];
+      paired.push([
+        a[0],
+        a[1],
+        b ? b[0] : "",
+        b ? b[1] : "",
+      ]);
+    }
+    y = tableY(doc, y, {
+      body: paired,
+      showHead: "never",
+      columnStyles: {
+        0: { cellWidth: 36, fontStyle: "bold", textColor: [70, 80, 90] },
+        1: { cellWidth: 28, fontStyle: "bold", fontSize: 10 },
+        2: { cellWidth: 36, fontStyle: "bold", textColor: [70, 80, 90] },
+        3: { cellWidth: 28, fontStyle: "bold", fontSize: 10 },
+      },
+    });
   }
 
-  autoTable(doc, {
-    startY: y,
-    head: [["Kennzahl", "Wert"]],
-    body: resultBody,
-    margin: { left: PDF_MARGIN, right: PDF_MARGIN },
-    styles: { fontSize: 9, cellPadding: 1.5 },
-    headStyles: { fillColor: [68, 112, 153], textColor: 255 },
-    columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: "auto" } },
-  });
-  y = getLastTableY(doc, y) + 8;
+  // —— Kommentar ——
+  const commentText = (
+    rec?.comment?.trim() ||
+    row.comment?.trim() ||
+    ""
+  ).trim();
+  if (on(sections, "comment") && commentText) {
+    y = sectionTitle(doc, "Kommentar", y);
+    y = tableY(doc, y, {
+      body: [[pdfText(commentText)]],
+      showHead: "never",
+      styles: { fontSize: 8, cellPadding: 2 },
+    });
+  }
 
-  // Teilgebiete
-  if ((project.subAreas?.length ?? 0) > 0) {
+  // —— Teilgebiete ——
+  if (on(sections, "subAreas") && (project.subAreas?.length ?? 0) > 0) {
     const saBody = project.subAreas.map((sa) => {
       const pts =
         row.subAreaPoints?.[sa.id] ?? rec?.bySubArea?.[sa.id] ?? null;
@@ -205,50 +428,46 @@ export function buildStudentPerformancePdf(
         sa.maxPoints != null ? pdfPoints(sa.maxPoints) : "–",
       ];
     });
-    if (saBody.some((r) => r[2] !== "–")) {
+    if (saBody.some((r) => r[2] !== "–") || saBody.length > 0) {
       y = sectionTitle(doc, "Teilgebiete", y);
-      autoTable(doc, {
-        startY: y,
+      y = tableY(doc, y, {
         head: [["Kürzel", "Teilgebiet", "Punkte", "Max."]],
         body: saBody,
-        margin: { left: PDF_MARGIN, right: PDF_MARGIN },
-        styles: { fontSize: 8, cellPadding: 1.2 },
-        headStyles: { fillColor: [68, 112, 153], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: 22 },
+          2: { cellWidth: 22, halign: "right" },
+          3: { cellWidth: 22, halign: "right" },
+        },
       });
-      y = getLastTableY(doc, y) + 8;
     }
   }
 
-  // Aufgaben (THE / elektrP / Klausur)
+  // —— Aufgaben ——
   const qDefs = project.questionDefs ?? [];
-  if (qDefs.length > 0 && rec?.byQuestion) {
+  if (on(sections, "questions") && qDefs.length > 0) {
     const qBody = [...qDefs]
       .sort((a, b) => a.orderIndex - b.orderIndex)
-      .map((q) => {
-        const v = rec.byQuestion?.[q.id] ?? null;
-        return [
-          pdfText(q.label),
-          pdfPoints(v),
-          pdfPoints(q.maxPoints),
-        ];
-      });
+      .map((q) => [
+        pdfText(q.label),
+        pdfPoints(rec?.byQuestion?.[q.id] ?? null),
+        pdfPoints(q.maxPoints),
+      ]);
     y = sectionTitle(doc, "Aufgaben / Detailpunkte", y);
-    autoTable(doc, {
-      startY: y,
+    y = tableY(doc, y, {
       head: [["Aufgabe", "Punkte", "Max."]],
       body: qBody,
-      margin: { left: PDF_MARGIN, right: PDF_MARGIN },
-      styles: { fontSize: 8, cellPadding: 1.2 },
-      headStyles: { fillColor: [68, 112, 153], textColor: 255 },
+      columnStyles: {
+        1: { cellWidth: 24, halign: "right" },
+        2: { cellWidth: 24, halign: "right" },
+      },
     });
-    y = getLastTableY(doc, y) + 8;
   }
 
-  // StA Kriterien
-  if (isStaCriteriaExam(project.examType)) {
+  // —— StA Kriterien ——
+  if (on(sections, "staCriteria") && isStaCriteriaExam(project.examType)) {
     const criteria = project.criteria ?? [];
     if (criteria.length > 0) {
-      y = sectionTitle(doc, "Bewertungskriterien (Studienarbeit)", y);
+      y = sectionTitle(doc, "Bewertungskriterien", y);
       const body = criteria.map((c) => {
         const raw = rec?.criterionValues?.[c.id] ?? null;
         return [
@@ -259,26 +478,20 @@ export function buildStudentPerformancePdf(
           formatCriterionRaw(raw, c),
         ];
       });
-      autoTable(doc, {
-        startY: y,
+      y = tableY(doc, y, {
         head: [["Kürzel", "Kriterium", "Gew.", "Skala", "Wert"]],
         body,
-        margin: { left: PDF_MARGIN, right: PDF_MARGIN },
-        styles: { fontSize: 8, cellPadding: 1.2 },
-        headStyles: { fillColor: [68, 112, 153], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: 18 },
+          2: { cellWidth: 14, halign: "right" },
+          3: { cellWidth: 26 },
+          4: { cellWidth: 22, halign: "right" },
+        },
       });
-      y = getLastTableY(doc, y) + 8;
     }
   }
 
-  // StA manuell – wenig Extra
-  if (isStaManualExam(project.examType) && rec?.comment) {
-    y = sectionTitle(doc, "Anmerkung", y);
-    y = drawKeyValueBlock(doc, [pdfText(rec.comment)], y);
-    y += 4;
-  }
-
-  // Portfolio
+  // —— Portfolio ——
   if (isPortfolioExam(project.examType)) {
     const components = project.portfolioComponents ?? [];
     const lecturers = (project.lecturers ?? [])
@@ -287,8 +500,8 @@ export function buildStudentPerformancePdf(
     const perLecturer = project.portfolioPerLecturerGrading === true;
     const critMode = project.portfolioCriteriaMode === true;
 
-    if (components.length > 0) {
-      y = sectionTitle(doc, "Teilleistungen (Portfolio)", y);
+    if (on(sections, "portfolioTl") && components.length > 0) {
+      y = sectionTitle(doc, "Teilleistungen", y);
       const tlBody = components.map((c) => {
         const d = row.portfolioComponentDetails?.[c.id];
         const g =
@@ -313,122 +526,121 @@ export function buildStudentPerformancePdf(
           raw,
         ];
       });
-      autoTable(doc, {
-        startY: y,
+      y = tableY(doc, y, {
         head: [["Kürzel", "Teilleistung", "Gew.", "Note", "%", "Punkte"]],
         body: tlBody,
-        margin: { left: PDF_MARGIN, right: PDF_MARGIN },
-        styles: { fontSize: 8, cellPadding: 1.2 },
-        headStyles: { fillColor: [68, 112, 153], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: 18 },
+          2: { cellWidth: 14, halign: "right" },
+          3: { cellWidth: 16, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 18, halign: "right" },
+          5: { cellWidth: 28, halign: "right" },
+        },
       });
-      y = getLastTableY(doc, y) + 8;
+    }
 
-      if (perLecturer) {
-        for (const c of components) {
-          const byL = rec?.portfolioGradesByLecturer?.[c.id] ?? {};
-          const hasAny = lecturers.some(
-            (l) => byL[l] != null && Number.isFinite(byL[l] as number)
-          );
-          if (!hasAny && lecturers.length === 0) continue;
-          y = sectionTitle(
-            doc,
-            `Teilnoten je Dozent · ${c.code || c.name}`,
-            y
-          );
-          const body = lecturers.map((l) => [
-            pdfText(l),
-            pdfGrade(byL[l] ?? null),
-          ]);
-          autoTable(doc, {
-            startY: y,
-            head: [["Dozent/in", "Teilnote"]],
-            body: body.length ? body : [["–", "–"]],
-            margin: { left: PDF_MARGIN, right: PDF_MARGIN },
-            styles: { fontSize: 8, cellPadding: 1.2 },
-            headStyles: { fillColor: [68, 112, 153], textColor: 255 },
-          });
-          y = getLastTableY(doc, y) + 6;
-        }
+    if (on(sections, "portfolioLecturer") && perLecturer && components.length) {
+      // Eine Tabelle: TL × Dozenten
+      const head = ["Teilleistung", ...lecturers.map((l) => pdfText(l).slice(0, 18))];
+      const body = components.map((c) => {
+        const byL = rec?.portfolioGradesByLecturer?.[c.id] ?? {};
+        return [
+          pdfText(c.code || c.name),
+          ...lecturers.map((l) => pdfGrade(byL[l] ?? null)),
+        ];
+      });
+      const hasAny = body.some((r) => r.slice(1).some((v) => v !== "–"));
+      if (hasAny || lecturers.length > 0) {
+        y = sectionTitle(doc, "Teilnoten je Dozent", y);
+        y = tableY(doc, y, {
+          head: [head],
+          body,
+          styles: { fontSize: 7.5 },
+        });
       }
+    }
 
-      if (critMode) {
-        for (const c of components) {
-          const crits = c.criteria ?? [];
-          if (crits.length === 0) continue;
-          y = sectionTitle(
-            doc,
-            `Kriterien · ${c.code || c.name}`,
-            y
-          );
+    if (on(sections, "portfolioCriteria") && critMode) {
+      for (const c of components) {
+        const crits = c.criteria ?? [];
+        if (crits.length === 0) continue;
 
-          if (perLecturer && lecturers.length > 0) {
-            for (const lec of lecturers) {
-              const vals =
-                rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[lec] ?? {};
-              const body = crits.map((cr) => [
+        if (perLecturer && lecturers.length > 0) {
+          y = sectionTitle(doc, `Kriterien · ${c.code || c.name}`, y);
+          // flache Tabelle: Dozent | Kürzel | Name | Gew | Skala | Wert
+          const body: string[][] = [];
+          for (const lec of lecturers) {
+            const vals =
+              rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[lec] ?? {};
+            for (const cr of crits) {
+              body.push([
+                pdfText(lec),
                 pdfText(cr.code || cr.name),
                 pdfText(cr.name),
                 pdfText(String(cr.weight ?? 1)),
                 pdfText(criterionScaleLabel(cr)),
                 formatCriterionRaw(vals[cr.id], cr),
               ]);
-              y = ensureY(doc, y, 20);
-              doc.setFont("helvetica", "bold");
-              doc.setFontSize(9);
-              doc.text(pdfText(`Dozent/in: ${lec}`), PDF_MARGIN, y);
-              y += 4;
-              autoTable(doc, {
-                startY: y,
-                head: [["Kürzel", "Kriterium", "Gew.", "Skala", "Wert"]],
-                body,
-                margin: { left: PDF_MARGIN, right: PDF_MARGIN },
-                styles: { fontSize: 7.5, cellPadding: 1.1 },
-                headStyles: { fillColor: [68, 112, 153], textColor: 255 },
-              });
-              y = getLastTableY(doc, y) + 5;
             }
-          } else {
-            const vals = rec?.portfolioCriterionValues?.[c.id] ?? {};
-            const body = crits.map((cr) => [
-              pdfText(cr.code || cr.name),
-              pdfText(cr.name),
-              pdfText(String(cr.weight ?? 1)),
-              pdfText(criterionScaleLabel(cr)),
-              formatCriterionRaw(vals[cr.id], cr),
-            ]);
-            autoTable(doc, {
-              startY: y,
-              head: [["Kürzel", "Kriterium", "Gew.", "Skala", "Wert"]],
-              body,
-              margin: { left: PDF_MARGIN, right: PDF_MARGIN },
-              styles: { fontSize: 8, cellPadding: 1.2 },
-              headStyles: { fillColor: [68, 112, 153], textColor: 255 },
-            });
-            y = getLastTableY(doc, y) + 6;
           }
+          y = tableY(doc, y, {
+            head: [["Dozent/in", "Kürzel", "Kriterium", "Gew.", "Skala", "Wert"]],
+            body,
+            styles: { fontSize: 7 },
+            columnStyles: {
+              0: { cellWidth: 32 },
+              1: { cellWidth: 16 },
+              3: { cellWidth: 12, halign: "right" },
+              4: { cellWidth: 22 },
+              5: { cellWidth: 18, halign: "right" },
+            },
+          });
+        } else {
+          y = sectionTitle(doc, `Kriterien · ${c.code || c.name}`, y);
+          const vals = rec?.portfolioCriterionValues?.[c.id] ?? {};
+          const body = crits.map((cr) => [
+            pdfText(cr.code || cr.name),
+            pdfText(cr.name),
+            pdfText(String(cr.weight ?? 1)),
+            pdfText(criterionScaleLabel(cr)),
+            formatCriterionRaw(vals[cr.id], cr),
+          ]);
+          y = tableY(doc, y, {
+            head: [["Kürzel", "Kriterium", "Gew.", "Skala", "Wert"]],
+            body,
+            columnStyles: {
+              0: { cellWidth: 18 },
+              2: { cellWidth: 14, halign: "right" },
+              3: { cellWidth: 26 },
+              4: { cellWidth: 22, halign: "right" },
+            },
+          });
         }
       }
     }
   }
 
-  // Zweitkorrektur falls vorhanden
+  // —— Zweitkorrektur ——
   if (
-    rec?.secondCorrectionPoints != null ||
-    rec?.secondCorrectionNotes?.trim()
+    on(sections, "secondCorrection") &&
+    (rec?.secondCorrectionPoints != null ||
+      rec?.secondCorrectionNotes?.trim())
   ) {
     y = sectionTitle(doc, "Zweitkorrektur", y);
-    y = drawKeyValueBlock(
-      doc,
-      [
-        rec.secondCorrectionPoints != null
-          ? `Punkte Zweitkorrektur: ${pdfPoints(rec.secondCorrectionPoints)}`
-          : "",
-        rec.secondCorrectionNotes?.trim()
-          ? `Anmerkung: ${pdfText(rec.secondCorrectionNotes.trim())}`
-          : "",
-      ].filter(Boolean),
-      y
-    );
+    const body: string[][] = [];
+    if (rec.secondCorrectionPoints != null) {
+      body.push(["Punkte", pdfPoints(rec.secondCorrectionPoints)]);
+    }
+    if (rec.secondCorrectionNotes?.trim()) {
+      body.push(["Anmerkung", pdfText(rec.secondCorrectionNotes.trim())]);
+    }
+    y = tableY(doc, y, {
+      body,
+      showHead: "never",
+      columnStyles: {
+        0: { cellWidth: 28, fontStyle: "bold", textColor: [70, 80, 90] },
+      },
+    });
   }
 
   return { doc, baseName: personFileBase(row) };
@@ -436,9 +648,10 @@ export function buildStudentPerformancePdf(
 
 export function exportStudentPerformancePdf(
   project: ExamProject,
-  row: EnrichedStudentRow
+  row: EnrichedStudentRow,
+  options?: StudentPerformancePdfOptions
 ): void {
-  const { doc, baseName } = buildStudentPerformancePdf(project, row);
+  const { doc, baseName } = buildStudentPerformancePdf(project, row, options);
   savePdf(doc, baseName, pdfFooterFromProject(project));
 }
 
@@ -448,7 +661,8 @@ export function exportStudentPerformancePdf(
 export async function exportStudentPerformancePdfs(
   project: ExamProject,
   rows: EnrichedStudentRow[],
-  keys: string[]
+  keys: string[],
+  options?: StudentPerformancePdfOptions
 ): Promise<{ count: number; mode: "pdf" | "zip" }> {
   const keySet = new Set(keys);
   const selected = rows.filter((r) => keySet.has(r.key));
@@ -457,7 +671,7 @@ export async function exportStudentPerformancePdfs(
   }
 
   if (selected.length === 1) {
-    exportStudentPerformancePdf(project, selected[0]);
+    exportStudentPerformancePdf(project, selected[0], options);
     return { count: 1, mode: "pdf" };
   }
 
@@ -466,7 +680,11 @@ export async function exportStudentPerformancePdfs(
   const usedNames = new Set<string>();
 
   for (const row of selected) {
-    const { doc, baseName } = buildStudentPerformancePdf(project, row);
+    const { doc, baseName } = buildStudentPerformancePdf(
+      project,
+      row,
+      options
+    );
     const blob = pdfDocToBlob(doc, pdfFooterFromProject(project));
     let fileName = `${baseName}.pdf`;
     let n = 2;

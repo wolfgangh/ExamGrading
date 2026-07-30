@@ -91,7 +91,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FileSpreadsheet, FileText, ListChecks, UserRound } from "lucide-react";
-import { exportStudentPerformancePdfs } from "@/lib/pdf/export-student-performance-pdf";
+import {
+  availableStudentPerformanceSections,
+  defaultStudentPerformanceSections,
+  exportStudentPerformancePdfs,
+  type StudentPerformanceSectionId,
+} from "@/lib/pdf/export-student-performance-pdf";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   isHisManualAssessmentExam,
   isPortfolioExam,
@@ -126,6 +132,10 @@ export default function GradesPage() {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [perfPdfBusy, setPerfPdfBusy] = useState(false);
   const [perfPdfMsg, setPerfPdfMsg] = useState<string | null>(null);
+  const [perfPdfDialogOpen, setPerfPdfDialogOpen] = useState(false);
+  const [perfPdfSections, setPerfPdfSections] = useState<
+    Partial<Record<StudentPerformanceSectionId, boolean>>
+  >({});
 
   const editRow = useMemo(
     () => rows.find((r) => r.key === editKey) ?? null,
@@ -935,42 +945,18 @@ export default function GradesPage() {
               title={
                 selectedKeys.length === 0
                   ? "Zuerst eine oder mehrere Personen in der Tabelle auswählen"
-                  : selectedKeys.length === 1
-                    ? "Leistungsnachweis als PDF für die ausgewählte Person"
-                    : `${selectedKeys.length} PDFs als ZIP (ein PDF je Person)`
+                  : "Inhalte wählen und Leistungs-PDF(s) erzeugen"
               }
               onClick={() => {
                 if (!project || selectedKeys.length === 0) return;
-                setPerfPdfBusy(true);
-                setPerfPdfMsg(null);
-                void exportStudentPerformancePdfs(
-                  project,
-                  rows,
-                  selectedKeys
-                )
-                  .then((r) => {
-                    setPerfPdfMsg(
-                      r.mode === "zip"
-                        ? `${r.count} Leistungs-PDFs als ZIP heruntergeladen.`
-                        : "Leistungs-PDF heruntergeladen."
-                    );
-                  })
-                  .catch((e) => {
-                    setPerfPdfMsg(
-                      e instanceof Error
-                        ? e.message
-                        : "PDF-Export fehlgeschlagen."
-                    );
-                  })
-                  .finally(() => setPerfPdfBusy(false));
+                setPerfPdfSections(defaultStudentPerformanceSections(project));
+                setPerfPdfDialogOpen(true);
               }}
             >
               <UserRound className="size-3.5" />
-              {perfPdfBusy
-                ? "PDF…"
-                : selectedKeys.length <= 1
-                  ? "Leistung PDF"
-                  : `Leistung PDF (${selectedKeys.length})`}
+              {selectedKeys.length <= 1
+                ? "Leistung PDF"
+                : `Leistung PDF (${selectedKeys.length})`}
             </Button>
             {selectedKeys.length > 0 && (
               <Button
@@ -1127,6 +1113,151 @@ export default function GradesPage() {
                 Speichern
               </Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={perfPdfDialogOpen}
+        onOpenChange={(open) => {
+          setPerfPdfDialogOpen(open);
+          if (!open) setPerfPdfBusy(false);
+        }}
+      >
+        <DialogContent className="max-h-[min(90vh,36rem)] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Leistungs-PDF exportieren</DialogTitle>
+            <DialogDescription>
+              {selectedKeys.length === 1
+                ? "Ein PDF für die ausgewählte Person."
+                : `${selectedKeys.length} PDFs als ZIP (ein PDF je Person).`}{" "}
+              Wählen Sie die Inhaltsblöcke.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {(project
+              ? availableStudentPerformanceSections(project)
+              : []
+            ).map((sec) => {
+              const checked = perfPdfSections[sec.id] !== false;
+              return (
+                <label
+                  key={sec.id}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-sm",
+                    sec.required && "bg-muted/40",
+                    checked
+                      ? "border-border"
+                      : "border-dashed opacity-80"
+                  )}
+                >
+                  <Checkbox
+                    className="mt-0.5"
+                    checked={checked}
+                    disabled={sec.required}
+                    onCheckedChange={(v) => {
+                      if (sec.required) return;
+                      setPerfPdfSections((prev) => ({
+                        ...prev,
+                        [sec.id]: v === true,
+                      }));
+                    }}
+                  />
+                  <span className="min-w-0">
+                    <span className="font-medium">
+                      {sec.label}
+                      {sec.required ? " (immer)" : ""}
+                    </span>
+                    {sec.hint && (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {sec.hint}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (!project) return;
+                  setPerfPdfSections(
+                    defaultStudentPerformanceSections(project)
+                  );
+                }}
+              >
+                Alle
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (!project) return;
+                  const next = {
+                    ...defaultStudentPerformanceSections(project),
+                  };
+                  for (const s of availableStudentPerformanceSections(
+                    project
+                  )) {
+                    if (!s.required) next[s.id] = false;
+                  }
+                  setPerfPdfSections(next);
+                }}
+              >
+                Nur Pflicht
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPerfPdfDialogOpen(false)}
+            >
+              Abbrechen
+            </Button>
+            <Button
+              type="button"
+              disabled={perfPdfBusy || selectedKeys.length === 0}
+              onClick={() => {
+                if (!project || selectedKeys.length === 0) return;
+                setPerfPdfBusy(true);
+                setPerfPdfMsg(null);
+                void exportStudentPerformancePdfs(
+                  project,
+                  rows,
+                  selectedKeys,
+                  { sections: perfPdfSections }
+                )
+                  .then((r) => {
+                    setPerfPdfMsg(
+                      r.mode === "zip"
+                        ? `${r.count} Leistungs-PDFs als ZIP heruntergeladen.`
+                        : "Leistungs-PDF heruntergeladen."
+                    );
+                    setPerfPdfDialogOpen(false);
+                  })
+                  .catch((e) => {
+                    setPerfPdfMsg(
+                      e instanceof Error
+                        ? e.message
+                        : "PDF-Export fehlgeschlagen."
+                    );
+                  })
+                  .finally(() => setPerfPdfBusy(false));
+              }}
+            >
+              <FileText className="size-3.5" />
+              {perfPdfBusy
+                ? "Erzeuge…"
+                : selectedKeys.length > 1
+                  ? "ZIP erzeugen"
+                  : "PDF erzeugen"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
