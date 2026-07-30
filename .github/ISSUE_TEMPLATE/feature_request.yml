@@ -1,0 +1,66 @@
+name: Feature-Wunsch
+description: Vorschlag für eine neue Funktion oder spürbare Verbesserung.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Beschreiben Sie den **Nutzen im Prüfungsalltag**. Keine personenbezogenen Prüfungsdaten in die Issue schreiben.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: Welchen Arbeitsablauf möchten Sie erleichtern?
+      placeholder: z. B. Beim Export brauche ich aktuell …
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Vorgeschlagene Lösung
+      description: Wie stellen Sie sich die Funktion vor?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativen (optional)
+      description: Workarounds oder andere Ansätze, die Sie schon nutzen.
+
+  - type: dropdown
+    id: exam_type
+    attributes:
+      label: Vor allem relevant für
+      options:
+        - Alle / App-weit
+        - THE / elektrP
+        - Klausur
+        - StA
+        - Portfolio
+        - Import / Export
+        - Startseite / Sicherung
+        - Sonstiges
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Für Sie wie wichtig?
+      options:
+        - Nice-to-have
+        - Würde den Alltag spürbar erleichtern
+        - Dringend für den Einsatz
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App-Version (optional)
+      description: Footer der App, falls die Idee an den aktuellen Stand anknüpft.
+      placeholder: ExamGrade v0.x.x

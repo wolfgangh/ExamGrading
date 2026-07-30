@@ -1,0 +1,30 @@
+name: Frage / Unklarheit
+description: Verständnisfrage zur Bedienung oder zu einem Workflow (kein klarer Bug).
+title: "[Frage]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Für Bedienungsfragen zuerst das [Benutzerhandbuch](../blob/main/docs/BENUTZERHANDBUCH.md) prüfen.  
+        **Keine personenbezogenen Prüfungsdaten** posten.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Ihre Frage
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Kontext (optional)
+      description: Prüfungsform, Schritt im Workflow, was Sie schon versucht haben.
+      placeholder: z. B. Portfolio, Teilnoten je Dozent, Seite Bewertung …
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App-Version (optional)
+      placeholder: ExamGrade v0.x.x

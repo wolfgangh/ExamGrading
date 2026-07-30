@@ -1,0 +1,109 @@
+name: Fehler melden (Bug)
+description: Etwas funktioniert nicht wie erwartet oder bricht ab.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke für die Meldung. **Keine personenbezogenen Prüfungsdaten** (Matrikelnummern, Notenlisten, JSON-Sicherungen mit Studierenden) in Issues oder Anhängen hochladen.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Kurzbeschreibung
+      description: Was ist passiert? In einem Satz.
+      placeholder: z. B. Import der HIS-Datei bricht mit Fehlermeldung ab
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Schritte zur Reproduktion
+      description: So genau wie möglich.
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Erwartetes Verhalten
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Tatsächliches Verhalten
+      description: Fehlermeldung, Screenshot-Beschreibung (ohne personenbezogene Daten).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: exam_type
+    attributes:
+      label: Prüfungsform (falls relevant)
+      options:
+        - Nicht zutreffend / Startseite
+        - THE
+        - elektrP
+        - Klausur
+        - StA (Kriterien)
+        - StA (manuell)
+        - Portfolio
+        - Sonstige
+        - Unbekannt
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App-Version
+      description: Steht im Footer (z. B. ExamGrade v0.4.59). In der App unter „Feedback“ kann die Umgebung kopiert werden.
+      placeholder: ExamGrade v0.x.x
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser und Gerät
+      description: z. B. Chrome 131 Windows, Safari iPad, Edge in MS Teams
+      placeholder: Chrome … / Windows …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Schweregrad
+      options:
+        - Blocker (Export/Import unbrauchbar)
+        - Hoch (wichtiger Workflow gestört)
+        - Mittel (Umweg möglich)
+        - Niedrig (kosmetisch / Randfall)
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Weitere Umgebungsinfos (optional)
+      description: Viewport, Teams-Einbettung, Console-Fehler (ohne personenbezogene Daten).
+      placeholder: z. B. Teams-Website-Tab · 390×844 · Console-Fehler …
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checkliste
+      options:
+        - label: Ich habe keine Matrikelnummern, Noten oder vollständige JSON-Sicherungen angehängt.
+          required: true
+        - label: Ich habe die App-Version und den Browser angegeben.
+          required: true
