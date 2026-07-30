@@ -38,6 +38,12 @@ import {
   renderStudentGradeContextChartPng,
 } from "@/lib/charts/student-grade-context-chart";
 import { computeStatistics } from "@/lib/grades/statistics";
+import {
+  criterionPointsTotalsPartial,
+  gradeFromUnitAvg,
+  resolveComponentCriteriaScale,
+  unitAvgFromCriterionValuesPartial,
+} from "@/lib/grades/portfolio";
 import type { jsPDF } from "jspdf";
 import type { UserOptions } from "jspdf-autotable";
 
@@ -90,17 +96,31 @@ const baseTable: Partial<UserOptions> = {
   theme: "grid",
 };
 
+function pageBottom(doc: jsPDF): number {
+  return doc.internal.pageSize.getHeight() - 14;
+}
+
 function ensureY(doc: jsPDF, y: number, need = 28): number {
-  const pageH = doc.internal.pageSize.getHeight();
-  if (y + need > pageH - 14) {
+  if (y + need > pageBottom(doc)) {
     doc.addPage();
     return PDF_MARGIN + 8;
   }
   return y;
 }
 
-function sectionTitle(doc: jsPDF, title: string, y: number): number {
-  y = ensureY(doc, y, 12);
+/**
+ * Abschnittsüberschrift nur, wenn Titel + Mindestkörper noch auf die Seite passen
+ * (kein alleinstehender Titel am Seitenende).
+ */
+function beginSection(
+  doc: jsPDF,
+  title: string,
+  y: number,
+  /** Mindestplatz unter dem Titel für erste Inhaltszeilen (mm) */
+  minBodyMm = 22
+): number {
+  const titleBlock = 8;
+  y = ensureY(doc, y, titleBlock + minBodyMm);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.setTextColor(...SECTION_COLOR);
@@ -115,14 +135,150 @@ function sectionTitle(doc: jsPDF, title: string, y: number): number {
 }
 
 function tableY(doc: jsPDF, y: number, opts: UserOptions): number {
+  // Genug Platz für Kopfzeile + erste Datenzeile
+  y = ensureY(doc, y, 18);
   autoTable(doc, {
     ...baseTable,
     startY: y,
     ...opts,
     styles: { ...baseTable.styles, ...opts.styles },
     headStyles: { ...baseTable.headStyles, ...opts.headStyles },
+    // Kopf auf Folgeseiten wiederholen, wenn die Tabelle umbricht
+    showHead: opts.showHead ?? "everyPage",
   });
   return getLastTableY(doc, y) + 4.5;
+}
+
+/** Teilnote / % / Punkte aus (ggf. unvollständigen) Kriterien für PDF-Anzeige. */
+function resolveTlDisplayForPdf(
+  project: ExamProject,
+  rec: ReturnType<typeof findPointsRecord>,
+  componentId: string,
+  enriched?: {
+    grade: number | null;
+    percent: number | null;
+    pointsRaw?: number | null;
+    pointsMax?: number | null;
+  } | null,
+  directGrade?: number | null
+): {
+  grade: number | null;
+  percent: number | null;
+  pointsRaw: number | null;
+  pointsMax: number | null;
+  partial: boolean;
+} {
+  if (
+    enriched?.grade != null &&
+    Number.isFinite(enriched.grade)
+  ) {
+    return {
+      grade: enriched.grade,
+      percent: enriched.percent ?? null,
+      pointsRaw: enriched.pointsRaw ?? null,
+      pointsMax: enriched.pointsMax ?? null,
+      partial: false,
+    };
+  }
+  if (directGrade != null && Number.isFinite(directGrade)) {
+    return {
+      grade: directGrade,
+      percent: enriched?.percent ?? null,
+      pointsRaw: enriched?.pointsRaw ?? null,
+      pointsMax: enriched?.pointsMax ?? null,
+      partial: false,
+    };
+  }
+
+  const components = project.portfolioComponents ?? [];
+  const c = components.find((x) => x.id === componentId);
+  if (!c || project.portfolioCriteriaMode !== true) {
+    return {
+      grade: null,
+      percent: null,
+      pointsRaw: null,
+      pointsMax: null,
+      partial: false,
+    };
+  }
+
+  const scale = resolveComponentCriteriaScale(c);
+  const crits = (c.criteria ?? []).map((k) => ({ ...k, scale }));
+  const lecturers = (project.lecturers ?? [])
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  let unit: number | null = null;
+  let pointsRaw: number | null = null;
+  let pointsMax: number | null = null;
+  let filled = 0;
+  let total = crits.length;
+
+  if (!project.portfolioPerLecturerGrading) {
+    const vals = rec?.portfolioCriterionValues?.[c.id];
+    unit = unitAvgFromCriterionValuesPartial(vals, crits);
+    for (const cr of crits) {
+      if (vals?.[cr.id] != null && Number.isFinite(vals[cr.id] as number)) {
+        filled += 1;
+      }
+    }
+    const tot = criterionPointsTotalsPartial(vals, crits);
+    if (tot) {
+      pointsRaw = tot.raw;
+      pointsMax = tot.max;
+    }
+  } else if (lecturers.length) {
+    let uAcc = 0;
+    let uN = 0;
+    let rAcc = 0;
+    let mAcc = 0;
+    let tN = 0;
+    for (const name of lecturers) {
+      const vals =
+        rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name] ?? {};
+      const u = unitAvgFromCriterionValuesPartial(vals, crits);
+      if (u != null) {
+        uAcc += u;
+        uN += 1;
+      }
+      for (const cr of crits) {
+        if (vals[cr.id] != null && Number.isFinite(vals[cr.id] as number)) {
+          filled += 1;
+        }
+      }
+      total = crits.length * lecturers.length;
+      const tot = criterionPointsTotalsPartial(vals, crits);
+      if (tot) {
+        rAcc += tot.raw;
+        mAcc += tot.max;
+        tN += 1;
+      }
+    }
+    if (uN > 0) unit = uAcc / uN;
+    if (tN > 0) {
+      pointsRaw = Math.round((rAcc / tN) * 100) / 100;
+      pointsMax = Math.round((mAcc / tN) * 100) / 100;
+    }
+  }
+
+  if (unit == null) {
+    return {
+      grade: null,
+      percent: null,
+      pointsRaw,
+      pointsMax,
+      partial: filled > 0 && filled < total,
+    };
+  }
+
+  const grade = gradeFromUnitAvg(unit, scale, project.gradeSchema);
+  return {
+    grade,
+    percent: unit,
+    pointsRaw,
+    pointsMax,
+    partial: filled > 0 && filled < total,
+  };
 }
 
 function criterionScaleLabel(c: AssessmentCriterion): string {
@@ -353,7 +509,7 @@ export function buildStudentPerformancePdf(
 
   // —— Stammdaten ——
   if (on(sections, "person") || on(sections, "exam")) {
-    y = sectionTitle(doc, "Stammdaten", y);
+    y = beginSection(doc, "Stammdaten", y, 28);
     const metaRows: string[][] = [];
     if (on(sections, "person")) {
       metaRows.push([
@@ -414,7 +570,7 @@ export function buildStudentPerformancePdf(
 
   // —— Ergebnis ——
   if (on(sections, "result")) {
-    y = sectionTitle(doc, "Ergebnis", y);
+    y = beginSection(doc, "Ergebnis", y, 22);
     const resultBody: string[][] = [
       ["Gesamtnote", pdfGrade(row.finalGrade)],
       ["Berechnet", pdfGrade(row.calculatedGrade)],
@@ -463,7 +619,8 @@ export function buildStudentPerformancePdf(
     const grades = cohortGradesFromRows(cohort);
     const rankInfo = computeStudentGradeRank(row.finalGrade, grades);
     if (grades.length >= 2 && rankInfo) {
-      y = sectionTitle(doc, "Einordnung in der Kohorte", y);
+      const chartH = 52;
+      y = beginSection(doc, "Einordnung in der Kohorte", y, chartH + 10);
       try {
         const stats = computeStatistics(
           cohort,
@@ -480,8 +637,6 @@ export function buildStudentPerformancePdf(
           height: 400,
           scale: 2,
         });
-        const chartH = 52;
-        y = ensureY(doc, y, chartH + 8);
         doc.addImage(png, "PNG", PDF_MARGIN, y, PDF_CONTENT_WIDTH, chartH);
         y += chartH + 3;
         doc.setFont("helvetica", "normal");
@@ -518,7 +673,7 @@ export function buildStudentPerformancePdf(
     ""
   ).trim();
   if (on(sections, "comment") && commentText) {
-    y = sectionTitle(doc, "Kommentar", y);
+    y = beginSection(doc, "Kommentar", y, 16);
     y = tableY(doc, y, {
       body: [[pdfText(commentText)]],
       showHead: "never",
@@ -540,7 +695,7 @@ export function buildStudentPerformancePdf(
     });
     const hasPts = saBody.some((r) => r[2] !== "–");
     if (hasPts) {
-      y = sectionTitle(doc, "Teilgebiete", y);
+      y = beginSection(doc, "Teilgebiete", y, 20);
       y = tableY(doc, y, {
         head: [["Kürzel", "Teilgebiet", "Punkte", "Max."]],
         body: saBody,
@@ -564,7 +719,7 @@ export function buildStudentPerformancePdf(
         pdfPoints(q.maxPoints),
       ]);
     if (qBody.some((r) => r[1] !== "–") || rec?.byQuestion) {
-      y = sectionTitle(doc, "Aufgaben / Detailpunkte", y);
+      y = beginSection(doc, "Aufgaben / Detailpunkte", y, 20);
       y = tableY(doc, y, {
         head: [["Aufgabe", "Punkte", "Max."]],
         body: qBody,
@@ -580,7 +735,7 @@ export function buildStudentPerformancePdf(
   if (on(sections, "staCriteria") && isStaCriteriaExam(project.examType)) {
     const criteria = project.criteria ?? [];
     if (criteria.length > 0) {
-      y = sectionTitle(doc, "Bewertungskriterien", y);
+      y = beginSection(doc, "Bewertungskriterien", y, 20);
       const body = criteria.map((c) => {
         const raw = rec?.criterionValues?.[c.id] ?? null;
         return [
@@ -610,11 +765,7 @@ export function buildStudentPerformancePdf(
     const critMode = project.portfolioCriteriaMode === true;
 
     if (on(sections, "portfolioTl") && components.length > 0) {
-      y = sectionTitle(
-        doc,
-        perLecturer ? "Teilleistungen (inkl. Dozenten)" : "Teilleistungen",
-        y
-      );
+      y = beginSection(doc, "Teilleistungen", y, 24);
 
       const lecHeads = perLecturer
         ? lecturers.map((l, i) => shortLecturer(l, i, lecturers.length))
@@ -632,28 +783,67 @@ export function buildStudentPerformancePdf(
 
       const tlBody = components.map((c) => {
         const d = row.portfolioComponentDetails?.[c.id];
-        const g =
-          d?.grade ??
+        const disp = resolveTlDisplayForPdf(
+          project,
+          rec,
+          c.id,
+          d
+            ? {
+                grade: d.grade,
+                percent: d.percent,
+                pointsRaw: d.pointsRaw,
+                pointsMax: d.pointsMax,
+              }
+            : null,
           row.portfolioComponentGrades?.[c.id] ??
-          rec?.portfolioGrades?.[c.id] ??
-          null;
+            rec?.portfolioGrades?.[c.id] ??
+            null
+        );
+        const g = disp.grade;
         const pct =
-          d?.percent != null
-            ? `${pdfText(formatPoints(d.percent * 100, 1))} %`
+          disp.percent != null
+            ? `${pdfText(formatPoints(disp.percent * 100, 1))} %${
+                disp.partial ? "*" : ""
+              }`
             : "–";
         const raw =
-          d?.pointsRaw != null && d?.pointsMax != null
-            ? `${pdfPoints(d.pointsRaw)}/${pdfPoints(d.pointsMax)}`
+          disp.pointsRaw != null && disp.pointsMax != null
+            ? `${pdfPoints(disp.pointsRaw)}/${pdfPoints(disp.pointsMax)}${
+                disp.partial ? "*" : ""
+              }`
             : "–";
         const byL = rec?.portfolioGradesByLecturer?.[c.id] ?? {};
         const lecCells = perLecturer
-          ? lecturers.map((l) => pdfGrade(byL[l] ?? null))
+          ? lecturers.map((l) => {
+              const direct = byL[l];
+              if (direct != null && Number.isFinite(direct)) {
+                return pdfGrade(direct);
+              }
+              // Teilbewertung je Dozent aus Kriterien
+              if (project.portfolioCriteriaMode && c.criteria?.length) {
+                const scale = resolveComponentCriteriaScale(c);
+                const crits = (c.criteria ?? []).map((k) => ({
+                  ...k,
+                  scale,
+                }));
+                const vals =
+                  rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[l] ??
+                  {};
+                const u = unitAvgFromCriterionValuesPartial(vals, crits);
+                if (u != null) {
+                  return `${pdfGrade(gradeFromUnitAvg(u, scale, project.gradeSchema))}*`;
+                }
+              }
+              return "–";
+            })
           : [];
         return [
           pdfText(c.code || c.name),
           pdfText(c.name),
           pdfText(String(c.weight ?? 1)),
-          pdfGrade(g),
+          g != null
+            ? `${pdfGrade(g)}${disp.partial ? "*" : ""}`
+            : "–",
           pct,
           raw,
           ...lecCells,
@@ -663,9 +853,9 @@ export function buildStudentPerformancePdf(
       const colStyles: UserOptions["columnStyles"] = {
         0: { cellWidth: 16 },
         2: { cellWidth: 12, halign: "right" },
-        3: { cellWidth: 14, halign: "right", fontStyle: "bold" },
-        4: { cellWidth: 16, halign: "right" },
-        5: { cellWidth: 22, halign: "right" },
+        3: { cellWidth: 16, halign: "right", fontStyle: "bold" },
+        4: { cellWidth: 18, halign: "right" },
+        5: { cellWidth: 24, halign: "right" },
       };
       if (perLecturer) {
         for (let i = 0; i < lecturers.length; i++) {
@@ -682,6 +872,24 @@ export function buildStudentPerformancePdf(
         styles: { fontSize: perLecturer ? 7 : 8 },
         columnStyles: colStyles,
       });
+
+      if (
+        tlBody.some((r) => r.some((cell) => String(cell).includes("*")))
+      ) {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7);
+        doc.setTextColor(80);
+        doc.text(
+          pdfText(
+            "* Aus den bisher bewerteten Kriterien berechnet (unvollständig)."
+          ),
+          PDF_MARGIN,
+          y
+        );
+        doc.setTextColor(0);
+        doc.setFont("helvetica", "normal");
+        y += 5;
+      }
     }
 
     if (on(sections, "portfolioCriteria") && critMode) {
@@ -689,7 +897,7 @@ export function buildStudentPerformancePdf(
         const crits = c.criteria ?? [];
         if (crits.length === 0) continue;
 
-        y = sectionTitle(doc, `Kriterien · ${c.code || c.name}`, y);
+        y = beginSection(doc, `Kriterien · ${c.code || c.name}`, y, 22);
 
         if (perLecturer) {
           // Eine Tabelle: Kriterien × Dozenten-Spalten
@@ -756,7 +964,7 @@ export function buildStudentPerformancePdf(
     (rec?.secondCorrectionPoints != null ||
       rec?.secondCorrectionNotes?.trim())
   ) {
-    y = sectionTitle(doc, "Zweitkorrektur", y);
+    y = beginSection(doc, "Zweitkorrektur", y, 16);
     const body: string[][] = [];
     if (rec.secondCorrectionPoints != null) {
       body.push(["Punkte", pdfPoints(rec.secondCorrectionPoints)]);

@@ -1140,41 +1140,58 @@ export default function GradesPage() {
               : []
             ).map((sec) => {
               const checked = perfPdfSections[sec.id] !== false;
+              const locked = Boolean(sec.required);
               return (
-                <label
+                <div
                   key={sec.id}
                   className={cn(
-                    "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-sm",
-                    sec.required && "bg-muted/40",
-                    checked
-                      ? "border-border"
-                      : "border-dashed opacity-80"
+                    "flex items-start gap-2.5 rounded-lg border px-3 py-2 text-sm",
+                    locked
+                      ? "cursor-not-allowed border-border/70 bg-muted/50 opacity-70"
+                      : "cursor-pointer",
+                    !locked &&
+                      (checked
+                        ? "border-border"
+                        : "border-dashed opacity-80")
                   )}
                 >
                   <Checkbox
-                    className="mt-0.5"
+                    className={cn(
+                      "mt-0.5",
+                      locked && "opacity-50 grayscale"
+                    )}
                     checked={checked}
-                    disabled={sec.required}
+                    disabled={locked}
                     onCheckedChange={(v) => {
-                      if (sec.required) return;
+                      if (locked) return;
                       setPerfPdfSections((prev) => ({
                         ...prev,
                         [sec.id]: v === true,
                       }));
                     }}
                   />
-                  <span className="min-w-0">
-                    <span className="font-medium">
+                  <label
+                    className={cn(
+                      "min-w-0 flex-1",
+                      locked ? "cursor-not-allowed" : "cursor-pointer"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "font-medium",
+                        locked && "text-muted-foreground"
+                      )}
+                    >
                       {sec.label}
-                      {sec.required ? " (immer)" : ""}
+                      {locked ? " (immer)" : ""}
                     </span>
                     {sec.hint && (
                       <span className="mt-0.5 block text-xs text-muted-foreground">
                         {sec.hint}
                       </span>
                     )}
-                  </span>
-                </label>
+                  </label>
+                </div>
               );
             })}
             <div className="flex flex-wrap gap-2 pt-1">

@@ -431,6 +431,75 @@ export function unitAvgFromCriterionValues(
   return acc / wSum;
 }
 
+/**
+ * Wie unitAvgFromCriterionValues, aber nur aus **ausgefüllten** Kriterien
+ * (fehlende Werte werden übersprungen). Für Anzeigen/PDF bei Teilbewertung.
+ */
+export function unitAvgFromCriterionValuesPartial(
+  values: Record<string, number | null | undefined> | undefined,
+  criteria: AssessmentCriterion[] | undefined | null,
+  options?: GradeFromCriteriaOptions
+): number | null {
+  const disabled = options?.disabledCriterionIds
+    ? options.disabledCriterionIds instanceof Set
+      ? options.disabledCriterionIds
+      : new Set(options.disabledCriterionIds)
+    : null;
+  const list = (criteria ?? []).filter((c) => !disabled?.has(c.id));
+  if (!list.length) return null;
+  const vals = values ?? {};
+  let wSum = 0;
+  let acc = 0;
+  for (const c of list) {
+    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 0;
+    if (w <= 0) continue;
+    const unit = normalizeCriterionValue(vals[c.id], c);
+    if (unit == null) continue;
+    wSum += w;
+    acc += unit * w;
+  }
+  if (wSum <= 0) return null;
+  return acc / wSum;
+}
+
+/**
+ * Rohpunkte-Summe nur über ausgefüllte Punkte-Kriterien (Teilbewertung).
+ */
+export function criterionPointsTotalsPartial(
+  values: Record<string, number | null | undefined> | undefined,
+  criteria: AssessmentCriterion[] | undefined | null,
+  options?: GradeFromCriteriaOptions
+): { raw: number; max: number } | null {
+  const disabled = options?.disabledCriterionIds
+    ? options.disabledCriterionIds instanceof Set
+      ? options.disabledCriterionIds
+      : new Set(options.disabledCriterionIds)
+    : null;
+  const list = (criteria ?? []).filter((c) => !disabled?.has(c.id));
+  if (!list.length) return null;
+  const vals = values ?? {};
+  let raw = 0;
+  let max = 0;
+  let any = false;
+  for (const c of list) {
+    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 1;
+    const cMax =
+      c.scale === "points" && c.maxPoints != null && c.maxPoints > 0
+        ? c.maxPoints
+        : c.scale === "percent"
+          ? 100
+          : null;
+    if (cMax == null) continue;
+    const v = vals[c.id];
+    if (v == null || !Number.isFinite(v)) continue;
+    any = true;
+    raw += Math.min(cMax, Math.max(0, v)) * w;
+    max += cMax * w;
+  }
+  if (!any || max <= 0) return null;
+  return { raw: Math.round(raw * 100) / 100, max: Math.round(max * 100) / 100 };
+}
+
 export type PortfolioFulfillment = {
   /** 0…1, gewichtet über Teilleistungen */
   unitAvg: number;
