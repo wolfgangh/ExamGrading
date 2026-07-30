@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -163,6 +163,10 @@ export function StudentsTable({
   portfolioComponents = [],
   assessmentHrefForRow,
   groupNames = {},
+  selectable = false,
+  selectedKeys,
+  onSelectionChange,
+  toolbarExtra,
 }: {
   rows: EnrichedStudentRow[];
   editable?: boolean;
@@ -185,6 +189,12 @@ export function StudentsTable({
   assessmentHrefForRow?: (row: EnrichedStudentRow) => string | null;
   /** Gruppen-id → Name; Spalte „Gruppe“ nur wenn nicht leer */
   groupNames?: Record<string, string>;
+  /** Zeilenauswahl (z. B. Leistungs-PDF) */
+  selectable?: boolean;
+  selectedKeys?: string[];
+  onSelectionChange?: (keys: string[]) => void;
+  /** Zusätzliche Aktionen in der Filter-Leiste */
+  toolbarExtra?: ReactNode;
 }) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "orderIndex", desc: false },
@@ -300,17 +310,80 @@ export function StudentsTable({
     borderlineLimit,
   ]);
 
+  const selectedSet = useMemo(
+    () => new Set(selectedKeys ?? []),
+    [selectedKeys]
+  );
+
   const columns = useMemo<ColumnDef<EnrichedStudentRow>[]>(() => {
-    const cols: ColumnDef<EnrichedStudentRow>[] = [
-      {
-        accessorKey: "orderIndex",
-        header: "#",
-        cell: ({ row }) => (
-          <span className="text-muted-foreground tabular-nums">
-            {row.original.orderIndex + 1}
-          </span>
-        ),
-      },
+    const cols: ColumnDef<EnrichedStudentRow>[] = [];
+
+    if (selectable && onSelectionChange) {
+      cols.push({
+        id: "select",
+        header: () => {
+          const visibleKeys = filtered.map((r) => r.key);
+          const allOn =
+            visibleKeys.length > 0 &&
+            visibleKeys.every((k) => selectedSet.has(k));
+          const someOn =
+            visibleKeys.some((k) => selectedSet.has(k)) && !allOn;
+          return (
+            <Checkbox
+              checked={allOn}
+              indeterminate={someOn}
+              onCheckedChange={(v) => {
+                if (v === true) {
+                  const next = new Set(selectedSet);
+                  for (const k of visibleKeys) next.add(k);
+                  onSelectionChange([...next]);
+                } else {
+                  const drop = new Set(visibleKeys);
+                  onSelectionChange(
+                    [...selectedSet].filter((k) => !drop.has(k))
+                  );
+                }
+              }}
+              aria-label="Alle sichtbaren auswählen"
+            />
+          );
+        },
+        cell: ({ row }) => {
+          const key = row.original.key;
+          const on = selectedSet.has(key);
+          return (
+            <Checkbox
+              checked={on}
+              onCheckedChange={(v) => {
+                if (v === true) {
+                  if (!selectedSet.has(key)) {
+                    onSelectionChange([...(selectedKeys ?? []), key]);
+                  }
+                } else {
+                  onSelectionChange(
+                    (selectedKeys ?? []).filter((k) => k !== key)
+                  );
+                }
+              }}
+              aria-label={`${key} auswählen`}
+              onClick={(e) => e.stopPropagation()}
+            />
+          );
+        },
+        enableSorting: false,
+      });
+    }
+
+    cols.push({
+      accessorKey: "orderIndex",
+      header: "#",
+      cell: ({ row }) => (
+        <span className="text-muted-foreground tabular-nums">
+          {row.original.orderIndex + 1}
+        </span>
+      ),
+    });
+    cols.push(
       {
         id: "matnr",
         accessorFn: (r) => r.student.matriculationNumber,
@@ -467,7 +540,7 @@ export function StudentsTable({
           </span>
         ),
       },
-    ];
+    );
 
     // Teilnoten links von der Gesamtnote (+ % vom Max, bis nächste Note)
     for (const pc of portfolioComponents) {
@@ -663,6 +736,11 @@ export function StudentsTable({
     rows,
     assessmentHrefForRow,
     groupNames,
+    selectable,
+    selectedSet,
+    selectedKeys,
+    onSelectionChange,
+    filtered,
   ]);
 
   const table = useReactTable({
@@ -717,6 +795,7 @@ export function StudentsTable({
           onChange={(e) => setGlobalFilter(e.target.value)}
           className="max-w-xs"
         />
+        {toolbarExtra}
         <Select
           value={statusFilter}
           onValueChange={(v) => v && setStatusFilter(v)}

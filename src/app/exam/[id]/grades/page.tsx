@@ -90,7 +90,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { FileSpreadsheet, FileText, ListChecks } from "lucide-react";
+import { FileSpreadsheet, FileText, ListChecks, UserRound } from "lucide-react";
+import { exportStudentPerformancePdfs } from "@/lib/pdf/export-student-performance-pdf";
 import {
   isHisManualAssessmentExam,
   isPortfolioExam,
@@ -122,6 +123,9 @@ export default function GradesPage() {
   const [spiegelBusy, setSpiegelBusy] = useState<string | null>(null);
   const [spiegelMsg, setSpiegelMsg] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<GroupFilterId>("all");
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [perfPdfBusy, setPerfPdfBusy] = useState(false);
+  const [perfPdfMsg, setPerfPdfMsg] = useState<string | null>(null);
 
   const editRow = useMemo(
     () => rows.find((r) => r.key === editKey) ?? null,
@@ -918,6 +922,71 @@ export default function GradesPage() {
         noShowOnly={noShowOnly}
         orphanOnly={orphanOnly}
         highlightBorderlineMax={highlightMax}
+        selectable
+        selectedKeys={selectedKeys}
+        onSelectionChange={setSelectedKeys}
+        toolbarExtra={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={selectedKeys.length === 0 || perfPdfBusy}
+              title={
+                selectedKeys.length === 0
+                  ? "Zuerst eine oder mehrere Personen in der Tabelle auswählen"
+                  : selectedKeys.length === 1
+                    ? "Leistungsnachweis als PDF für die ausgewählte Person"
+                    : `${selectedKeys.length} PDFs als ZIP (ein PDF je Person)`
+              }
+              onClick={() => {
+                if (!project || selectedKeys.length === 0) return;
+                setPerfPdfBusy(true);
+                setPerfPdfMsg(null);
+                void exportStudentPerformancePdfs(
+                  project,
+                  rows,
+                  selectedKeys
+                )
+                  .then((r) => {
+                    setPerfPdfMsg(
+                      r.mode === "zip"
+                        ? `${r.count} Leistungs-PDFs als ZIP heruntergeladen.`
+                        : "Leistungs-PDF heruntergeladen."
+                    );
+                  })
+                  .catch((e) => {
+                    setPerfPdfMsg(
+                      e instanceof Error
+                        ? e.message
+                        : "PDF-Export fehlgeschlagen."
+                    );
+                  })
+                  .finally(() => setPerfPdfBusy(false));
+              }}
+            >
+              <UserRound className="size-3.5" />
+              {perfPdfBusy
+                ? "PDF…"
+                : selectedKeys.length <= 1
+                  ? "Leistung PDF"
+                  : `Leistung PDF (${selectedKeys.length})`}
+            </Button>
+            {selectedKeys.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedKeys([])}
+              >
+                Auswahl aufheben
+              </Button>
+            )}
+            {perfPdfMsg && (
+              <span className="text-xs text-muted-foreground">{perfPdfMsg}</span>
+            )}
+          </div>
+        }
         subAreaNames={
           project.subAreas.length > 1
             ? Object.fromEntries(

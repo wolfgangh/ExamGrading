@@ -357,6 +357,12 @@ export function savePdf(
   void downloadBlob(datedExportFilename(baseName, "pdf"), blob);
 }
 
+/** PDF als Blob (z. B. für ZIP mit mehreren Einzel-PDFs). */
+export function pdfDocToBlob(doc: jsPDF, footer?: PdfFooterMeta): Blob {
+  addPageNumbers(doc, footer);
+  return doc.output("blob");
+}
+
 export function pdfFooterFromProject(project: ExamProject): PdfFooterMeta {
   return {
     examName: project.name,
