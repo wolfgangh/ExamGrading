@@ -153,12 +153,21 @@ export function buildNotenspiegelData(
     { label: "Bewertet", value: String(stats.graded) },
     {
       label: "No-Shows",
-      value: stats.hasAttendanceList ? String(stats.noShow) : "–",
+      value:
+        stats.hasAttendanceList || stats.noShow > 0
+          ? String(stats.noShow)
+          : "–",
     },
     { label: "Ø Note (Mittelwert)", value: formatGrade(stats.averageGrade) },
     { label: "Median Note", value: formatGrade(stats.medianGrade) },
     { label: "Stabw. Note", value: formatStat(stats.stdDevGrade, 2) },
-    { label: "Bestehensquote", value: formatPercent(stats.passRate) },
+    {
+      label: "Bestehensquote",
+      value:
+        (stats.gradeSampleSize ?? 0) > 0
+          ? `${formatPercent(stats.passRate)} (n=${stats.gradeSampleSize})`
+          : formatPercent(stats.passRate),
+    },
     { label: "Durchfaller", value: String(stats.failCount) },
     { label: "Ø Punkte", value: formatPoints(stats.averagePoints) },
     { label: "Median Punkte", value: formatPoints(stats.medianPoints) },

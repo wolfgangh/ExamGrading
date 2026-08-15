@@ -60,7 +60,12 @@ import {
   visibleScenarios,
   withActiveScenario,
 } from "@/lib/grades/scenarios";
-import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
+import {
+  hasLecturerDiscrepancy,
+  LECTURER_DISCREPANCY_THRESHOLD,
+  maxLecturerSpreadForPerson,
+  portfolioUsesGradeScenarios,
+} from "@/lib/grades/portfolio";
 import { examUsesGradeScenarios } from "@/lib/grades/scenarios";
 import {
   computeGradeBuckets,
@@ -237,6 +242,23 @@ export default function GradesPage() {
   if (!project) return null;
 
   const usesScenarios = examUsesGradeScenarios(project);
+  const lecturerGapN =
+    project.portfolioPerLecturerGrading === true
+      ? rows.filter((r) => {
+          if (r.status === "no_show") return false;
+          const rec = project.points.find(
+            (p) => normalizeMatriculation(p.matriculationNumber) === r.key
+          );
+          return hasLecturerDiscrepancy(
+            maxLecturerSpreadForPerson(
+              project,
+              rec,
+              r.student.groupId,
+              project.gradeSchema
+            )
+          );
+        }).length
+      : 0;
   const gradingLocked = hasOpenGrading(project);
   const backupOk = canAccessProtectedExport(project);
   const orphansLocked = hasUnresolvedOrphans(project, rows);
@@ -402,6 +424,14 @@ export default function GradesPage() {
         </div>
       )}
 
+      {lecturerGapN > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50/80 px-3 py-2.5 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+          {lecturerGapN} Person(en): Korrektoren weichen um mehr als{" "}
+          {String(LECTURER_DISCREPANCY_THRESHOLD).replace(".", ",")}{" "}
+          Notenstufen ab – Details in der Bewertungsmatrix.
+        </div>
+      )}
+
       {usesScenarios && (
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Szenario:</span>
@@ -539,7 +569,13 @@ export default function GradesPage() {
               { l: "25%-Quantil", v: formatGrade(stats.q25Grade) },
               { l: "75%-Quantil", v: formatGrade(stats.q75Grade) },
               { l: "Stabw.", v: formatStat(stats.stdDevGrade, 2) },
-              { l: "Bestehen", v: formatPercent(stats.passRate) },
+              {
+                l: "Bestehen",
+                v:
+                  (stats.gradeSampleSize ?? 0) > 0
+                    ? `${formatPercent(stats.passRate)} (n=${stats.gradeSampleSize})`
+                    : formatPercent(stats.passRate),
+              },
               {
                 l: "Durchfaller",
                 v: `${stats.failCount}`,

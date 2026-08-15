@@ -5,7 +5,23 @@ import type {
   FailerAnalysis,
   GradeSchema,
 } from "@/lib/types";
+import { GERMAN_GRADES } from "@/lib/types";
 import { median, quantile } from "@/lib/stats/quantile";
+
+/** Nächste zulässige deutsche Note (Gleichstand → bessere Note). Für die Verteilung. */
+export function nearestGermanGrade(grade: number): number {
+  if (!Number.isFinite(grade)) return 5.0;
+  let best: number = GERMAN_GRADES[GERMAN_GRADES.length - 1];
+  let bestDist = Infinity;
+  for (const g of GERMAN_GRADES) {
+    const d = Math.abs(g - grade);
+    if (d < bestDist - 1e-9 || (Math.abs(d - bestDist) < 1e-9 && g < best)) {
+      best = g;
+      bestDist = d;
+    }
+  }
+  return best;
+}
 
 /** Stichproben-Standardabweichung (n−1) */
 function stdDevSample(values: number[]): number | null {
@@ -84,9 +100,7 @@ export function computeStatistics(
   const attendedOrphan = unique.filter(
     (r) => r.attendanceWithoutHis || (!r.inHis && r.attended === true)
   ).length;
-  const noShow = inHis.filter(
-    (r) => r.status === "no_show" || r.attended === false
-  ).length;
+  const noShow = inHis.filter((r) => r.status === "no_show").length;
   const withPoints = unique.filter((r) => r.hasPoints).length;
   const graded = unique.filter((r) => r.finalGrade != null).length;
   const exportReady = unique.filter(
@@ -112,10 +126,11 @@ export function computeStatistics(
       !r.isFailed
   ).length;
 
-  const gradeKeys = [1, 1.3, 1.7, 2, 2.3, 2.7, 3, 3.3, 3.7, 4, 5];
+  const snapped = grades.map(nearestGermanGrade);
+  const gradeKeys = [...GERMAN_GRADES];
   const gradeDistribution = gradeKeys.map((grade) => ({
     grade,
-    count: grades.filter((g) => Math.abs(g - grade) < 0.05).length,
+    count: snapped.filter((g) => Math.abs(g - grade) < 1e-9).length,
   }));
 
   const maxP = schema.maxPoints || 100;
@@ -135,9 +150,11 @@ export function computeStatistics(
     attended,
     attendanceImported,
     attendedOrphan,
-    noShow: hasAttendanceList ? noShow : 0,
+    noShow,
     noShowRate:
-      hasAttendanceList && registered > 0 ? noShow / registered : null,
+      registered > 0 && (hasAttendanceList || noShow > 0)
+        ? noShow / registered
+        : null,
     hasAttendanceList,
     withPoints,
     graded,

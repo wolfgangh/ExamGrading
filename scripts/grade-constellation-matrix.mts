@@ -44,7 +44,19 @@ import { pickNewerProject } from "../src/lib/project-load.ts";
 import { examUsesGradeScenarios } from "../src/lib/grades/scenarios.ts";
 import { defaultStaCriteria } from "../src/lib/grades/sta-criteria.ts";
 import { listAssessmentRemaining } from "../src/lib/grades/assessment-remaining.ts";
-import { uniqueRowsByMatriculation } from "../src/lib/grades/statistics.ts";
+import {
+  nearestGermanGrade,
+  uniqueRowsByMatriculation,
+} from "../src/lib/grades/statistics.ts";
+import {
+  criterionPointsTotals,
+  countMissingPortfolioCells,
+  hasLecturerDiscrepancy,
+  lecturerValuesSpread,
+  LECTURER_DISCREPANCY_THRESHOLD,
+} from "../src/lib/grades/portfolio.ts";
+import { countMissingCriteria } from "../src/lib/grades/sta-criteria.ts";
+import { validateForExport } from "../src/lib/validations.ts";
 
 type Status = "pass" | "fail";
 type CaseResult = { id: string; status: Status; message: string };
@@ -1049,6 +1061,145 @@ function portfolioPointsProject(units: number[], scale: "percent" | "points") {
       rem.remaining[0].hiddenByFilter === true,
     `remaining ${rem.remaining.length}/${rem.total} done=${rem.done} hidden=${rem.remaining[0]?.hiddenByFilter}`
   );
+}
+
+// ========== W4: Gewicht 0, Verteilung, No-Show, Klausur, Korrektoren ==========
+{
+  const crits = [
+    { id: "a", name: "A", code: "A", scale: "points" as const, weight: 2, maxPoints: 6 },
+    { id: "z", name: "Z", code: "Z", scale: "points" as const, weight: 0, maxPoints: 6 },
+  ];
+  const miss = countMissingCriteria({ a: 4 }, crits);
+  const tot = criterionPointsTotals({ a: 4 }, crits);
+  check(
+    "W4W1",
+    miss === 0 && tot != null && tot.raw === 8 && tot.max === 12,
+    `weight0 skipped missing=${miss} raw=${tot?.raw} max=${tot?.max}`
+  );
+}
+
+{
+  check("W4S1a", nearestGermanGrade(1.5) === 1.3, `1,5 → ${nearestGermanGrade(1.5)}`);
+  check("W4S1b", nearestGermanGrade(2.5) === 2.3, `2,5 → ${nearestGermanGrade(2.5)}`);
+  check("W4S1c", nearestGermanGrade(4.3) === 4.0, `4,3 → ${nearestGermanGrade(4.3)}`);
+  const schema = generateLinearGradeSchema(100, 50, true);
+  const rows: any[] = [
+    {
+      key: "1",
+      inHis: true,
+      attended: true,
+      hasPoints: true,
+      finalGrade: 1.5,
+      isFailed: false,
+      totalPoints: 90,
+      status: "export_ready",
+    },
+  ];
+  const stats = computeStatistics(rows as any, schema, 2);
+  const bin15 = stats.gradeDistribution.find((d) => Math.abs(d.grade - 1.3) < 1e-9);
+  check(
+    "W4S1d",
+    (bin15?.count ?? 0) === 1 && stats.averageGrade === 1.5,
+    `override 1,5 in bin 1,3 count=${bin15?.count} avg=${stats.averageGrade}`
+  );
+}
+
+{
+  const schema = generateLinearGradeSchema(100, 50, true);
+  const rows: any[] = [
+    {
+      key: "1",
+      inHis: true,
+      attended: false,
+      hasPoints: false,
+      finalGrade: null,
+      isFailed: false,
+      status: "no_show",
+    },
+    {
+      key: "2",
+      inHis: true,
+      attended: true,
+      hasPoints: true,
+      finalGrade: 2.0,
+      isFailed: false,
+      status: "export_ready",
+    },
+  ];
+  const stats = computeStatistics(rows as any, schema, 2, {
+    attendance: [],
+  } as any);
+  check(
+    "W4S2",
+    stats.noShow === 1 &&
+      stats.noShowRate != null &&
+      Math.abs(stats.noShowRate - 0.5) < 1e-9,
+    `no-show without attendance list: n=${stats.noShow} rate=${stats.noShowRate}`
+  );
+}
+
+{
+  const schema = generateLinearGradeSchema(100, 50, true);
+  const project: any = {
+    id: "w4v",
+    examType: "written",
+    hisRows: [{ matriculationNumber: "1" }],
+    points: [],
+    criteria: [],
+    attendance: [],
+    gradeSchema: schema,
+  };
+  const rows: any[] = [
+    {
+      key: "1",
+      inHis: true,
+      status: "registered",
+      finalGrade: null,
+      attended: null,
+      hasPoints: false,
+    },
+  ];
+  const items = validateForExport(project, rows);
+  const hit = items.find((i) => i.level === "error" && /ohne Note/.test(i.message));
+  check("W4V1", !!hit, `klausur empty HIS: ${hit?.message ?? "missing"}`);
+}
+
+{
+  const s = lecturerValuesSpread([1.0, 1.7]);
+  check(
+    "W4L1",
+    s != null &&
+      Math.abs(s.spread - 0.7) < 1e-9 &&
+      !hasLecturerDiscrepancy(s) &&
+      hasLecturerDiscrepancy(lecturerValuesSpread([1.0, 1.8])),
+    `spread 0,7 no flag, 0,8 flags (thr=${LECTURER_DISCREPANCY_THRESHOLD})`
+  );
+}
+
+{
+  const project: any = {
+    portfolioCriteriaMode: true,
+    portfolioPerLecturerGrading: false,
+    portfolioComponents: [
+      {
+        id: "c1",
+        name: "AE",
+        code: "AE",
+        weight: 1,
+        criteria: [
+          { id: "k1", name: "K", code: "K", scale: "points", weight: 1, maxPoints: 6 },
+        ],
+      },
+    ],
+    studentGroups: [
+      { id: "g1", name: "G", disabledPortfolioCriteria: { c1: ["k1"] } },
+    ],
+    lecturers: [],
+  };
+  const miss = countMissingPortfolioCells(project, { matriculationNumber: "x" }, {
+    groupId: "g1",
+  });
+  check("W4P1", miss === 0, `all-disabled TL not missing: ${miss}`);
 }
 
 // Summary

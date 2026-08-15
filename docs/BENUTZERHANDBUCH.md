@@ -2,7 +2,7 @@
 
 Vollständige Anleitung für Prüferinnen und Prüfer – Einstieg und Nachschlagewerk.
 
-**App-Version:** 0.4.71  
+**App-Version:** 0.4.72  
 **Zielgruppe:** Personen, die Prüfungen bewerten und Noten an HISinOne bzw. die Studienabteilung melden  
 **Datenschutz:** Alle Prüfungsdaten bleiben **im Browser** (IndexedDB). Es gibt **keine** Übertragung von Notenlisten an einen App-Server.
 
@@ -319,6 +319,8 @@ Seite: **Kriterienbewertung** bzw. **Teilnoten**.
 
 Wenn „Teilnoten je Dozent“ aktiv: Bewerter wählen; jede Person braucht vollständige Werte **aller** Korrektoren für die Teilnote.
 
+Weichen die Korrektoren einer Teilleistung um **mehr als 0,7 Notenstufen** voneinander ab, erscheint ein Hinweis in der Matrix und in der Notenübersicht.
+
 ### 10.5 Nicht angetreten (No-Show)
 
 Für HISinOne-angemeldete Personen, die **nicht** bewertet werden (z. B. ohne Gruppe, nicht erschienen):
@@ -339,6 +341,8 @@ Für HISinOne-angemeldete Personen, die **nicht** bewertet werden (z. B. ohne 
 **Ausgeblendet**, wenn: Person hat eine Gruppe **und** bereits Noten/Punkte/% eingetragen.
 
 **Antritt markieren** hebt die Markierung wieder auf.
+
+Ohne importierte Antrittsliste (StA/Portfolio) zählen manuelle No-Shows trotzdem in Kennzahlen und Quote.
 
 ### 10.6 Schriftgröße
 

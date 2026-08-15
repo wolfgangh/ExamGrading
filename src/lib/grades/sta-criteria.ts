@@ -155,13 +155,25 @@ export function computeCriteriaTotalPoints(
   return Math.round((acc / weightSum) * safeMax * 100) / 100;
 }
 
+/** Gewicht ≤ 0 = Kriterium/TL deaktiviert (überall gleich). */
+export function isActiveWeight(weight: number | null | undefined): boolean {
+  return Number.isFinite(weight) && (weight as number) > 0;
+}
+
+export function activeCriteria(
+  criteria: AssessmentCriterion[] | undefined | null
+): AssessmentCriterion[] {
+  return (criteria ?? []).filter((c) => isActiveWeight(c.weight));
+}
+
 export function criteriaAllFilled(
   criterionValues: Record<string, number | null | undefined> | undefined,
   criteria: AssessmentCriterion[]
 ): boolean {
-  if (!criteria.length) return false;
+  const list = activeCriteria(criteria);
+  if (!list.length) return false;
   const vals = criterionValues ?? {};
-  return criteria.every((c) => {
+  return list.every((c) => {
     const v = vals[c.id];
     return v != null && Number.isFinite(v);
   });

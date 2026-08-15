@@ -46,6 +46,18 @@ export function SummaryPanel({
         { label: "Ø Note", value: formatGrade(stats.averageGrade) },
         { label: "Median Note", value: formatGrade(stats.medianGrade) },
         { label: "Bestehensquote", value: passLabel },
+        ...(stats.noShow > 0
+          ? [
+              {
+                label: "No-Shows",
+                value: String(stats.noShow),
+              },
+              {
+                label: "No-Show-Quote",
+                value: formatPercent(stats.noShowRate),
+              },
+            ]
+          : []),
         {
           label: "Unstimmigkeiten",
           value: String(stats.mismatches),
@@ -69,13 +81,17 @@ export function SummaryPanel({
         },
         {
           label: "No-Shows",
-          value: stats.hasAttendanceList ? String(stats.noShow) : "–",
+          value:
+            stats.hasAttendanceList || stats.noShow > 0
+              ? String(stats.noShow)
+              : "–",
         },
         {
           label: "No-Show-Quote",
-          value: stats.hasAttendanceList
-            ? formatPercent(stats.noShowRate)
-            : "–",
+          value:
+            stats.noShowRate != null
+              ? formatPercent(stats.noShowRate)
+              : "–",
         },
         {
           label: "Ø Note",

@@ -11,6 +11,7 @@ import { calculateGrade } from "@/lib/grades/schema";
 import {
   countMissingCriteria,
   gradeToUnit,
+  isActiveWeight,
   normalizeCriterionValue,
 } from "@/lib/grades/sta-criteria";
 
@@ -226,7 +227,9 @@ export function portfolioAllCriteriaArePoints(
   for (const c of components) {
     if (resolveComponentCriteriaScale(c) !== "points") return false;
     const disabled = new Set(disabledCriteriaForGroup(project, groupId, c.id));
-    const crits = (c.criteria ?? []).filter((k) => !disabled.has(k.id));
+    const crits = (c.criteria ?? []).filter(
+      (k) => isActiveWeight(k.weight) && !disabled.has(k.id)
+    );
     if (!crits.length) continue;
     any = true;
     for (const k of crits) {
@@ -247,9 +250,11 @@ export function portfolioCriterionPointsMax(
   let max = 0;
   for (const c of project.portfolioComponents ?? []) {
     const disabled = new Set(disabledCriteriaForGroup(project, groupId, c.id));
-    const crits = (c.criteria ?? []).filter((k) => !disabled.has(k.id));
+    const crits = (c.criteria ?? []).filter(
+      (k) => isActiveWeight(k.weight) && !disabled.has(k.id)
+    );
     for (const k of crits) {
-      const w = Number.isFinite(k.weight) && k.weight > 0 ? k.weight : 1;
+      const w = k.weight;
       const cMax = k.maxPoints != null && k.maxPoints > 0 ? k.maxPoints : 0;
       max += cMax * w;
     }
@@ -385,7 +390,8 @@ export function criterionPointsTotals(
   let max = 0;
   let any = false;
   for (const c of list) {
-    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 1;
+    if (!isActiveWeight(c.weight)) continue;
+    const w = c.weight;
     const cMax =
       c.scale === "points" && c.maxPoints != null && c.maxPoints > 0
         ? c.maxPoints
@@ -485,7 +491,8 @@ export function criterionPointsTotalsPartial(
   let max = 0;
   let any = false;
   for (const c of list) {
-    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 1;
+    if (!isActiveWeight(c.weight)) continue;
+    const w = c.weight;
     const cMax =
       c.scale === "points" && c.maxPoints != null && c.maxPoints > 0
         ? c.maxPoints
@@ -535,8 +542,8 @@ export function computePortfolioFulfillment(
   let acc = 0;
 
   for (const c of components) {
-    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 0;
-    if (w <= 0) continue;
+    if (!isPortfolioComponentActiveForGroup(project, c, groupId)) continue;
+    const w = c.weight;
 
     let unit: number | null = null;
 
@@ -596,6 +603,32 @@ export function disabledCriteriaForGroup(
   if (!groupId) return [];
   const g = (project.studentGroups ?? []).find((x) => x.id === groupId);
   return g?.disabledPortfolioCriteria?.[componentId] ?? [];
+}
+
+/** Aktive Kriterien einer TL (Gewicht > 0, nicht gruppenweise deaktiviert). */
+export function activeCriteriaForPortfolioComponent(
+  project: Pick<ExamProject, "studentGroups">,
+  component: PortfolioComponent,
+  groupId?: string | null
+): AssessmentCriterion[] {
+  const disabled = new Set(
+    disabledCriteriaForGroup(project, groupId, component.id)
+  );
+  return (component.criteria ?? []).filter(
+    (k) => isActiveWeight(k.weight) && !disabled.has(k.id)
+  );
+}
+
+/** TL zählt in Note/Füllstand, wenn Gewicht > 0 und (ohne Kriterienmodus oder mind. ein aktives Kriterium). */
+export function isPortfolioComponentActiveForGroup(
+  project: PortfolioProjectSlice,
+  component: PortfolioComponent,
+  groupId?: string | null
+): boolean {
+  if (!isActiveWeight(component.weight)) return false;
+  if (project.portfolioCriteriaMode !== true) return true;
+  return activeCriteriaForPortfolioComponent(project, component, groupId)
+    .length > 0;
 }
 
 /** Unit 0…1 einer TL (Kriterien ± Dozenten). */
@@ -682,6 +715,7 @@ export function countMissingPortfolioGrades(
   if (!components.length) return 0;
   const vals = portfolioGrades ?? {};
   return components.filter((c) => {
+    if (!isActiveWeight(c.weight)) return false;
     const g = vals[c.id];
     return g == null || !Number.isFinite(g);
   }).length;
@@ -716,14 +750,9 @@ export function countRequiredPortfolioCells(
   if (criteriaMode) {
     let required = 0;
     for (const c of components) {
-      const disabled = new Set(
-        disabledCriteriaForGroup(project, groupId, c.id)
-      );
-      const crits = (c.criteria ?? []).filter((k) => !disabled.has(k.id));
-      if (!crits.length) {
-        required += 1; // TL ohne aktive Kriterien = 1 „Pflicht“ (unvollständig)
-        continue;
-      }
+      if (!isActiveWeight(c.weight)) continue;
+      const crits = activeCriteriaForPortfolioComponent(project, c, groupId);
+      if (!crits.length) continue;
       if (!project.portfolioPerLecturerGrading) {
         required += crits.length;
       } else {
@@ -733,10 +762,11 @@ export function countRequiredPortfolioCells(
     return required;
   }
 
+  const active = components.filter((c) => isActiveWeight(c.weight));
   if (!project.portfolioPerLecturerGrading) {
-    return components.length;
+    return active.length;
   }
-  return components.length * Math.max(lecturers.length, 1);
+  return active.length * Math.max(lecturers.length, 1);
 }
 
 /** Fehlende Zellen: Noten oder Kriterien (× Dozent); deaktivierte Kriterien ignorieren */
@@ -757,14 +787,9 @@ export function countMissingPortfolioCells(
   if (criteriaMode) {
     let missing = 0;
     for (const c of components) {
-      const disabled = new Set(
-        disabledCriteriaForGroup(project, groupId, c.id)
-      );
-      const crits = (c.criteria ?? []).filter((k) => !disabled.has(k.id));
-      if (!crits.length) {
-        missing += 1; // TL ohne aktive Kriterien = unvollständig
-        continue;
-      }
+      if (!isActiveWeight(c.weight)) continue;
+      const crits = activeCriteriaForPortfolioComponent(project, c, groupId);
+      if (!crits.length) continue;
       if (!project.portfolioPerLecturerGrading) {
         missing += countMissingCriteria(
           rec?.portfolioCriterionValues?.[c.id],
@@ -786,16 +811,17 @@ export function countMissingPortfolioCells(
     return missing;
   }
 
+  const active = components.filter((c) => isActiveWeight(c.weight));
   if (!project.portfolioPerLecturerGrading) {
-    return countMissingPortfolioGrades(rec?.portfolioGrades, components);
+    return countMissingPortfolioGrades(rec?.portfolioGrades, active);
   }
 
   if (lecturers.length === 0) {
-    return components.length;
+    return active.length;
   }
   const byL = rec?.portfolioGradesByLecturer ?? {};
   let missing = 0;
-  for (const c of components) {
+  for (const c of active) {
     const per = byL[c.id] ?? {};
     for (const name of lecturers) {
       const g = per[name];
@@ -858,9 +884,12 @@ export function computePortfolioGradeForProject(
   ctx?: PortfolioGradeContext
 ): number | null {
   // Gesamtnote = Mittel der (ggf. szenariobasierten) TL-Noten – nicht unitAvg×Schema.
+  const components = (project.portfolioComponents ?? []).filter((c) =>
+    isPortfolioComponentActiveForGroup(project, c, ctx?.groupId)
+  );
   return computePortfolioGrade(
     effectivePortfolioGrades(project, rec, ctx),
-    project.portfolioComponents ?? []
+    components
   );
 }
 
@@ -1051,9 +1080,12 @@ export function computePortfolioRawAverageForProject(
   rec: PointsRecord | undefined | null,
   ctx?: PortfolioGradeContext
 ): number | null {
+  const components = (project.portfolioComponents ?? []).filter((c) =>
+    isPortfolioComponentActiveForGroup(project, c, ctx?.groupId)
+  );
   return computePortfolioRawAverage(
     effectivePortfolioGrades(project, rec, ctx),
-    project.portfolioComponents ?? []
+    components
   );
 }
 
@@ -1072,6 +1104,87 @@ export function recomputePortfolioRecord(rec: PointsRecord): PointsRecord {
     ...rec,
     source: rec.source === "moodle" ? "mixed" : rec.source || "manual",
   };
+}
+
+/** Korrektoren-Abstand, ab dem ein Hinweis erscheint (Notenstufen). */
+export const LECTURER_DISCREPANCY_THRESHOLD = 0.7;
+
+export type LecturerSpread = {
+  min: number;
+  max: number;
+  spread: number;
+};
+
+export function lecturerValuesSpread(
+  values: readonly number[]
+): LecturerSpread | null {
+  const nums = values.filter((v) => Number.isFinite(v));
+  if (nums.length < 2) return null;
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  return {
+    min,
+    max,
+    spread: Math.round((max - min) * 1000) / 1000,
+  };
+}
+
+/** Dozenten-Spreizung einer TL (direkte Noten oder berechnete Kriterien-Noten). */
+export function lecturerSpreadForComponent(
+  project: PortfolioProjectSlice,
+  rec: PointsRecord | undefined | null,
+  component: PortfolioComponent,
+  groupId?: string | null,
+  schema?: GradeSchema | null
+): LecturerSpread | null {
+  if (project.portfolioPerLecturerGrading !== true) return null;
+  if (!isPortfolioComponentActiveForGroup(project, component, groupId)) {
+    return null;
+  }
+  const lecturers = (project.lecturers ?? [])
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lecturers.length < 2) return null;
+
+  if (project.portfolioCriteriaMode === true) {
+    const scale = resolveComponentCriteriaScale(component);
+    const disabled = disabledCriteriaForGroup(project, groupId, component.id);
+    const grades: number[] = [];
+    for (const name of lecturers) {
+      const unit = unitAvgFromCriterionValues(
+        rec?.portfolioCriterionValuesByLecturer?.[component.id]?.[name],
+        component.criteria,
+        { disabledCriterionIds: disabled }
+      );
+      if (unit == null) continue;
+      grades.push(gradeFromUnitAvg(unit, scale, schema));
+    }
+    return lecturerValuesSpread(grades);
+  }
+
+  const per = rec?.portfolioGradesByLecturer?.[component.id] ?? {};
+  const grades = lecturers
+    .map((name) => per[name])
+    .filter((g): g is number => g != null && Number.isFinite(g));
+  return lecturerValuesSpread(grades);
+}
+
+export function maxLecturerSpreadForPerson(
+  project: PortfolioProjectSlice,
+  rec: PointsRecord | undefined | null,
+  groupId?: string | null,
+  schema?: GradeSchema | null
+): LecturerSpread | null {
+  let best: LecturerSpread | null = null;
+  for (const c of project.portfolioComponents ?? []) {
+    const s = lecturerSpreadForComponent(project, rec, c, groupId, schema);
+    if (s && (!best || s.spread > best.spread)) best = s;
+  }
+  return best;
+}
+
+export function hasLecturerDiscrepancy(spread: LecturerSpread | null): boolean {
+  return spread != null && spread.spread > LECTURER_DISCREPANCY_THRESHOLD + 1e-9;
 }
 
 export function defaultPortfolioComponents(

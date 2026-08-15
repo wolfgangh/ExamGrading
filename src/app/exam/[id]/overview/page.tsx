@@ -358,16 +358,18 @@ export default function OverviewPage() {
             </div>
           )}
 
-          {stats.hasAttendanceList && noShows.length > 0 && (
+          {noShows.length > 0 && (
             <div className="rounded-xl border border-orange-300 bg-orange-50/80 px-3 py-2.5 text-sm dark:border-orange-800 dark:bg-orange-950/30">
               <p className="font-medium leading-snug">
-                {stats.noShow} No-Show(s) · Quote{" "}
-                {formatPercent(stats.noShowRate)}
+                {stats.noShow} No-Show(s)
+                {stats.noShowRate != null
+                  ? ` · Quote ${formatPercent(stats.noShowRate)}`
+                  : ""}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                In {HISINONE_LABEL} angemeldet, nicht in der Antrittsliste ·
-                Moodle {stats.attendanceImported} · gematcht {stats.attended} ·
-                HIS {stats.registered}
+                {stats.hasAttendanceList
+                  ? `In ${HISINONE_LABEL} angemeldet, nicht in der Antrittsliste · Moodle ${stats.attendanceImported} · gematcht ${stats.attended} · HIS ${stats.registered}`
+                  : `Manuell als nicht angetreten markiert · HIS ${stats.registered}`}
               </p>
             </div>
           )}

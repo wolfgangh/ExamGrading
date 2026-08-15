@@ -39,11 +39,13 @@ import {
 } from "@/lib/charts/student-grade-context-chart";
 import { computeStatistics } from "@/lib/grades/statistics";
 import {
-  criterionPointsTotalsPartial,
+  activeCriteriaForPortfolioComponent,
+  criterionPointsTotals,
   gradeFromUnitAvg,
   resolveComponentCriteriaScale,
-  unitAvgFromCriterionValuesPartial,
+  unitAvgFromCriterionValues,
 } from "@/lib/grades/portfolio";
+import { isActiveWeight } from "@/lib/grades/sta-criteria";
 import type { jsPDF } from "jspdf";
 import type { UserOptions } from "jspdf-autotable";
 
@@ -157,6 +159,7 @@ function resolveTlDisplayForPdf(
   project: ExamProject,
   rec: ReturnType<typeof findPointsRecord>,
   componentId: string,
+  groupId?: string | null,
   enriched?: {
     grade: number | null;
     percent: number | null;
@@ -206,81 +209,85 @@ function resolveTlDisplayForPdf(
   }
 
   const scale = resolveComponentCriteriaScale(c);
-  const crits = (c.criteria ?? []).map((k) => ({ ...k, scale }));
+  const crits = activeCriteriaForPortfolioComponent(project, c, groupId).map(
+    (k) => ({ ...k, scale })
+  );
+  if (!crits.length) {
+    return {
+      grade: null,
+      percent: null,
+      pointsRaw: null,
+      pointsMax: null,
+      partial: false,
+    };
+  }
+
   const lecturers = (project.lecturers ?? [])
     .map((l) => l.trim())
     .filter(Boolean);
 
-  let unit: number | null = null;
-  let pointsRaw: number | null = null;
-  let pointsMax: number | null = null;
-  let filled = 0;
-  let total = crits.length;
-
   if (!project.portfolioPerLecturerGrading) {
     const vals = rec?.portfolioCriterionValues?.[c.id];
-    unit = unitAvgFromCriterionValuesPartial(vals, crits);
-    for (const cr of crits) {
-      if (vals?.[cr.id] != null && Number.isFinite(vals[cr.id] as number)) {
-        filled += 1;
-      }
+    const unit = unitAvgFromCriterionValues(vals, crits);
+    const tot = criterionPointsTotals(vals, crits);
+    if (unit == null) {
+      return {
+        grade: null,
+        percent: null,
+        pointsRaw: tot?.raw ?? null,
+        pointsMax: tot?.max ?? null,
+        partial: true,
+      };
     }
-    const tot = criterionPointsTotalsPartial(vals, crits);
-    if (tot) {
-      pointsRaw = tot.raw;
-      pointsMax = tot.max;
-    }
-  } else if (lecturers.length) {
-    let uAcc = 0;
-    let uN = 0;
-    let rAcc = 0;
-    let mAcc = 0;
-    let tN = 0;
-    for (const name of lecturers) {
-      const vals =
-        rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name] ?? {};
-      const u = unitAvgFromCriterionValuesPartial(vals, crits);
-      if (u != null) {
-        uAcc += u;
-        uN += 1;
-      }
-      for (const cr of crits) {
-        if (vals[cr.id] != null && Number.isFinite(vals[cr.id] as number)) {
-          filled += 1;
-        }
-      }
-      total = crits.length * lecturers.length;
-      const tot = criterionPointsTotalsPartial(vals, crits);
-      if (tot) {
-        rAcc += tot.raw;
-        mAcc += tot.max;
-        tN += 1;
-      }
-    }
-    if (uN > 0) unit = uAcc / uN;
-    if (tN > 0) {
-      pointsRaw = Math.round((rAcc / tN) * 100) / 100;
-      pointsMax = Math.round((mAcc / tN) * 100) / 100;
-    }
-  }
-
-  if (unit == null) {
     return {
-      grade: null,
-      percent: null,
-      pointsRaw,
-      pointsMax,
-      partial: filled > 0 && filled < total,
+      grade: gradeFromUnitAvg(unit, scale, project.gradeSchema),
+      percent: unit,
+      pointsRaw: tot?.raw ?? null,
+      pointsMax: tot?.max ?? null,
+      partial: false,
     };
   }
 
-  const grade = gradeFromUnitAvg(unit, scale, project.gradeSchema);
+  if (!lecturers.length) {
+    return {
+      grade: null,
+      percent: null,
+      pointsRaw: null,
+      pointsMax: null,
+      partial: true,
+    };
+  }
+
+  let uAcc = 0;
+  let rAcc = 0;
+  let mAcc = 0;
+  for (const name of lecturers) {
+    const vals =
+      rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[name] ?? {};
+    const u = unitAvgFromCriterionValues(vals, crits);
+    if (u == null) {
+      return {
+        grade: null,
+        percent: null,
+        pointsRaw: null,
+        pointsMax: null,
+        partial: true,
+      };
+    }
+    uAcc += u;
+    const tot = criterionPointsTotals(vals, crits);
+    if (tot) {
+      rAcc += tot.raw;
+      mAcc += tot.max;
+    }
+  }
+  const unit = uAcc / lecturers.length;
   return {
-    grade,
+    grade: gradeFromUnitAvg(unit, scale, project.gradeSchema),
     percent: unit,
-    pointsRaw,
-    pointsMax,
-    partial: filled > 0 && filled < total,
+    pointsRaw: Math.round((rAcc / lecturers.length) * 100) / 100,
+    pointsMax: Math.round((mAcc / lecturers.length) * 100) / 100,
+    partial: false,
   };
 }
 
@@ -849,7 +856,9 @@ export function buildStudentPerformancePdf(
 
   // —— StA Kriterien ——
   if (on(sections, "staCriteria") && isStaCriteriaExam(project.examType)) {
-    const criteria = project.criteria ?? [];
+    const criteria = (project.criteria ?? []).filter((c) =>
+      isActiveWeight(c.weight)
+    );
     if (criteria.length > 0) {
       y = beginSection(doc, "Bewertungskriterien", y, 20);
       const body = criteria.map((c) => {
@@ -900,11 +909,13 @@ export function buildStudentPerformancePdf(
       let anyPartialTl = false;
       const tlBody = components.map((c) => {
         const d = row.portfolioComponentDetails?.[c.id];
+        const officialOk = row.finalGrade != null;
         const disp = resolveTlDisplayForPdf(
           project,
           rec,
           c.id,
-          d
+          row.student.groupId,
+          officialOk && d
             ? {
                 grade: d.grade,
                 percent: d.percent,
@@ -912,11 +923,18 @@ export function buildStudentPerformancePdf(
                 pointsMax: d.pointsMax,
               }
             : null,
-          row.portfolioComponentGrades?.[c.id] ??
-            rec?.portfolioGrades?.[c.id] ??
-            null
+          officialOk
+            ? row.portfolioComponentGrades?.[c.id] ??
+              rec?.portfolioGrades?.[c.id] ??
+              null
+            : null
         );
-        if (disp.partial) anyPartialTl = true;
+        if (!officialOk) {
+          if (disp.grade != null || disp.partial) anyPartialTl = true;
+          disp.grade = null;
+        } else if (disp.partial) {
+          anyPartialTl = true;
+        }
         const g = disp.grade;
         const pct =
           disp.percent != null
@@ -935,24 +953,27 @@ export function buildStudentPerformancePdf(
               }
               if (project.portfolioCriteriaMode && c.criteria?.length) {
                 const scale = resolveComponentCriteriaScale(c);
-                const crits = (c.criteria ?? []).map((k) => ({
-                  ...k,
-                  scale,
-                }));
+                const crits = activeCriteriaForPortfolioComponent(
+                  project,
+                  c,
+                  row.student.groupId
+                ).map((k) => ({ ...k, scale }));
                 const vals =
                   rec?.portfolioCriterionValuesByLecturer?.[c.id]?.[l] ??
                   {};
-                const u = unitAvgFromCriterionValuesPartial(vals, crits);
-                if (u != null) {
-                  // Teilbewertung: zählt als partial für Hinweis
-                  const filled = crits.filter(
-                    (cr) =>
-                      vals[cr.id] != null && Number.isFinite(vals[cr.id] as number)
-                  ).length;
-                  if (filled < crits.length) anyPartialTl = true;
+                const u = unitAvgFromCriterionValues(vals, crits);
+                if (u != null && officialOk) {
                   return pdfGrade(
                     gradeFromUnitAvg(u, scale, project.gradeSchema)
                   );
+                }
+                if (u == null) {
+                  const anyFilled = crits.some(
+                    (cr) =>
+                      vals[cr.id] != null &&
+                      Number.isFinite(vals[cr.id] as number)
+                  );
+                  if (anyFilled) anyPartialTl = true;
                 }
               }
               return "–";
@@ -1018,7 +1039,7 @@ export function buildStudentPerformancePdf(
         doc.setTextColor(80);
         const lines = doc.splitTextToSize(
           pdfText(
-            "Hinweis: Einzelne Teilleistungen sind nur aus den bisher bewerteten Kriterien berechnet (Bewertung unvollständig)."
+            "Hinweis: Teilnoten erscheinen erst, wenn die Amtsnote steht. Unvollständige Kriterien werden nicht als Note ausgewiesen."
           ),
           PDF_CONTENT_WIDTH
         ) as string[];
@@ -1036,7 +1057,11 @@ export function buildStudentPerformancePdf(
     // Aggregierte Kriterien (Mittel über Dozenten bzw. einfache Werte)
     if (on(sections, "portfolioCriteria") && critMode) {
       for (const c of components) {
-        const crits = c.criteria ?? [];
+        const crits = activeCriteriaForPortfolioComponent(
+          project,
+          c,
+          row.student.groupId
+        );
         if (crits.length === 0) continue;
 
         y = beginSection(
@@ -1114,7 +1139,11 @@ export function buildStudentPerformancePdf(
         lecturerColumnLabels(lecturers);
 
       for (const c of components) {
-        const crits = c.criteria ?? [];
+        const crits = activeCriteriaForPortfolioComponent(
+          project,
+          c,
+          row.student.groupId
+        );
         if (crits.length === 0) continue;
 
         y = beginSection(

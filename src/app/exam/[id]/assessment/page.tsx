@@ -58,6 +58,10 @@ import {
   effectivePortfolioGrades,
   gradeFromUnitAvg,
   groupPortfolioFillStatus,
+  hasLecturerDiscrepancy,
+  lecturerSpreadForComponent,
+  LECTURER_DISCREPANCY_THRESHOLD,
+  maxLecturerSpreadForPerson,
   resolveComponentCriteriaScale,
   shortLecturerLabel,
   unitAvgFromCriterionValues,
@@ -308,6 +312,30 @@ export default function AssessmentPage() {
     () => listAssessmentRemaining(sortedRows, visibleKeys),
     [sortedRows, visibleKeys]
   );
+  const lecturerGaps = useMemo(() => {
+    if (!project?.portfolioPerLecturerGrading) return [];
+    const out: { key: string; name: string; spread: number }[] = [];
+    for (const r of sortedRows) {
+      if (r.status === "no_show") continue;
+      const rec = project.points.find(
+        (p) => normalizeMatriculation(p.matriculationNumber) === r.key
+      );
+      const s = maxLecturerSpreadForPerson(
+        project,
+        rec,
+        r.student.groupId,
+        project.gradeSchema
+      );
+      if (hasLecturerDiscrepancy(s) && s) {
+        out.push({
+          key: r.key,
+          name: `${r.student.lastName}, ${r.student.firstName}`,
+          spread: s.spread,
+        });
+      }
+    }
+    return out;
+  }, [project, sortedRows]);
 
   const jumpToRemaining = (mat: string) => {
     setShowNoShows(true);
@@ -1227,11 +1255,36 @@ export default function AssessmentPage() {
                     </span>
                   )}
                 </CardDescription>
-                <div className="mt-3">
+                <div className="mt-3 space-y-2">
                   <AssessmentRemainingBar
                     data={remaining}
                     onJump={jumpToRemaining}
                   />
+                  {lecturerGaps.length > 0 && (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50/80 px-3 py-2 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+                      <p className="font-medium">
+                        {lecturerGaps.length} Person(en): Korrektoren weichen um
+                        mehr als {String(LECTURER_DISCREPANCY_THRESHOLD).replace(".", ",")}{" "}
+                        Notenstufen ab
+                      </p>
+                      <ul className="mt-1 max-h-28 space-y-0.5 overflow-auto text-xs">
+                        {lecturerGaps.slice(0, 12).map((g) => (
+                          <li key={g.key}>
+                            <button
+                              type="button"
+                              className="hover:underline"
+                              onClick={() => jumpToRemaining(g.key)}
+                            >
+                              {g.name}
+                              <span className="ml-1 tabular-nums text-muted-foreground">
+                                Δ {String(g.spread).replace(".", ",")}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
                 {isCriteria && (
                   <p className="mt-1.5 text-[0.6875rem] leading-snug text-muted-foreground">
@@ -1988,6 +2041,13 @@ export default function AssessmentPage() {
                                             c.id,
                                             lecturers
                                           );
+                                        const gap = lecturerSpreadForComponent(
+                                          project,
+                                          rec,
+                                          c,
+                                          r.student.groupId,
+                                          project.gradeSchema
+                                        );
                                         const unit =
                                           avgG != null
                                             ? (5 - avgG) / 4
@@ -2002,6 +2062,14 @@ export default function AssessmentPage() {
                                         return (
                                           <div className="flex flex-col items-center gap-0.5">
                                             <span>{formatGrade(avgG)}</span>
+                                            {hasLecturerDiscrepancy(gap) && gap ? (
+                                              <span
+                                                className="inline-flex w-fit rounded border border-amber-400 bg-amber-50 px-1 py-px text-[0.5625rem] font-semibold text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50"
+                                                title={`Korrektoren ${formatGrade(gap.min)}–${formatGrade(gap.max)}`}
+                                              >
+                                                Δ{String(gap.spread).replace(".", ",")}
+                                              </span>
+                                            ) : null}
                                             {tlNext ? (
                                               <span
                                                 className={cn(

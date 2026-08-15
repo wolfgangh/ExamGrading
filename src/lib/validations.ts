@@ -181,6 +181,24 @@ export function validateForExport(
     }
   }
 
+  if (project.examType === "written" || project.examType === "other") {
+    const emptyHis = rows.filter(
+      (r) =>
+        r.inHis &&
+        r.status !== "no_show" &&
+        r.finalGrade == null
+    );
+    if (emptyHis.length > 0) {
+      items.push({
+        level: "error",
+        message: `${emptyHis.length} Person(en) in HISinOne ohne Note und nicht als No-Show – leere Exportzelle wirkt wie Nichtantritt. Bitte Note eintragen oder als nicht angetreten markieren.`,
+        count: emptyHis.length,
+        href: `/exam/${project.id}/grades`,
+        actionLabel: "Zur Notenübersicht",
+      });
+    }
+  }
+
   const missingPoints = rows.filter(
     (r) => r.inHis && r.attended === true && !r.hasPoints
   );
