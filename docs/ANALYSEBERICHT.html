@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ExamGrade – Tiefenanalyse v0.4.68</title>
+  <style>
+    :root {
+      --blue: #2c5171;
+      --blue-mid: #447099;
+      --ink: #1a2330;
+      --muted: #5b6470;
+      --line: #dce3ea;
+      --bg: #f6f8fb;
+      --card: #fff;
+      --crit: #9f1239;
+      --crit-bg: #fff1f2;
+      --high: #c2410c;
+      --high-bg: #fff7ed;
+      --med: #a16207;
+      --med-bg: #fefce8;
+      --low: #334155;
+      --low-bg: #f1f5f9;
+      --ok: #166534;
+      --ok-bg: #ecfdf3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 16px/1.55 "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    header.hero {
+      background: linear-gradient(135deg, #2c5171, #447099);
+      color: #fff;
+      padding: 2.4rem 1.5rem 2rem;
+    }
+    header.hero .wrap, main.wrap, footer.wrap {
+      max-width: 58rem;
+      margin: 0 auto;
+    }
+    header.hero h1 { margin: 0 0 .35rem; font-size: 1.85rem; letter-spacing: -.02em; }
+    header.hero p { margin: .2rem 0; opacity: .92; }
+    .meta { display: flex; flex-wrap: wrap; gap: .5rem .85rem; margin-top: 1rem; font-size: .85rem; }
+    .chip { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25); padding: .2rem .6rem; border-radius: 999px; }
+    main.wrap { padding: 1.5rem 1.25rem 3rem; }
+    nav.toc {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 1.75rem;
+    }
+    nav.toc h2 { margin: 0 0 .5rem; font-size: 1rem; }
+    nav.toc ol { margin: 0; padding-left: 1.2rem; columns: 2; }
+    nav.toc a { color: var(--blue-mid); text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+    @media (max-width: 720px) { nav.toc ol { columns: 1; } }
+    h2 { color: var(--blue); font-size: 1.35rem; margin: 2.2rem 0 .7rem; border-bottom: 2px solid var(--line); padding-bottom: .35rem; }
+    h3 { font-size: 1.08rem; margin: 1.4rem 0 .45rem; }
+    h4 { margin: 1rem 0 .3rem; font-size: 1rem; }
+    p, li { color: #243040; }
+    .lead { font-size: 1.05rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; background: var(--card); margin: .6rem 0 1rem; }
+    th, td { border: 1px solid var(--line); padding: .45rem .55rem; text-align: left; vertical-align: top; }
+    th { background: #eef3f8; color: var(--blue); }
+    code, .path { font-family: ui-monospace, Consolas, monospace; font-size: .84em; background: #eef2f6; padding: .05em .3em; border-radius: 3px; }
+    .sev { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: .12rem .4rem; border-radius: 4px; }
+    .sev-c { background: var(--crit-bg); color: var(--crit); }
+    .sev-h { background: var(--high-bg); color: var(--high); }
+    .sev-m { background: var(--med-bg); color: var(--med); }
+    .sev-l { background: var(--low-bg); color: var(--low); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: .85rem 1rem;
+      margin: .65rem 0;
+    }
+    .card h4 { margin-top: 0; }
+    .ok { background: var(--ok-bg); border-color: #bbf7d0; }
+    .kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; margin: 1rem 0; }
+    @media (max-width: 800px) { .kpi { grid-template-columns: 1fr 1fr; } }
+    .kpi div { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem; }
+    .kpi strong { display: block; font-size: 1.4rem; color: var(--blue); }
+    .kpi span { font-size: .8rem; color: var(--muted); }
+    footer.wrap { color: var(--muted); font-size: .82rem; padding: 0 1.25rem 2rem; }
+    @media print {
+      header.hero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      nav.toc { break-after: page; }
+      .card, table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <h1>Tiefenanalyse ExamGrade</h1>
+      <p>Schwächen, Edge Cases, Sicherheit, Nutzungsabläufe und Bewertungskriterien (KI-Kontext)</p>
+      <div class="meta">
+        <span class="chip">App v0.4.68</span>
+        <span class="chip">Stand 30.07.2026</span>
+        <span class="chip">Methode: Doku + 6 parallele Code-Audits</span>
+        <span class="chip">Interner Prüfbericht, keine Gewähr</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <nav class="toc">
+      <h2>Inhalt</h2>
+      <ol>
+        <li><a href="#methode">Methode und Quellen</a></li>
+        <li><a href="#lage">Gesamtlage</a></li>
+        <li><a href="#prio">Priorisierte Maßnahmen</a></li>
+        <li><a href="#daten">Datenintegrität und Auto-Save</a></li>
+        <li><a href="#noten">Notenlogik und Edge Cases</a></li>
+        <li><a href="#import">Import, Matching, Export</a></li>
+        <li><a href="#ux">Abläufe und Nutzung</a></li>
+        <li><a href="#kriterien">Bewertungskriterien und KI</a></li>
+        <li><a href="#sicherheit">Sicherheit</a></li>
+        <li><a href="#stark">Was bereits gut sitzt</a></li>
+        <li><a href="#roadmap">Umsetzungs-Roadmap</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="methode">1. Methode und Quellen</h2>
+    <p class="lead">Zuerst wurden die Projektdokumente gelesen, anschließend sechs unabhängige Audits parallel geführt und hier zusammengeführt.</p>
+    <table>
+      <thead><tr><th>Quelle</th><th>Rolle</th></tr></thead>
+      <tbody>
+        <tr><td><code>docs/BENUTZERHANDBUCH.md</code>, <code>ARCHITEKTUR.md</code>, <code>DEPLOYMENT.md</code>, <code>SECURITY.md</code>, <code>README.md</code></td><td>Soll-Abläufe, Architektur, bekanntes Bedrohungsmodell</td></tr>
+        <tr><td>Agent Sicherheit</td><td>Auth, CSP, ZIP/XLSX, XSS, Framing</td></tr>
+        <tr><td>Agent Datenintegrität</td><td>Auto-Save, Tabs, Migration, Backup, Duplikat</td></tr>
+        <tr><td>Agent Notenlogik</td><td>Schema, Portfolio, StA, Statistik, No-Show</td></tr>
+        <tr><td>Agent Import/Export</td><td>HIS/Moodle-Parser, Konflikt, PDF, Multi-HIS</td></tr>
+        <tr><td>Agent UX/Workflow</td><td>Gates, Mobile, Dead Ends, Prüfertag</td></tr>
+        <tr><td>Agent Kriterien/KI</td><td>Defaults, Validität bei generativer KI</td></tr>
+      </tbody>
+    </table>
+    <p>Geprüfte Version: <strong>0.4.68</strong> auf <code>main</code>. Die Konstellationsmatrix (44 Fälle) ist grün – sie sichert den <em>aktuellen</em> Soll-Stand, nicht die hier vorgeschlagenen fachlichen Korrekturen.</p>
+
+    <h2 id="lage">2. Gesamtlage</h2>
+    <div class="kpi">
+      <div><strong>6</strong><span>kritische Verlust-/Notenpfade</span></div>
+      <div><strong>18</strong><span>hohe Risiken (Daten, HIS, UX)</span></div>
+      <div><strong>Client-only</strong><span>kein Noten-Backend, lokale IndexedDB</span></div>
+      <div><strong>44/44</strong><span>bestehende Noten-Regressionstests grün</span></div>
+    </div>
+    <p>ExamGrade ist fachlich weit: HIS-Re-Export, Orphans, Szenarien, Portfolio mit Korrektoren, Leistungs-PDF. Die größten Restrisiken liegen nicht in der UI-Politur, sondern in <strong>Datenverlust durch Auto-Save/Tabs</strong>, <strong>fachlich überraschender Notenrechnung</strong> (StA-Note-Skala, Mixed-Portfolio, 4,5→4,0) und <strong>Identitätsfehlern beim Import</strong> (falsche Matrikelspalte, Komma-Artefakt).</p>
+    <p>Sicherheit entspricht dem dokumentierten Modell (Zugangshürde, keine Cloud). Das ist für interne Prüfer akzeptabel, wenn klar bleibt: das Passwort im Bundle ist kein Geheimnisschutz.</p>
+
+    <h2 id="prio">3. Priorisierte Maßnahmen (sofort)</h2>
+    <table>
+      <thead><tr><th>Prio</th><th>Thema</th><th>Wirkung</th></tr></thead>
+      <tbody>
+        <tr><td><span class="sev sev-c">P0</span></td><td>Auto-Save: Flush beim Verlassen, eine Schreib-Queue, Tab-Koordination</td><td>Verhindert stillen Notenverlust</td></tr>
+        <tr><td><span class="sev sev-c">P0</span></td><td>„Folgesemester ohne Daten“ muss <code>hisSources</code> leeren</td><td>Verhindert PII-Leck in die nächste Prüfung</td></tr>
+        <tr><td><span class="sev sev-c">P0</span></td><td>StA-Kriterien mit Note-Skala nicht durch Punkteszenario jagen</td><td>4,0 darf nicht zur 5,0 werden</td></tr>
+        <tr><td><span class="sev sev-c">P0</span></td><td>Portfolio-Gesamtnote = Mittel der TL-Noten (nicht Mixed-A8)</td><td>Anzeige und Amtsnote stimmen überein</td></tr>
+        <tr><td><span class="sev sev-c">P0</span></td><td>Rundung 4,5 → 5,0 (PO-konform, konfigurierbar)</td><td>Bestehensgrenze rechtssicher</td></tr>
+        <tr><td><span class="sev sev-h">P1</span></td><td>Matrikel: <code>3513589,0</code>; Moodle <code>ID-Nummer</code> vs. Matrikel</td><td>Orphans und falsche Personen vermeiden</td></tr>
+        <tr><td><span class="sev sev-h">P1</span></td><td>HIS-Export: Zeile nur bei passender Matrikel; Float 1,3 runden</td><td>Keine falschen HIS-Zellen</td></tr>
+        <tr><td><span class="sev sev-h">P1</span></td><td>Dokumente: Validierungsliste + CTA (wie Handbuch §13.4)</td><td>Häufigster Dead End</td></tr>
+        <tr><td><span class="sev sev-h">P1</span></td><td>ZIP-Expand-Limits; Backup nur nach erfolgreichem Download</td><td>DoS / falsche „gesichert“-Flags</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="daten">4. Datenintegrität und Auto-Save</h2>
+
+    <div class="card">
+      <h4><span class="sev sev-c">Kritisch</span> Letzte Änderung geht beim Verlassen verloren</h4>
+      <p><code>use-auto-save.ts</code> bricht den 800-ms-Debounce im Cleanup ab, ohne zu flushen. Wechsel zur Prüfungsliste oder Tab-Schließen innerhalb der Debounce-Zeit verwirft die letzte Zelle.</p>
+      <p><strong>Behebung:</strong> Bei Unmount/<code>pagehide</code> <code>persistNow(projectRef.current)</code>, wenn dirty. Eine Writer-Queue, damit Debounce und 15-s-Intervall sich nicht überholen. <code>dirtyRef</code> nur löschen, wenn die geschriebene Revision noch aktuell ist.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-c">Kritisch</span> Zwei Tabs: Last-Write-Wins</h4>
+      <p>Kein <code>revision</code>, kein <code>BroadcastChannel</code>. Tab A überschreibt Tab B und löscht den Draft. Listen-Export/Semester-ZIP speichert den <em>Listenstand</em> (ohne Draft) und markiert ihn als Sicherung – kann neuere Tab-Daten überschreiben.</p>
+      <p><strong>Behebung:</strong> Monotone Revision vor dem Schreiben prüfen. Nach Import/Replace/Delete Broadcast → Reload. Export immer aus <code>getExam</code>+<code>getDraft</code> mergen.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-c">Kritisch</span> Duplikat „für Folgesemester (ohne Daten)“ behält HIS</h4>
+      <p><code>duplicateExamProject</code> leert <code>hisRows</code>, nicht <code>hisSources</code>. <code>migrateExamProject</code> baut die Masterliste inkl. Base64-Excel wieder auf. Personenbezogene Daten wandern ins Folgesemester.</p>
+      <p><strong>Behebung:</strong> Bei <code>clearData</code> auch <code>hisSources</code>, Merges, Dismissals, <code>questionDefs</code>, Backup-Meilensteine leeren.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-h">Hoch</span> Replace-Import vs. offener Editor</h4>
+      <p>Konflikt-Dialog warnt korrekt. Ein offener Tab schreibt danach per Auto-Save die lokale Version über den Import. Import ohne Match vergibt immer eine neue ID – Bookmarks und Re-Match per ID sterben.</p>
+      <p><strong>Behebung:</strong> Vor Replace Snapshot. Nach Replace Tabs invalidieren. Ohne Konflikt Import-ID behalten.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-h">Hoch</span> Migration nicht idempotent</h4>
+      <p>Jedes Lesen von Schema &lt; 2 erzeugt neue Szenario-UUIDs, bis gespeichert wird. <code>rebuildScenariosForMaxPoints</code> vernichtet Custom-Schwellen. HIS-v3 überschreibt <code>hisRows</code> immer aus <code>hisSources</code>.</p>
+      <p><strong>Behebung:</strong> Stabile Preset-IDs (<code>sc-pass50</code> …). Custom-Schwellen als Prozent persistieren. <code>hisRows</code> nur ableiten, nie als zweite Wahrheit.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-h">Hoch</span> Backup als „frisch“ trotz fehlgeschlagenem Download</h4>
+      <p><code>void downloadJson</code> + sofort <code>markProjectBackedUp</code>. File-Picker-Abort oder Teams-Blockade gibt Exporte frei, obwohl keine Datei existiert. ZIP-Namen ohne Uhrzeit: zwei gleichnamige Prüfungen → eine Datei fehlt, beide gelten als gesichert.</p>
+      <p><strong>Behebung:</strong> Nur nach erfolgreichem <code>downloadBlob</code> markieren. ZIP-Dateiname um kurze ID erweitern.</p>
+    </div>
+
+    <h2 id="noten">5. Notenlogik und Edge Cases</h2>
+
+    <div class="card">
+      <h4><span class="sev sev-c">Kritisch</span> StA-Kriterien mit Skala „Note“ durchlaufen den Punkteschlüssel</h4>
+      <p>Unit aus Note 2,0 ist 0,75 → ×100 → <code>calculateGrade(75)</code> oft <strong>2,3</strong>. Überall 4,0 (bestanden) kann <strong>5,0</strong> werden. Portfolio-Note-TLs rechnen bewusst linear <code>5−4·unit</code> – StA nicht.</p>
+      <p><strong>Behebung:</strong> Wenn alle StA-Kriterien Note-Skala: gewichtetes Notenmittel + deutsche Rundung. Mixed Grade+Punkte: TL-weise zuerst Note, nie Grade→Punkte-Schema. UI-Warnung.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-c">Kritisch</span> Mixed-Portfolio: TL-Mittel ≠ Gesamtnote</h4>
+      <p>Eine Punkte-TL (80 % → 2,0) plus eine Note-TL (2,0) ergibt sichtbare TL-Noten 2,0 / 2,0, Gesamt aber Unit-Mittel 0,775 → oft 2,3. Im Matrix-Skript als A8 festgeschrieben.</p>
+      <p><strong>Behebung:</strong> Gesamtnote = gewichtetes Mittel der berechneten TL-Noten. Szenario nur innerhalb der Punkte/%-TLs. Tests A8 neu spezifizieren.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-c">Kritisch</span> Rohmittel 4,5 wird 4,0 (bestanden)</h4>
+      <p><code>roundToNearestGermanGrade</code> wählt bei Gleichstand die bessere Note. Abstand 4,0–5,0 = 1,0; Mitte 4,5 → 4,0. Viele Prüfungsordnungen: ab 4,5 nicht bestanden.</p>
+      <p><strong>Behebung:</strong> Konfigurierbare Regel (Default PO: <code>&lt; 4,5 → 4,0</code>, <code>≥ 4,5 → 5,0</code>). Tests 4,49 / 4,50 / 4,51.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-h">Hoch</span> Gewicht 0 hat drei Semantiken</h4>
+      <p>Note ignoriert Gewicht 0; Missing-Zähler verlangt den Wert trotzdem; Rohpunkte behandeln 0 als Gewicht 1. Folge: Export gesperrt trotz berechneter Note – oder verfälschte Punktsumme.</p>
+      <p><strong>Behebung:</strong> <code>weight ≤ 0</code> = deaktiviert überall.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-h">Hoch</span> Statistik und No-Show</h4>
+      <ul>
+        <li>Multi-HIS: dieselbe Person zählt doppelt in Ø und Bestehensquote.</li>
+        <li>StA/Portfolio-No-Shows erscheinen in <code>noShowRate</code> nur bei importierter Antrittsliste.</li>
+        <li>Override 1,5 / 2,5 / 4,3 fehlt in der Notenverteilung (<code>|Δ| &lt; 0,05</code>).</li>
+        <li>Leistungs-PDF rechnet Teilnoten aus unvollständigen Kriterien, während die Amtsnote leer bleibt.</li>
+      </ul>
+      <p><strong>Behebung:</strong> Kennzahlen nach Matrikel deduplizieren. Nenner der Bestehensquote beschriften. Partial-Noten im PDF nur als „vorläufig“ oder weglassen, solange <code>finalGrade == null</code>. Disabled-Kriterien der Gruppe auch im PDF beachten.</p>
+    </div>
+    <div class="card">
+      <h4><span class="sev sev-m">Mittel</span> Weitere Kanten</h4>
+      <ul>
+        <li>TL ohne aktive Gruppen-Kriterien bleibt dauerhaft „unvollständig“.</li>
+        <li>Dozentenmodus an: Kriterienwerte werden nicht geseedet (nur einfache Teilnoten).</li>
+        <li><code>notAttended</code> bei Personen ohne HIS ergibt Status <code>mismatch</code>, nicht No-Show.</li>
+        <li>Attendance-Import setzt faktisch immer „angetreten“ (<code>a.attended</code> ungenutzt).</li>
+        <li>Override räumt offene Moodle-Aufgaben nicht weg → Export bleibt gesperrt.</li>
+      </ul>
+    </div>
+
+    <h2 id="import">6. Import, Matching, Export</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Befund</th><th>Behebung</th></tr></thead>
+      <tbody>
+        <tr><td><span class="sev sev-h">H</span></td><td>Moodle-Spalte <code>ID-Nummer</code> wird als Matrikel gelesen</td><td>Matrikel* priorisieren; ID nur Fallback</td></tr>
+        <tr><td><span class="sev sev-h">H</span></td><td><code>3513589,0</code> wird zu <code>35135890</code></td><td>Wie <code>.0+</code> auch <code>,0+</code> behandeln</td></tr>
+        <tr><td><span class="sev sev-h">H</span></td><td><code>Bewertung</code> stiehlt Moodle-<code>Bewertung/90,00</code></td><td>Slash-Gesamtpunkte zuerst</td></tr>
+        <tr><td><span class="sev sev-h">H</span></td><td>Zweite HIS-Datei mit gleicher Prüfungsnr. ersetzt die erste</td><td>Upsert nach Dateiname + Nachfrage</td></tr>
+        <tr><td><span class="sev sev-h">H</span></td><td>HIS-Export schreibt über gespeicherte Excel-Zeile ohne Matrikel-Check</td><td>Zelle nur bei passender Matrikel</td></tr>
+        <tr><td><span class="sev sev-h">H</span></td><td>Punkte-Reimport löscht No-Show, Zweitkorrektur, Portfolio-Felder</td><td>Whitelist mergen</td></tr>
+        <tr><td><span class="sev sev-h">H</span></td><td>Klausur ohne Antritt: leere HIS-Note ohne Warnung (wirkt wie No-Show)</td><td>Error: „N HIS ohne Note, nicht als No-Show“</td></tr>
+        <tr><td><span class="sev sev-h">H</span></td><td>Import-Match ohne Prüfungsnummer (Name+Semester+Typ)</td><td>Leere Nummer ≠ hartes Match</td></tr>
+        <tr><td><span class="sev sev-m">M</span></td><td>Note als IEEE-Double (1,2999…) ins HIS-Excel</td><td><code>round(g×10)/10</code> oder Text 1,3</td></tr>
+        <tr><td><span class="sev sev-m">M</span></td><td>Mehrere HIS-Downloads hintereinander vom Browser blockiert</td><td>ZIP aller Studiengänge</td></tr>
+        <tr><td><span class="sev sev-m">M</span></td><td>Notenlisten-PDF zu schmal bei vielen TLs; Unicode-Namen in Helvetica</td><td>Querformat / Font einbetten</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="ux">7. Abläufe und Nutzung</h2>
+    <p>Der fachliche Soll-Ablauf ist im Handbuch klar. Die UI weicht an mehreren Stellen davon ab oder lässt Sperren unsichtbar.</p>
+
+    <h3>7.1 Dead Ends</h3>
+    <ul>
+      <li><strong>Dokumente</strong> sperren ohne die Validierungsliste (die steht nur unter Sicherung). Handbuch §13.4 verspricht Hinweise auf der Dokumente-Seite.</li>
+      <li><strong>Manuell abgeschlossen</strong> setzt die Startkarte auf 100 %, ändert Export-Gates nicht. Zwei Zustände verwechseln: Fortschritt vs. exportbereit.</li>
+      <li>THE: Workflow-Schritt „Sicherung nach Import“ liegt <em>vor</em> den Punkten, verlangt aber bereits Punkte (<code>importsComplete</code>).</li>
+      <li>Auto-Save „Gespeichert 14:32“ wird mit JSON-Sicherung verwechselt – HIS bleibt gesperrt.</li>
+    </ul>
+
+    <h3>7.2 Optimierung Prüfertag</h3>
+    <table>
+      <thead><tr><th>Typ</th><th>Schlanker Soll-Pfad</th><th>Heute Reibung</th></tr></thead>
+      <tbody>
+        <tr><td>THE / elektrP</td><td>HIS → Antritt → Punkte → Orphans (nur wenn nötig) → offene Aufgaben → eine Sicherung → HIS-Excel je Studiengang</td><td>Drei Importkarten, zwei Punkteseiten, Import-Sicherung zu früh</td></tr>
+        <tr><td>Klausur</td><td>HIS → Vorlage <em>oder</em> Tabelle → Noten → sichern → Export</td><td>Drei Eingabewege ohne „empfohlen“</td></tr>
+        <tr><td>StA / Portfolio</td><td>HIS → Struktur-Check → Matrix inkl. Restliste/No-Show → sichern → Export</td><td>Struktur kein Schritt; eine Person blockiert unsichtbar hinter Filtern</td></tr>
+        <tr><td>StA manuell</td><td>HIS → Note klicken → sichern</td><td>Zwei gleiche Workflow-Karten auf /grades</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Konkrete UX-Fixes:</strong> Blockerliste + CTA auf Dokumente. Sticky „Noch 3 von 42“ in der Matrix. Übersicht/Quicklinks/Kennzahlen je Prüfungstyp. Sidebar unter <code>md</code> als Sheet. Prüfungstyp nach erstem Import sperren oder bestätigen. Import-Konflikt: Esc nicht still skippen. Semester-ZIP am Filter ausrichten.</p>
+
+    <h3>7.3 Analyse für Prüfer</h3>
+    <ul>
+      <li>Grenzfälle, Durchfaller, Szenario-Impact und Leistungs-PDF sind stark – aber Statistik-Nenner und Multi-HIS-Duplikate entwerten Ø/Quote.</li>
+      <li>Szenarien bei reinen Note-TLs in der Navigation ausblenden.</li>
+      <li>Notenspiegel nur an einer Stelle (Dokumente), Grades mit Deep-Link.</li>
+      <li>Korrektoren: Diskrepanz &gt; 0,7 Notenstufen als Hinweis (heute nur Mittel).</li>
+    </ul>
+
+    <h2 id="kriterien">8. Bewertungskriterien und generative KI</h2>
+    <p>Im Katalog (<code>exam-catalog.ts</code>) gibt es <strong>keine</strong> fachlichen StA-/Portfolio-Kriterien. Defaults:</p>
+    <ul>
+      <li>StA: leere Liste; Button erzeugt „Neues Kriterium“, Skala Prozent.</li>
+      <li>Portfolio: TL1/TL2; Kriterienmodus startet mit einem Kriterium <strong>„Inhalt“</strong>, Punkte 0–6.</li>
+    </ul>
+    <p>Gemessen wird ausschließlich ein <strong>Prüferurteil über das Endprodukt</strong> (eine Zahl). Prozess, Mündliches, Reproduktion und Quellenstichprobe sind nicht vorgegeben. Bei ChatGPT/Copilot/Claude ist „Inhalt 0–6“ oder holistische Prozentnoten <strong>kaum diskriminierend</strong>: Textglätte und Formalia erzeugt das Modell zuverlässig.</p>
+
+    <h3>8.1 Was bleibt prüfbar (ohne Datei-Upload)</h3>
+    <p>Das Datenmodell erlaubt nur Name, Gewicht, Skala, Beschreibung, eine Zahl. Valide sind Kriterien, die der Prüfer <em>am Abgabeprodukt oder in einer Sitzung</em> stichproben kann:</p>
+    <table>
+      <thead><tr><th>Kriterium</th><th>Code</th><th>Gew.</th><th>Warum KI-resistenter</th></tr></thead>
+      <tbody>
+        <tr><td>Aufgabenbezug und Fragestellung</td><td>ABZ</td><td>2</td><td>Konkrete Aufgabenstellung getroffen?</td></tr>
+        <tr><td>Fachliche Korrektheit</td><td>FACH</td><td>3</td><td>Rechnung/Code/Begriff stichproben</td></tr>
+        <tr><td>Methode und Begründung</td><td>METH</td><td>2</td><td>Warum dieses Vorgehen, Grenzen</td></tr>
+        <tr><td>Quellen und Belege</td><td>QUEL</td><td>2</td><td>3 zentrale Belege prüfen; tote/erfundene DOI → 0–2</td></tr>
+        <tr><td>Spezifität statt Generik</td><td>SPEZ</td><td>2</td><td>Eigene Daten/Fall/Zahlen, keine Lehrbuchphrasen</td></tr>
+        <tr><td>Reproduzierbarkeit (DSR, WDK, FMP, DIL)</td><td>REPR</td><td>2</td><td>Workflow/Notebook <em>ausführen</em>, nicht nur lesen</td></tr>
+        <tr><td>Kolloquium / Rückfragen (optional)</td><td>KOLL</td><td>2</td><td>Nur anlegen, wenn mündlich stattfindet</td></tr>
+        <tr><td>Individualbeitrag (Gruppe)</td><td>IND</td><td>2</td><td>Nicht per „gleiche Werte für die Gruppe“ mitkopieren</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Nicht als Default:</strong> Sprache/Form (KI-aufgeblasen); holistisches „Inhalt“ allein; Prozent ohne Anker.</p>
+    <p>Einheitliche Skala <strong>Punkte 0–6</strong> mit Stufen in <code>description</code> (6 / 3 / 0). Note-Skala je Kriterium vermeiden (doppelte Rundung, siehe §5).</p>
+
+    <h3>8.2 Portfolio-TLs umbenennen</h3>
+    <ul>
+      <li>TL1 → <strong>Arbeitsergebnis</strong> (ABZ, FACH, SPEZ)</li>
+      <li>TL2 → <strong>Nachvollziehbarkeit</strong> (METH, QUEL, REPR, optional IND)</li>
+      <li>Optional TL3 Kolloquium (Gew. 0,5) – sonst Workflow-Blockade</li>
+    </ul>
+
+    <h3>8.3 App-Erweiterungen (später)</h3>
+    <ul>
+      <li>Vorlagen-Katalog statt leerer StA-Liste / Seed „Inhalt“ (<code>defaultStaCriteria()</code>, <code>defaultPortfolioComponents</code>).</li>
+      <li>Pflicht-<code>description</code> mit operationalisierten Stufen.</li>
+      <li>Kommentar <em>je Kriterium</em> in der Matrix (heute nur Override-Kommentar).</li>
+      <li>Warnung, wenn alle Kriterien nur Form/Inhalt/Sprache sind.</li>
+      <li>Optional Metadaten <code>oral</code> / <code>process</code> / <code>artifact</code> (ändern die Formel nicht).</li>
+      <li>Handbuch §10: KI erlaubt, Bewertung nicht auf Stil; Quellenstichprobe Pflicht; Code ausführen.</li>
+    </ul>
+
+    <h2 id="sicherheit">9. Sicherheit</h2>
+    <p>Passend zum dokumentierten Bedrohungsmodell. Kein klassisches XSS über Kommentare/Excel nachgewiesen (React-Text, jsPDF-Text).</p>
+    <table>
+      <thead><tr><th>Schwere</th><th>Befund</th><th>Behebung</th></tr></thead>
+      <tbody>
+        <tr><td><span class="sev sev-h">Hoch</span> by design</td><td><code>NEXT_PUBLIC_APP_PASSWORD</code> im Bundle; Session = fester String in sessionStorage</td><td>Nur mit Server-Auth wirklich härten. Preview ≠ Production. Logout-Option „lokale Daten löschen“.</td></tr>
+        <tr><td><span class="sev sev-m">Mittel</span></td><td>ZIP: Expand vor Size-Check; keine Entry-Cap</td><td>uncompressedSize + Summe + max. Dateien vor <code>async("string")</code></td></tr>
+        <tr><td><span class="sev sev-m">Mittel</span></td><td>CSP ohne <code>frame-ancestors</code> – jede Site darf einbetten</td><td>Allowlist Teams-Hosts, nicht weltweit offen</td></tr>
+        <tr><td><span class="sev sev-m">Mittel</span></td><td><code>unsafe-inline</code> + <code>unsafe-eval</code></td><td>Nonces; eval in Production prüfen</td></tr>
+        <tr><td><span class="sev sev-m">Mittel</span></td><td>JSON-Import Zod-passthrough, keine Signatur</td><td>Key-Strip, Array-Limits, optionales HMAC eigener Exporte</td></tr>
+        <tr><td><span class="sev sev-l">Niedrig</span></td><td>Fremde HIS-xlsx mit Formeln überlebt Re-Export</td><td>Nur Werte schreiben, wenn HISinOne das erlaubt</td></tr>
+      </tbody>
+    </table>
+    <p>IndexedDB bleibt unverschlüsselt – XSS, Erweiterung oder geteiltes Profil = Vollzugriff. Das ist Architektur, kein Implementierungsbug.</p>
+
+    <h2 id="stark">10. Was bereits gut sitzt</h2>
+    <div class="card ok">
+      <ul>
+        <li>Kein Default-Passwort; Production-Build ohne Env bricht ab.</li>
+        <li>Keine App-API, keine Noten auf dem Server.</li>
+        <li>Import-Limits, Dateinamen-Sanitizing, Downloads mit Teams-Fallback.</li>
+        <li>Import-Konflikt mit Diff, Replace nur mit Checkbox.</li>
+        <li>Orphans mit Merge/Dismiss/Undo; No-Show schließt StA/Portfolio-Zellen aus der Export-Validierung aus.</li>
+        <li>Mehrere HIS-Quellen, getrennte Export-Buttons.</li>
+        <li>Szenario-Vergleich, Grenzfall-Markierung, Leistungs-PDF mit Abschnittswahl.</li>
+        <li>44 Konstellations-Tests; <code>calculateGrade</code> ohne Excel-ROUNDUP, mit ε gegen Float.</li>
+        <li>Echte Kriterienpunkte in Anzeige/PDF-Header (nicht 19,6 von 100 bei Max 66).</li>
+      </ul>
+    </div>
+
+    <h2 id="roadmap">11. Umsetzungs-Roadmap</h2>
+    <h3>Welle 1 – Daten- und Notensicherheit (1–2 Iterationen)</h3>
+    <ol>
+      <li>Auto-Save-Flush + Writer-Queue + BroadcastChannel</li>
+      <li><code>clearData</code> inkl. <code>hisSources</code></li>
+      <li>StA-Note-Pfad, Portfolio-TL-Mittel, 4,5-Regel</li>
+      <li>Matrikel-Normalisierung und Moodle-Spaltenpriorität</li>
+      <li>HIS-Export: Zeilen-Check + gerundete Note</li>
+    </ol>
+    <h3>Welle 2 – Export und Workflow-Wahrheit</h3>
+    <ol>
+      <li>Validierung auf der Dokumente-Seite</li>
+      <li>Workflow: kein 100 % ohne Export-OK; THE-Schrittordnung</li>
+      <li>Punkte-Reimport mergen; Backup nur nach Download-OK</li>
+      <li>ZIP-Expand-Limits; ZIP-Dateinamen mit ID</li>
+    </ol>
+    <h3>Welle 3 – Nutzung und Kriterien</h3>
+    <ol>
+      <li>Typgerechte Übersicht, Restliste in der Matrix, Mobile-Sheet</li>
+      <li>Default-Kriterienkatalog (KI-tauglich) + Handbuch §10</li>
+      <li>Statistik deduplizieren; Szenarien-Nav nur wenn wirksam</li>
+      <li>Regressionstests für Header-Varianten, <code>3513589,0</code>, Zwei-Tab-Save, Folgesemester-Klon</li>
+    </ol>
+    <p>Nach Welle 1 die Konstellationsmatrix um 4,5-Fälle, StA-Note-Skala und TL-Mittel erweitern – die heutigen A8/A10-Erwartungen ändern sich bewusst.</p>
+  </main>
+  <footer class="wrap">
+    <p>ExamGrade · interner Analysebericht · parallel: Sicherheit, Datenintegrität, Noten, Import/Export, UX, Kriterien/KI · Ergebnisse vor Umsetzung fachlich (PO/Prüfungsausschuss) prüfen.</p>
+  </footer>
+</body>
+</html>

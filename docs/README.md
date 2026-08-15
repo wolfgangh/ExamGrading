@@ -9,6 +9,7 @@ Zentrale Übersicht der Projektdokumentation.
 | [ARCHITEKTUR.md](ARCHITEKTUR.md) | Technische Architektur, Module, Routing, Storage |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Vercel, Umgebungsvariablen, Teams-Einbettung, Fehlerbehebung |
 | [../SECURITY.md](../SECURITY.md) | Sicherheitsaudit und Betriebs-Checkliste |
+| [ANALYSEBERICHT.html](ANALYSEBERICHT.html) | Tiefenanalyse v0.4.68 (Sicherheit, Daten, Noten, UX, KI-Kriterien) |
 | [../README.md](../README.md) | Projektüberblick und Schnellstart (GitHub-Landing) |
 
 ## Empfohlene Lesereihenfolge
