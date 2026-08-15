@@ -172,11 +172,14 @@ async function exportOneSourceFromTemplate(
       break;
     }
 
+    const cellMat = cellMatKey(sheet.getCell(r, matCol).value);
+    const expected = byExcelRow.get(r);
+    // Zeile nur nutzen, wenn die Zelle zur gespeicherten Matrikel passt
     const mat =
-      byExcelRow.get(r) ??
-      cellMatKey(sheet.getCell(r, matCol).value);
+      expected && cellMat && expected !== cellMat
+        ? cellMat
+        : cellMat || expected || "";
     if (!mat) {
-      // leere Vorlagenzeilen belassen
       continue;
     }
 
@@ -184,11 +187,9 @@ async function exportOneSourceFromTemplate(
     const cell = sheet.getCell(r, gradeCol);
 
     if (isNoShow || grade == null) {
-      // No-Show / keine Note: Zelle leeren (wie HisinOne-Vorlage)
       cell.value = null;
     } else {
-      // Numerische Note wie in Originalvorlagen (1.3, 2, …)
-      cell.value = grade;
+      cell.value = Math.round(grade * 10) / 10;
     }
     updated++;
   }

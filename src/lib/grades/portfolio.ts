@@ -18,9 +18,12 @@ import {
 export function roundToNearestGermanGrade(raw: number): number {
   if (!Number.isFinite(raw)) return 5.0;
   const clamped = Math.min(5, Math.max(1, raw));
+  // PO-Regel: ab 4,5 nicht bestanden (nicht zur besseren Note 4,0 runden)
+  if (clamped + 1e-12 >= 4.5) return 5.0;
   let best: number = GERMAN_GRADES[GERMAN_GRADES.length - 1];
   let bestDist = Infinity;
   for (const g of GERMAN_GRADES) {
+    if (g >= 5) continue;
     const d = Math.abs(g - clamped);
     if (d < bestDist - 1e-9 || (Math.abs(d - bestDist) < 1e-9 && g < best)) {
       best = g;
@@ -854,15 +857,7 @@ export function computePortfolioGradeForProject(
   rec: PointsRecord | undefined | null,
   ctx?: PortfolioGradeContext
 ): number | null {
-  if (
-    portfolioUsesGradeScenarios(project as ExamProject) &&
-    ctx?.schema != null &&
-    ctx.schema.maxPoints > 0
-  ) {
-    const ful = computePortfolioFulfillment(project, rec, ctx);
-    if (ful == null) return null;
-    return gradeFromUnitWithScenario(ful.unitAvg, ctx.schema);
-  }
+  // Gesamtnote = Mittel der (ggf. szenariobasierten) TL-Noten – nicht unitAvg×Schema.
   return computePortfolioGrade(
     effectivePortfolioGrades(project, rec, ctx),
     project.portfolioComponents ?? []

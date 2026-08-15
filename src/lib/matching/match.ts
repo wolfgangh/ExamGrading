@@ -8,7 +8,10 @@ import {
   pointsBelowPass,
 } from "@/lib/grades/next-grade";
 import { ensureScenarios, getActiveScenario } from "@/lib/grades/scenarios";
-import { countMissingCriteria } from "@/lib/grades/sta-criteria";
+import {
+  computeStaFinalGrade,
+  countMissingCriteria,
+} from "@/lib/grades/sta-criteria";
 import {
   computePortfolioComponentDetails,
   computePortfolioCriterionPointTotals,
@@ -58,6 +61,13 @@ function calculatedGradeForRecord(
       groupId,
       schema: gradeSchema,
     });
+  }
+  if (isStaCriteriaExam(project.examType) && (project.criteria?.length ?? 0) > 0) {
+    return computeStaFinalGrade(
+      pointsRec?.criterionValues,
+      project.criteria ?? [],
+      gradeSchema
+    );
   }
   if (totalPoints != null) {
     return calculateGrade(totalPoints, gradeSchema);

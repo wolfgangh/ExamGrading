@@ -100,7 +100,7 @@ export function ExamClientLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ExamProvider examId={examId}>
+    <ExamProvider key={examId} examId={examId}>
       <ExamShell examId={examId}>{children}</ExamShell>
     </ExamProvider>
   );

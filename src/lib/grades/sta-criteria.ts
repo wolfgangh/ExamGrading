@@ -2,8 +2,11 @@ import type {
   AssessmentCriterion,
   CriterionScale,
   ExamProject,
+  GradeSchema,
   PointsRecord,
 } from "@/lib/types";
+import { calculateGrade } from "@/lib/grades/schema";
+import { roundToNearestGermanGrade } from "@/lib/grades/portfolio";
 
 export const CRITERION_SCALE_LABELS: Record<CriterionScale, string> = {
   percent: "Prozent (0–100)",
@@ -171,9 +174,53 @@ export function countMissingCriteria(
   if (!criteria.length) return 0;
   const vals = criterionValues ?? {};
   return criteria.filter((c) => {
+    const w = Number.isFinite(c.weight) && c.weight > 0 ? c.weight : 0;
+    if (w <= 0) return false;
     const v = vals[c.id];
     return v == null || !Number.isFinite(v);
   }).length;
+}
+
+/** Alle aktiven Kriterien (Gewicht > 0) haben die Skala Note. */
+export function staCriteriaAllGradeScale(
+  criteria: AssessmentCriterion[] | undefined | null
+): boolean {
+  const active = (criteria ?? []).filter(
+    (c) => Number.isFinite(c.weight) && c.weight > 0
+  );
+  return active.length > 0 && active.every((c) => c.scale === "grade");
+}
+
+/**
+ * Amtsnote StA: reine Note-Kriterien → gewichtetes Notenmittel;
+ * sonst Erfüllung × Schema (wie bisher).
+ */
+export function computeStaFinalGrade(
+  criterionValues: Record<string, number | null | undefined> | undefined,
+  criteria: AssessmentCriterion[],
+  schema: GradeSchema
+): number | null {
+  const active = criteria.filter(
+    (c) => Number.isFinite(c.weight) && c.weight > 0
+  );
+  if (!active.length) return null;
+  if (staCriteriaAllGradeScale(criteria)) {
+    const vals = criterionValues ?? {};
+    let wSum = 0;
+    let acc = 0;
+    for (const c of active) {
+      const v = vals[c.id];
+      if (v == null || !Number.isFinite(v)) return null;
+      const w = c.weight;
+      acc += Math.min(5, Math.max(1, v)) * w;
+      wSum += w;
+    }
+    if (wSum <= 0) return null;
+    return roundToNearestGermanGrade(acc / wSum);
+  }
+  const pts = computeCriteriaTotalPoints(criterionValues, criteria, schema.maxPoints);
+  if (pts == null) return null;
+  return calculateGrade(pts, schema);
 }
 
 /** Punkte-Record nach Kriterien neu berechnen */

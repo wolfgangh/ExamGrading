@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ExamProject } from "@/lib/types";
 import { deleteExam, listExams, saveExam } from "@/lib/storage";
 import { duplicateExamProject } from "@/lib/project-factory";
+import { broadcastExamSync, subscribeExamSync } from "@/lib/exam-sync";
 
 export function useExams() {
   const [exams, setExams] = useState<ExamProject[]>([]);
@@ -27,9 +28,16 @@ export function useExams() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    return subscribeExamSync(() => {
+      void refresh();
+    });
+  }, [refresh]);
+
   const remove = useCallback(
     async (id: string) => {
       await deleteExam(id);
+      broadcastExamSync({ type: "deleted", examId: id });
       await refresh();
     },
     [refresh]

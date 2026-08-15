@@ -25,10 +25,11 @@ const SYNONYMS: Record<LogicalField, string[]> = {
     "matrikel",
     "matrikelnr",
     "matrikelnr.",
-    "id-nummer",
-    "id nummer",
+    "matr. nr.",
+    "matr nr.",
+    "mtknr",
+    "matnr",
     "matriculation",
-    "student id",
   ],
   lastName: [
     "nachname",
@@ -86,9 +87,25 @@ const SYNONYMS: Record<LogicalField, string[]> = {
 function normalizeHeader(h: string): string {
   return h
     .toLowerCase()
+    .replace(/[.\-]+/g, " ")
     .replace(/\s+/g, " ")
     .replace(/[_]+/g, " ")
     .trim();
+}
+
+function isWeakMatriculationHeader(h: string): boolean {
+  const n = normalizeHeader(h);
+  return (
+    n === "id nummer" ||
+    n === "id-nummer" ||
+    n.startsWith("id nummer") ||
+    n === "student id"
+  );
+}
+
+function isStrongTotalPointsHeader(h: string): boolean {
+  const n = normalizeHeader(h);
+  return n.startsWith("bewertung/") || n.startsWith("gesamtpunkte");
 }
 
 export function detectField(header: string): LogicalField | null {
@@ -149,11 +166,25 @@ export function autoMapColumns(
 ): Partial<Record<LogicalField, number>> {
   const map: Partial<Record<LogicalField, number>> = {};
   headers.forEach((h, idx) => {
+    if (isWeakMatriculationHeader(h)) return;
     const field = detectField(h);
     if (field && map[field] == null) {
       map[field] = idx;
     }
   });
+  if (map.matriculation == null) {
+    headers.forEach((h, idx) => {
+      if (!isWeakMatriculationHeader(h)) return;
+      if (map.matriculation == null) map.matriculation = idx;
+    });
+  }
+  if (map.totalPoints != null) {
+    const cur = headers[map.totalPoints] ?? "";
+    if (!isStrongTotalPointsHeader(cur)) {
+      const better = headers.findIndex((h) => isStrongTotalPointsHeader(h));
+      if (better >= 0) map.totalPoints = better;
+    }
+  }
   return map;
 }
 

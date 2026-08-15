@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ExamProject } from "@/lib/types";
 import { saveDraft, saveExam } from "@/lib/storage";
+import { broadcastExamSync } from "@/lib/exam-sync";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -24,24 +25,57 @@ export function useAutoSave(
   const first = useRef(true);
   const projectRef = useRef(project);
   const dirtyRef = useRef(false);
+  const inFlightRef = useRef<Promise<void> | null>(null);
+  const queuedRef = useRef(false);
+  const persistFlag = useRef(persist);
+  persistFlag.current = persist;
 
   useEffect(() => {
     projectRef.current = project;
   }, [project]);
 
-  const persistNow = async (ev: ExamProject) => {
+  useEffect(() => {
+    first.current = true;
+    dirtyRef.current = false;
+  }, [project?.id]);
+
+  const persistNow = async () => {
+    const ev = projectRef.current;
+    if (!ev) return;
+    const writtenAt = ev.updatedAt;
     setStatus("saving");
     try {
       await saveDraft(ev);
-      if (persist) {
+      if (persistFlag.current) {
         await saveExam(ev);
+      }
+      broadcastExamSync({
+        type: "saved",
+        examId: ev.id,
+        updatedAt: ev.updatedAt,
+      });
+      if (projectRef.current?.updatedAt === writtenAt) {
+        dirtyRef.current = false;
       }
       setStatus("saved");
       setLastSavedAt(new Date());
-      dirtyRef.current = false;
     } catch {
       setStatus("error");
     }
+  };
+
+  const enqueuePersist = () => {
+    if (inFlightRef.current) {
+      queuedRef.current = true;
+      return;
+    }
+    inFlightRef.current = persistNow().finally(() => {
+      inFlightRef.current = null;
+      if (queuedRef.current) {
+        queuedRef.current = false;
+        enqueuePersist();
+      }
+    });
   };
 
   useEffect(() => {
@@ -56,11 +90,16 @@ export function useAutoSave(
     setStatus("saving");
 
     timer.current = setTimeout(() => {
-      void persistNow(project);
+      timer.current = null;
+      enqueuePersist();
     }, debounceMs);
 
     return () => {
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+        if (dirtyRef.current) enqueuePersist();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project, debounceMs, persist]);
@@ -69,18 +108,37 @@ export function useAutoSave(
     if (!project || !intervalMs || intervalMs <= 0) return;
 
     const id = setInterval(() => {
-      const ev = projectRef.current;
-      if (!ev || !dirtyRef.current) return;
-      void persistNow(ev);
+      if (!projectRef.current || !dirtyRef.current) return;
+      enqueuePersist();
     }, intervalMs);
 
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, intervalMs, persist]);
 
+  useEffect(() => {
+    const flush = () => {
+      if (!dirtyRef.current || !projectRef.current) return;
+      enqueuePersist();
+    };
+    window.addEventListener("pagehide", flush);
+    const onVis = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVis);
+      flush();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id]);
+
   const saveNow = async () => {
-    if (!project) return;
-    await persistNow(project);
+    if (!projectRef.current) return;
+    dirtyRef.current = true;
+    enqueuePersist();
+    if (inFlightRef.current) await inFlightRef.current;
   };
 
   return { status, lastSavedAt, saveNow };

@@ -13,7 +13,9 @@ import {
   portfolioUsesGradeScenarios,
   computePortfolioComponentDetails,
   effectivePortfolioGrades,
+  roundToNearestGermanGrade,
 } from "../src/lib/grades/portfolio.ts";
+import { computeStaFinalGrade } from "../src/lib/grades/sta-criteria.ts";
 import {
   createPortfolioDefaultScenarios,
   createDefaultScenarios,
@@ -106,6 +108,9 @@ function studentsFromHis(his: ReturnType<typeof makeHis>) {
     gradeFromUnitAvg(0.85, "percent", s50) === calculateGrade(85, s50),
     `unit 0.85 schema → ${gradeFromUnitAvg(0.85, "percent", s50)}`
   );
+  check("C6a", roundToNearestGermanGrade(4.5) === 5.0, `4,5 → ${roundToNearestGermanGrade(4.5)}`);
+  check("C6b", roundToNearestGermanGrade(4.49) === 4.0, `4,49 → ${roundToNearestGermanGrade(4.49)}`);
+  check("C6c", roundToNearestGermanGrade(4.51) === 5.0, `4,51 → ${roundToNearestGermanGrade(4.51)}`);
 }
 
 // ========== D3 defaults ==========
@@ -407,9 +412,24 @@ function portfolioPointsProject(units: number[], scale: "percent" | "points") {
   };
   check("A8uses", portfolioUsesGradeScenarios(project), "mixed → scenario mode true");
   const g = buildEnrichedRows(project)[0]?.finalGrade;
-  // unitAvg = (0.8 + gradeToUnit(2.0))/2 = (0.8+0.75)/2 = 0.775 → schema 50%
-  const exp = calculateGrade(77.5, scenarios[0].schema);
-  check("A8", g === exp, `mixed unitAvg→schema: ${g} exp ${exp}`);
+  // TL1 80 % → Schema-Note; TL2 Note 2,0; Gesamt = Mittel der TL-Noten
+  const tl1 = gradeFromUnitAvg(0.8, "percent", scenarios[0].schema);
+  const tl2 = 2.0;
+  const exp = roundToNearestGermanGrade((tl1 + tl2) / 2);
+  check("A8", g === exp, `mixed TL-Mittel: ${g} exp ${exp} (TL ${tl1}/${tl2})`);
+}
+
+// ========== A8b StA reine Note-Kriterien (kein Punkteschema) ==========
+{
+  const schema = generateLinearGradeSchema(100, 50, true);
+  const criteria = [
+    { id: "k1", name: "A", code: "A", scale: "grade" as const, weight: 1 },
+    { id: "k2", name: "B", code: "B", scale: "grade" as const, weight: 1 },
+  ];
+  const g = computeStaFinalGrade({ k1: 2.0, k2: 2.0 }, criteria, schema);
+  check("A8b", g === 2.0, `StA Note-Mittel 2,0/2,0 → ${g} (nicht Schema)`);
+  const fail = computeStaFinalGrade({ k1: 4.0, k2: 4.0 }, criteria, schema);
+  check("A8c", fail === 4.0, `StA überall 4,0 bleibt 4,0 (nicht 5,0): ${fail}`);
 }
 
 // ========== A9 per lecturer ==========

@@ -1,23 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExamProject } from "@/lib/types";
 import { getDraft, getExam, saveExam } from "@/lib/storage";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { buildEnrichedRows } from "@/lib/matching/match";
 import { computeStatistics } from "@/lib/grades/statistics";
+import { subscribeExamSync } from "@/lib/exam-sync";
 
 export function useExam(id: string) {
   const [project, setProject] = useState<ExamProject | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const loadSeq = useRef(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const seq = ++loadSeq.current;
+    if (!opts?.silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const draft = await getDraft(id);
       const stored = await getExam(id);
+      if (seq !== loadSeq.current) return;
       const chosen =
         draft && stored
           ? new Date(draft.updatedAt) > new Date(stored.updatedAt)
@@ -31,15 +37,30 @@ export function useExam(id: string) {
         setProject(chosen);
       }
     } catch (e) {
+      if (seq !== loadSeq.current) return;
       setError(e instanceof Error ? e.message : "Laden fehlgeschlagen");
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current && !opts?.silent) setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    return subscribeExamSync((msg) => {
+      if (msg.examId !== id) return;
+      if (msg.type === "deleted") {
+        setError("Prüfung wurde in einem anderen Tab gelöscht");
+        setProject(null);
+        return;
+      }
+      if (msg.type === "saved") {
+        void load({ silent: true });
+      }
+    });
+  }, [id, load]);
 
   const updateProject = useCallback(
     (updater: ExamProject | ((prev: ExamProject) => ExamProject)) => {

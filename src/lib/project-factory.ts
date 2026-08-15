@@ -101,7 +101,7 @@ export function duplicateExamProject(
   const now = new Date().toISOString();
   const clear = options?.clearData ?? false;
 
-  return {
+  const copy: ExamProject = {
     ...structuredClone(source),
     id: createId("exam"),
     createdAt: now,
@@ -117,6 +117,18 @@ export function duplicateExamProject(
       ? undefined
       : structuredClone(source.hisTemplateMeta),
   };
+  if (clear) {
+    copy.hisSources = [];
+    copy.identityMerges = [];
+    copy.identityDismissals = [];
+    copy.questionDefs = undefined;
+    copy.workflowMilestones = undefined;
+    copy.lastBackupAt = undefined;
+    copy.lastBackupSyncedUpdatedAt = undefined;
+    copy.workflowManuallyCompletedAt = undefined;
+    copy.subAreaMappingConfirmedAt = undefined;
+  }
+  return copy;
 }
 
 export { defaultGradeSchema };
