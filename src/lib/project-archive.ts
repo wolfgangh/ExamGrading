@@ -109,8 +109,10 @@ export function projectArchiveFilename(
   stage: import("@/lib/workflow-milestones").BackupStage = "general"
 ): string {
   const suffix = STAGE_SUFFIX[stage] ?? "Sicherung";
-  const base = `ExamGrade_${project.name || "Pruefung"}_${suffix}`;
-  // Datum + Schritt im Namen genügen – ohne Uhrzeit
+  const idHint = (project.id || "").replace(/[^a-zA-Z0-9]/g, "").slice(-8);
+  const base = `ExamGrade_${project.name || "Pruefung"}_${suffix}${
+    idHint ? `_${idHint}` : ""
+  }`;
   return datedExportFilename(base, "json", { withTime: false });
 }
 

@@ -65,6 +65,8 @@ import {
 } from "@/lib/backup-status";
 import {
   assertFileSizeLimit,
+  assertZipEntryUncompressed,
+  assertZipJsonEntries,
   MAX_PROJECT_ARCHIVE_BYTES,
   MAX_SEMESTER_ZIP_BYTES,
 } from "@/lib/import-limits";
@@ -421,11 +423,13 @@ export function ExamList() {
                 "ZIP enthält keine .json-Projektsicherungen."
               );
             }
+            assertZipJsonEntries(jsonEntries, file.name);
             jsonEntries.sort((a, b) => a.name.localeCompare(b.name, "de"));
             for (const entry of jsonEntries) {
               try {
-                const text = await entry.async("string");
                 const label = `${file.name}/${entry.name}`;
+                assertZipEntryUncompressed(entry, label);
+                const text = await entry.async("string");
                 assertFileSizeLimit(
                   {
                     size: new TextEncoder().encode(text).length,
@@ -518,7 +522,16 @@ export function ExamList() {
   const activeConflict = conflictQueue[conflictIndex] ?? null;
 
   const exportBackup = async (exam: ExamProject) => {
-    void downloadJson(projectArchiveFilename(exam), exportExamJson(exam));
+    const result = await downloadJson(
+      projectArchiveFilename(exam),
+      exportExamJson(exam)
+    );
+    if (result.method === "failed") {
+      setImportErr(
+        result.error || `Sicherung von „${exam.name}“ fehlgeschlagen.`
+      );
+      return;
+    }
     await saveExam(markProjectBackedUp(exam));
     await refresh();
   };
@@ -544,7 +557,12 @@ export function ExamList() {
         `ExamGrade_${semesterSlug(semesterNow)}_Semester`,
         "zip"
       );
-      await downloadBlob(zipName, blob);
+      const zipResult = await downloadBlob(zipName, blob);
+      if (zipResult.method === "failed") {
+        throw new Error(
+          zipResult.error || "Semester-ZIP konnte nicht heruntergeladen werden."
+        );
+      }
 
       for (const exam of semesterExams) {
         await saveExam(markProjectBackedUp(exam));

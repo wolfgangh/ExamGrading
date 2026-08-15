@@ -71,14 +71,24 @@ export default function ExportPage() {
   const filenamePreview = projectArchiveFilename(project, stage);
 
   const doProjectBackup = () => {
-    downloadAndMarkBackup(project, setProject, {
-      gradedCount: stats.graded,
-      unresolvedOrphanCount: unresolvedN,
-      stage,
-    });
-    setMessage(
-      `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}, Datei: ${filenamePreview}). Bitte neben den Klausurdateien ablegen. Notenliste und ${HISINONE_LABEL}-Export sind freigeschaltet (sofern keine weiteren Sperren).`
-    );
+    void (async () => {
+      try {
+        await downloadAndMarkBackup(project, setProject, {
+          gradedCount: stats.graded,
+          unresolvedOrphanCount: unresolvedN,
+          stage,
+        });
+        setMessage(
+          `Projektsicherung heruntergeladen (${projectArchiveSummary(project)}, Datei: ${filenamePreview}). Bitte neben den Klausurdateien ablegen. Notenliste und ${HISINONE_LABEL}-Export sind freigeschaltet (sofern keine weiteren Sperren).`
+        );
+      } catch (e) {
+        setMessage(
+          e instanceof Error
+            ? e.message
+            : "Sicherung konnte nicht heruntergeladen werden."
+        );
+      }
+    })();
   };
 
   const stageLabel =

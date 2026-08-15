@@ -34,6 +34,7 @@ import {
 } from "@/lib/types";
 import { buildEnrichedRows } from "@/lib/matching/match";
 import { computeStatistics } from "@/lib/grades/statistics";
+import { validateForExport } from "@/lib/validations";
 
 export type WorkflowStep = {
   id: string;
@@ -54,10 +55,15 @@ export {
 
 export function gradesComplete(
   project: ExamProject,
-  _rows: EnrichedStudentRow[],
+  rows: EnrichedStudentRow[],
   stats: ExamStatistics
 ): boolean {
-  return gradesDataComplete(project, stats.graded);
+  if (!gradesDataComplete(project, stats.graded)) return false;
+  const his = rows.filter((r) => r.inHis);
+  if (his.length === 0) return stats.graded > 0;
+  return his.every(
+    (r) => r.status === "no_show" || r.finalGrade != null
+  );
 }
 
 function formatMilestoneAt(iso?: string): string {
@@ -196,28 +202,6 @@ export function buildWorkflowSteps(
           } satisfies WorkflowStep,
         ]
       : []),
-    // Nach Matching/Import, vor Bewertung – nicht direkt vor „Sicherung nach Noten“
-    {
-      id: "backup-import",
-      done: importBackupDone,
-      label: "Sicherung nach Import",
-      href: `/exam/${examId}/export?stage=import#sicherung`,
-      detail: !importsOk
-        ? isHisManual || isKlausur
-          ? `Zuerst ${HISINONE_LABEL}-Masterliste importieren`
-          : `Zuerst alle XLSX importieren (${HISINONE_LABEL}, Antritt, Punkte)`
-        : importBackupDone
-          ? `Erledigt${formatMilestoneAt(
-              project.workflowMilestones?.backupAfterImportAt
-            )}${
-              onlineStyle
-                ? " · reine Punkte-Updates erfordern keine erneute Import-Sicherung"
-                : ""
-            }`
-          : "JSON-Sicherung …_nach-Import",
-      critical: importsOk && !importBackupDone,
-      actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
-    },
     ...(isStaManualExam(project.examType)
       ? [
           {
@@ -308,6 +292,27 @@ export function buildWorkflowSteps(
               } satisfies WorkflowStep,
             ]),
     {
+      id: "backup-import",
+      done: importBackupDone,
+      label: "Sicherung nach Import",
+      href: `/exam/${examId}/export?stage=import#sicherung`,
+      detail: !importsOk
+        ? isHisManual || isKlausur
+          ? `Zuerst ${HISINONE_LABEL}-Masterliste importieren`
+          : `Zuerst ${HISINONE_LABEL}, Antritt und Punkte importieren`
+        : importBackupDone
+          ? `Erledigt${formatMilestoneAt(
+              project.workflowMilestones?.backupAfterImportAt
+            )}${
+              onlineStyle
+                ? " · reine Punkte-Updates erfordern keine erneute Import-Sicherung"
+                : ""
+            }`
+          : "JSON-Sicherung …_nach-Import",
+      critical: importsOk && !importBackupDone,
+      actionLabel: importBackupDone ? "Öffnen" : "Jetzt sichern",
+    },
+    {
       id: "grades",
       done:
         gradesOk &&
@@ -370,7 +375,8 @@ export function buildWorkflowSteps(
         backupOk &&
         !openGrading &&
         (!onlineStyle || unresolvedN === 0) &&
-        (!subMapNeeded || subMapOk),
+        (!subMapNeeded || subMapOk) &&
+        validateForExport(project, rows).every((i) => i.level !== "error"),
       label: "Dokumente / HISinOne-Export",
       href: !backupOk
         ? `/exam/${examId}/export#sicherung`
@@ -456,11 +462,9 @@ export function getExamWorkflowSummary(
     workflowProgress(steps);
   const autoComplete = totalCount > 0 && doneCount === totalCount;
   const manual = isWorkflowManuallyCompleted(project);
-  const complete = autoComplete || manual;
-  const statusLabel = manual
-    ? autoComplete
-      ? `Abgeschlossen · ${doneCount}/${totalCount}`
-      : `Manuell abgeschlossen · ${doneCount}/${totalCount}`
+  const complete = autoComplete;
+  const statusLabel = manual && !autoComplete
+    ? `Archiviert · ${doneCount}/${totalCount}`
     : autoComplete
       ? `Abgeschlossen · ${doneCount}/${totalCount}`
       : nextOpen
@@ -471,9 +475,9 @@ export function getExamWorkflowSummary(
   return {
     doneCount,
     totalCount,
-    progressPct: complete ? 100 : progressPct,
+    progressPct: autoComplete ? 100 : progressPct,
     complete,
-    nextOpen: complete ? undefined : nextOpen,
+    nextOpen: autoComplete ? undefined : nextOpen,
     statusLabel,
   };
 }

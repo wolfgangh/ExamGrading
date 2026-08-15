@@ -70,6 +70,39 @@ type PreviewState = {
   isPointsReimport?: boolean;
 };
 
+/** Beim Punkte-Reimport Overrides, No-Show und Korrekturfelder behalten. */
+function preservePointsMetaOnReimport(
+  rec: PointsRecord,
+  old: PointsRecord
+): PointsRecord {
+  return {
+    ...rec,
+    gradeOverride: old.gradeOverride,
+    totalOverride: old.totalOverride,
+    previousGrade: old.previousGrade ?? rec.previousGrade,
+    comment: old.comment ?? rec.comment,
+    notAttended: old.notAttended,
+    secondCorrectionPoints: old.secondCorrectionPoints,
+    secondCorrectionNotes: old.secondCorrectionNotes,
+    criterionValues: old.criterionValues ?? rec.criterionValues,
+    portfolioGrades: old.portfolioGrades ?? rec.portfolioGrades,
+    portfolioGradesByLecturer:
+      old.portfolioGradesByLecturer ?? rec.portfolioGradesByLecturer,
+    portfolioCriterionValues:
+      old.portfolioCriterionValues ?? rec.portfolioCriterionValues,
+    portfolioCriterionValuesByLecturer:
+      old.portfolioCriterionValuesByLecturer ??
+      rec.portfolioCriterionValuesByLecturer,
+    manualProgramCode: old.manualProgramCode ?? rec.manualProgramCode,
+    source:
+      old.gradeOverride != null ||
+      old.totalOverride != null ||
+      old.notAttended
+        ? "mixed"
+        : rec.source,
+  };
+}
+
 function mergeStudents(
   existing: Record<string, Student>,
   incoming: Student[]
@@ -385,16 +418,7 @@ export default function ImportPage() {
                   normalizeMatriculation(p.matriculationNumber) === key
               );
               if (!old) return rec;
-              return {
-                ...rec,
-                gradeOverride: old.gradeOverride,
-                totalOverride: old.totalOverride,
-                comment: old.comment ?? rec.comment,
-                source:
-                  old.gradeOverride != null || old.totalOverride != null
-                    ? "mixed"
-                    : rec.source,
-              };
+              return preservePointsMetaOnReimport(rec, old);
             });
           } else {
             const byKey = new Map(
@@ -410,16 +434,7 @@ export default function ImportPage() {
                 rec.matriculationNumber;
               const old = byKey.get(key);
               if (old && keep) {
-                byKey.set(key, {
-                  ...rec,
-                  gradeOverride: old.gradeOverride,
-                  totalOverride: old.totalOverride,
-                  comment: old.comment ?? rec.comment,
-                  source:
-                    old.gradeOverride != null || old.totalOverride != null
-                      ? "mixed"
-                      : rec.source,
-                });
+                byKey.set(key, preservePointsMetaOnReimport(rec, old));
               } else {
                 byKey.set(key, rec);
               }

@@ -168,8 +168,10 @@ export default function DocumentsPage() {
       return;
     }
     if (validationBlocked) {
+      const first = validation.find((i) => i.level === "error");
       setError(
-        "Export gesperrt – siehe Validierung (z. B. fehlende HISinOne-Vorlage)."
+        first?.message ??
+          "Export gesperrt – siehe Hinweise oben."
       );
       return;
     }
@@ -216,6 +218,47 @@ export default function DocumentsPage() {
           .
         </p>
       </div>
+
+      {validation.some((i) => i.level === "error") && (
+        <div
+          role="alert"
+          className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm"
+        >
+          <p className="font-semibold text-destructive">
+            Export gesperrt – bitte zuerst erledigen
+          </p>
+          <ul className="space-y-2">
+            {validation
+              .filter((i) => i.level === "error")
+              .map((item, i) => (
+                <li
+                  key={`${item.message}-${i}`}
+                  className="flex flex-wrap items-start justify-between gap-2"
+                >
+                  <span>
+                    {item.message}
+                    {item.count != null && (
+                      <span className="ml-1 tabular-nums opacity-80">
+                        ({item.count})
+                      </span>
+                    )}
+                  </span>
+                  {item.href && (
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        buttonVariants({ size: "sm", variant: "outline" }),
+                        "shrink-0"
+                      )}
+                    >
+                      {item.actionLabel ?? "Öffnen"}
+                    </Link>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
 
       {orphansLocked && (
         <div
@@ -280,11 +323,23 @@ export default function DocumentsPage() {
             size="sm"
             className="bg-amber-800 text-white hover:bg-amber-900"
             onClick={() => {
-              downloadAndMarkBackup(project, setProject, {
-                gradedCount: stats?.graded,
-              });
-              setMessage("Projektsicherung heruntergeladen – Exporte freigeschaltet.");
-              setError(null);
+              void (async () => {
+                try {
+                  await downloadAndMarkBackup(project, setProject, {
+                    gradedCount: stats?.graded,
+                  });
+                  setMessage(
+                    "Projektsicherung heruntergeladen – Exporte freigeschaltet."
+                  );
+                  setError(null);
+                } catch (e) {
+                  setError(
+                    e instanceof Error
+                      ? e.message
+                      : "Sicherung fehlgeschlagen."
+                  );
+                }
+              })();
             }}
           >
             <HardDrive className="size-4" />

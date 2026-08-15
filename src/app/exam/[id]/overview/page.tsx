@@ -346,7 +346,7 @@ export default function OverviewPage() {
               <div
                 className="h-2.5 w-full overflow-hidden rounded-full bg-muted"
                 role="progressbar"
-                aria-valuenow={displayComplete ? totalCount : doneCount}
+                aria-valuenow={autoComplete ? totalCount : doneCount}
                 aria-valuemin={0}
                 aria-valuemax={totalCount}
                 aria-label="Workflow-Fortschritt"
@@ -354,10 +354,10 @@ export default function OverviewPage() {
                 <div
                   className={cn(
                     "h-full rounded-full transition-all",
-                    displayComplete ? "bg-emerald-600" : "bg-primary"
+                    autoComplete ? "bg-emerald-600" : "bg-primary"
                   )}
                   style={{
-                    width: `${displayComplete ? 100 : progressPct}%`,
+                    width: `${autoComplete ? 100 : progressPct}%`,
                   }}
                 />
               </div>

@@ -9,10 +9,9 @@ import type { BackupStage } from "@/lib/workflow-milestones";
 import { inferBackupStage } from "@/lib/workflow-milestones";
 
 /**
- * JSON-Sicherung herunterladen und Projekt als gesichert markieren.
- * `setProject` muss den Exam-Context-Updater sein.
+ * JSON-Sicherung herunterladen und erst bei Erfolg als gesichert markieren.
  */
-export function downloadAndMarkBackup(
+export async function downloadAndMarkBackup(
   project: ExamProject,
   setProject: (
     updater: ExamProject | ((prev: ExamProject) => ExamProject)
@@ -22,7 +21,7 @@ export function downloadAndMarkBackup(
     unresolvedOrphanCount?: number;
     stage?: BackupStage;
   }
-): ExamProject {
+): Promise<ExamProject> {
   const stage =
     options?.stage ??
     inferBackupStage(project, {
@@ -30,10 +29,15 @@ export function downloadAndMarkBackup(
       unresolvedOrphanCount: options?.unresolvedOrphanCount,
     });
 
-  void downloadJson(
+  const result = await downloadJson(
     projectArchiveFilename(project, stage),
     buildProjectArchive(project)
   );
+  if (result.method === "failed") {
+    throw new Error(
+      result.error || "Sicherung konnte nicht heruntergeladen werden."
+    );
+  }
   const marked = markProjectBackedUp(project, {
     gradedCount: options?.gradedCount,
     unresolvedOrphanCount: options?.unresolvedOrphanCount,

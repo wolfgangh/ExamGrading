@@ -30,6 +30,8 @@ export interface ValidationItem {
   level: "error" | "warning" | "info";
   message: string;
   count?: number;
+  href?: string;
+  actionLabel?: string;
 }
 
 export function validateForExport(
@@ -42,6 +44,8 @@ export function validateForExport(
     items.push({
       level: "error",
       message: `Keine ${HISINONE_LABEL}-Masterliste importiert – Export unvollständig.`,
+      href: `/exam/${project.id}/import`,
+      actionLabel: "Zu Importe",
     });
   }
 
@@ -51,6 +55,8 @@ export function validateForExport(
       level: "error",
       message: `Original-${HISINONE_LABEL}-Datei fehlt für formatgetreuen Export – bitte Datei(en) unter Import erneut einlesen.`,
       count: missingOriginal.length,
+      href: `/exam/${project.id}/import`,
+      actionLabel: "HIS erneut importieren",
     });
   }
 
@@ -60,6 +66,8 @@ export function validateForExport(
       level: "error",
       message: `Offene Aufgaben „Bewertung notwendig“ (${people} Person(en), ${tasks} Aufgabe(n)) – Export und PDF gesperrt, bis alle bewertet sind.`,
       count: tasks,
+      href: `/exam/${project.id}/detail-points`,
+      actionLabel: "Zu Detailpunkten",
     });
   }
 
@@ -69,6 +77,8 @@ export function validateForExport(
       level: "error",
       message: `${n} Antritt/Punkte ohne ${HISINONE_LABEL} noch ungeprüft – unter Zuordnung zusammenführen oder ablehnen (Notenliste und ${HISINONE_LABEL}-Export gesperrt).`,
       count: n,
+      href: `/exam/${project.id}/matching`,
+      actionLabel: "Zur Zuordnung",
     });
   }
 
@@ -78,6 +88,8 @@ export function validateForExport(
       level: "error",
       message: `Teilgebiet-Zuordnung unvollständig: ${issues[0] ?? "Aufgaben den Teilgebieten zuordnen (Detailpunkte)"}.`,
       count: issues.length,
+      href: `/exam/${project.id}/detail-points`,
+      actionLabel: "Teilgebiete zuordnen",
     });
   }
 
@@ -87,6 +99,8 @@ export function validateForExport(
         level: "error",
         message:
           "Keine Bewertungskriterien definiert – unter Einstellungen anlegen.",
+        href: `/exam/${project.id}/settings`,
+        actionLabel: "Einstellungen",
       });
     } else {
       const incomplete = rows.filter((r) => {
@@ -106,6 +120,8 @@ export function validateForExport(
           level: "error",
           message: `Kriterien unvollständig bei ${incomplete.length} Person(en) in HISinOne.`,
           count: incomplete.length,
+          href: `/exam/${project.id}/assessment`,
+          actionLabel: "Zur Matrix",
         });
       }
     }
@@ -123,6 +139,8 @@ export function validateForExport(
         level: "error",
         message: `Manuelle Note fehlt bei ${missingGrade.length} Person(en) in HISinOne.`,
         count: missingGrade.length,
+        href: `/exam/${project.id}/grades`,
+        actionLabel: "Zur Notenübersicht",
       });
     }
   }
@@ -133,6 +151,8 @@ export function validateForExport(
         level: "error",
         message:
           "Keine Teilleistungen definiert – unter Einstellungen anlegen (Standard: 2).",
+        href: `/exam/${project.id}/settings`,
+        actionLabel: "Einstellungen",
       });
     } else {
       // No-Show / notAttended: keine Teilnoten nötig (auch bei 2 Korrektoren)
@@ -154,6 +174,8 @@ export function validateForExport(
           level: "error",
           message: `Teilnoten unvollständig bei ${incomplete.length} Person(en) in HISinOne.`,
           count: incomplete.length,
+          href: `/exam/${project.id}/assessment`,
+          actionLabel: "Zur Matrix",
         });
       }
     }
