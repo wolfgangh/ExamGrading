@@ -24,6 +24,7 @@ import { parseAttendanceMatrix } from "@/lib/excel/parse-attendance";
 import { parsePointsMatrix } from "@/lib/excel/parse-moodle-points";
 import {
   buildHisSourceFromParse,
+  findHisSourceExamNumberConflict,
   getHisSources,
   removeHisSource,
   upsertHisSource,
@@ -68,6 +69,7 @@ type PreviewState = {
   errors: string[];
   apply: () => void;
   isPointsReimport?: boolean;
+  hisCollisionLabel?: string;
 };
 
 /** Beim Punkte-Reimport Overrides, No-Show und Korrekturfelder behalten. */
@@ -134,6 +136,7 @@ export default function ImportPage() {
   const replaceAllPointsRef = useRef(replaceAllPoints);
   keepOverridesRef.current = keepOverrides;
   replaceAllPointsRef.current = replaceAllPoints;
+  const hisReplaceRef = useRef(false);
   const pointsRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
 
@@ -193,6 +196,14 @@ export default function ImportPage() {
       "Originaldatei gespeichert – Export bleibt HisinOne-kompatibel."
     );
 
+    const collision = findHisSourceExamNumberConflict(project, source);
+    if (collision) {
+      hisReplaceRef.current = false;
+      warnings.unshift(
+        `Prüfungsnr. ${source.examNumber} ist bereits in „${collision.originalFileName || collision.label}“. Standard: zusätzlich behalten.`
+      );
+    }
+
     setPreview({
       type: "his",
       fileName: file.name,
@@ -200,6 +211,9 @@ export default function ImportPage() {
       preview: result.preview,
       warnings,
       errors: result.log.errors,
+      hisCollisionLabel: collision
+        ? collision.originalFileName || collision.label
+        : undefined,
       apply: () => {
         setProject((prev) => {
           const students = mergeStudents(
@@ -214,7 +228,12 @@ export default function ImportPage() {
             prev.lecturers.length > 0
               ? prev.lecturers
               : result.meta.lecturers ?? prev.lecturers;
-          let next = upsertHisSource(prev, source);
+          const conflict = findHisSourceExamNumberConflict(prev, source);
+          const replaceId =
+            hisReplaceRef.current && conflict ? conflict.id : undefined;
+          let next = upsertHisSource(prev, source, {
+            replaceSourceId: replaceId,
+          });
           next = {
             ...next,
             lecturers,
@@ -255,6 +274,10 @@ export default function ImportPage() {
           prev.lecturers.length > 0
             ? prev.lecturers
             : result.meta.lecturers ?? prev.lecturers;
+        const conflict = findHisSourceExamNumberConflict(prev, source);
+        const extraWarn = conflict
+          ? `Prüfungsnr. ${source.examNumber} schon in „${conflict.originalFileName || conflict.label}“ – als weitere Quelle behalten.`
+          : null;
         return clearWorkflowMilestonesOnImport({
           ...upsertHisSource(prev, source),
           lecturers,
@@ -264,6 +287,7 @@ export default function ImportPage() {
               ...result.log,
               warnings: [
                 "Originaldatei gespeichert – Export bleibt HisinOne-kompatibel.",
+                ...(extraWarn ? [extraWarn] : []),
                 ...result.log.warnings,
               ],
             }),
@@ -761,7 +785,34 @@ export default function ImportPage() {
             : undefined
         }
         extra={
-          preview?.type === "points" ? (
+          preview?.type === "his" && preview.hisCollisionLabel ? (
+            <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50/80 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+              <p className="font-medium">
+                Gleiche Prüfungsnummer wie „{preview.hisCollisionLabel}“
+              </p>
+              <label className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="his-collision"
+                  defaultChecked
+                  onChange={() => {
+                    hisReplaceRef.current = false;
+                  }}
+                />
+                <span>Als weitere HIS-Quelle behalten (empfohlen)</span>
+              </label>
+              <label className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="his-collision"
+                  onChange={() => {
+                    hisReplaceRef.current = true;
+                  }}
+                />
+                <span>Bestehende Quelle mit dieser Datei ersetzen</span>
+              </label>
+            </div>
+          ) : preview?.type === "points" ? (
             <div className="space-y-2 rounded-lg border p-3 text-sm">
               <p className="font-medium">Aktualisierungsoptionen</p>
               <label className="flex items-start gap-2">

@@ -87,6 +87,7 @@ import { semesterSelectOptions } from "@/lib/semester";
 import { ComboboxField } from "@/components/ui/combobox-field";
 import { LecturerPicker } from "@/components/exam/lecturer-picker";
 import { cn } from "@/lib/utils";
+import { hasSubstantialData } from "@/lib/backup-status";
 
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>();
@@ -205,9 +206,18 @@ export default function SettingsPage() {
               <Label>Typ</Label>
               <Select
                 value={project.examType}
-                onValueChange={(v) =>
-                  v && updateMeta("examType", v as ExamType)
-                }
+                onValueChange={(v) => {
+                  if (!v) return;
+                  const next = v as ExamType;
+                  if (next === project.examType) return;
+                  if (hasSubstantialData(project)) {
+                    const ok = window.confirm(
+                      "Es sind bereits Importdaten vorhanden. Den Prüfungstyp trotzdem ändern? Workflow, Seiten und Notenlogik passen sich an."
+                    );
+                    if (!ok) return;
+                  }
+                  updateMeta("examType", next);
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue>
@@ -222,6 +232,11 @@ export default function SettingsPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {hasSubstantialData(project) && (
+                <p className="text-xs text-muted-foreground">
+                  Nach dem ersten Import nur mit Bestätigung ändern.
+                </p>
+              )}
             </div>
           </div>
           <LecturerPicker

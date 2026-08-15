@@ -41,6 +41,12 @@ import {
   duplicateExamProject,
 } from "../src/lib/project-factory.ts";
 import { pickNewerProject } from "../src/lib/project-load.ts";
+import { findExistingExamMatches } from "../src/lib/project-import-conflict.ts";
+import {
+  findHisSourceExamNumberConflict,
+  upsertHisSource,
+} from "../src/lib/his-sources.ts";
+import { cellToString } from "../src/lib/excel/column-detect.ts";
 import { examUsesGradeScenarios } from "../src/lib/grades/scenarios.ts";
 import { defaultStaCriteria } from "../src/lib/grades/sta-criteria.ts";
 import { listAssessmentRemaining } from "../src/lib/grades/assessment-remaining.ts";
@@ -1241,6 +1247,74 @@ function portfolioPointsProject(units: number[], scale: "percent" | "points") {
       stats.averageGrade === 2.3 &&
       stats.passRate === 1,
     `klausur override stats: grade=${rows[0]?.finalGrade} hasPoints=${rows[0]?.hasPoints} n=${stats.gradeSampleSize} avg=${stats.averageGrade} pass=${stats.passRate}`
+  );
+}
+
+{
+  const a = createEmptyExamProject({
+    name: "FI",
+    examType: "the",
+    semester: "SoSe 2026",
+  });
+  a.examNumber = "";
+  const b = { ...a, id: "other", examNumber: "" };
+  const emptyMatch = findExistingExamMatches(a, [b]);
+  check(
+    "W5M1",
+    emptyMatch.matches.length === 0 && emptyMatch.byId === false,
+    `empty examNumber is not a hard match (n=${emptyMatch.matches.length})`
+  );
+  a.examNumber = "MEB 1";
+  const c = { ...b, examNumber: "MEB 1" };
+  const hard = findExistingExamMatches(a, [c]);
+  check(
+    "W5M2",
+    hard.matches.length === 1,
+    `same name+sem+type+number matches (n=${hard.matches.length})`
+  );
+}
+
+{
+  const p = createEmptyExamProject({ name: "HIS", examType: "the" });
+  const src1 = {
+    id: "s1",
+    programCode: "MEB",
+    examNumber: "8010260",
+    label: "MEB",
+    originalFileName: "MEB.xlsx",
+    meta: {},
+    rows: [],
+  };
+  const src2 = {
+    ...src1,
+    id: "s2",
+    programCode: "MBW",
+    originalFileName: "MBW.xlsx",
+  };
+  const one = upsertHisSource(p, src1);
+  const two = upsertHisSource(one, src2);
+  check(
+    "W5H1",
+    (two.hisSources?.length ?? 0) === 2,
+    `same examNumber different file adds source (n=${two.hisSources?.length})`
+  );
+  const hit = findHisSourceExamNumberConflict(one, src2);
+  check("W5H2", hit?.id === "s1", `conflict detects ${hit?.id}`);
+  const again = upsertHisSource(one, { ...src1, rows: [] });
+  check(
+    "W5H3",
+    (again.hisSources?.length ?? 0) === 1 && again.hisSources?.[0]?.id === "s1",
+    "same filename upserts in place"
+  );
+}
+
+{
+  check(
+    "W5C1",
+    cellToString({ text: "Mustermann" }) === "Mustermann" &&
+      cellToString({ richText: [{ text: "A" }, { text: "B" }] }) === "AB" &&
+      cellToString({ result: 3513589 }) === "3513589",
+    `cellToString unwraps excel objects`
   );
 }
 

@@ -221,14 +221,29 @@ export function cellToString(value: unknown): string {
     }
     return String(value);
   }
-  return String(value).trim();
+  if (typeof value === "object") {
+    const o = value as {
+      result?: unknown;
+      text?: unknown;
+      richText?: { text?: string }[];
+      hyperlink?: unknown;
+    };
+    if ("result" in o && o.result != null) return cellToString(o.result);
+    if (Array.isArray(o.richText)) {
+      return o.richText.map((t) => t.text ?? "").join("").trim();
+    }
+    if (typeof o.text === "string") return o.text.trim();
+    if (o.text != null) return cellToString(o.text);
+  }
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "string") return value.trim();
+  return "";
 }
 
 export function cellToNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  const s = String(value)
-    .trim()
+  const s = cellToString(value)
     .replace(",", ".")
     .replace(/\s/g, "")
     .replace("%", "");

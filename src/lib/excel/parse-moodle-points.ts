@@ -427,7 +427,7 @@ export function parsePointsMatrix(
   }
   if (unmatched > 0) {
     warnings.unshift(
-      `${unmatched} Zeile(n) ohne Anmeldename-Match – Antritt/HIS zuerst importieren oder Logins prüfen.`
+      `${unmatched} Zeile(n) ohne Matrikel-/Namens-Match – zuerst HIS oder Antritt importieren oder Spalten prüfen.`
     );
   }
 

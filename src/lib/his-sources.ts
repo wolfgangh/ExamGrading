@@ -165,24 +165,50 @@ export function syncLegacyHisFields(project: ExamProject): ExamProject {
   };
 }
 
+/**
+ * Gleiche Prüfungsnr., aber andere Datei – nicht automatisch ersetzen.
+ */
+export function findHisSourceExamNumberConflict(
+  project: ExamProject,
+  source: Pick<HisSource, "id" | "examNumber" | "originalFileName">
+): HisSource | null {
+  const num = (source.examNumber || "").trim();
+  if (!num) return null;
+  const file = source.originalFileName || "";
+  return (
+    getHisSources(project).find((s) => {
+      if (s.id === source.id) return false;
+      if ((s.examNumber || "").trim() !== num) return false;
+      return (s.originalFileName || "") !== file;
+    }) ?? null
+  );
+}
+
 export function upsertHisSource(
   project: ExamProject,
-  source: HisSource
+  source: HisSource,
+  options?: { replaceSourceId?: string }
 ): ExamProject {
   const existing = getHisSources(project);
-  const idx = existing.findIndex(
-    (s) =>
-      s.id === source.id ||
-      (s.examNumber &&
-        source.examNumber &&
-        s.examNumber === source.examNumber) ||
-      (s.originalFileName &&
-        source.originalFileName &&
-        s.originalFileName === source.originalFileName)
-  );
+  const idx = existing.findIndex((s) => {
+    if (options?.replaceSourceId && s.id === options.replaceSourceId) {
+      return true;
+    }
+    if (s.id === source.id) return true;
+    if (
+      s.originalFileName &&
+      source.originalFileName &&
+      s.originalFileName === source.originalFileName
+    ) {
+      return true;
+    }
+    return false;
+  });
   const next =
     idx >= 0
-      ? existing.map((s, i) => (i === idx ? source : s))
+      ? existing.map((s, i) =>
+          i === idx ? { ...source, id: s.id } : s
+        )
       : [...existing, source];
   return syncLegacyHisFields({ ...project, hisSources: next });
 }

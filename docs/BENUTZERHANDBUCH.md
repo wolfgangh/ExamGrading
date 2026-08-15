@@ -2,7 +2,7 @@
 
 Vollständige Anleitung für Prüferinnen und Prüfer – Einstieg und Nachschlagewerk.
 
-**App-Version:** 0.4.72  
+**App-Version:** 0.4.74  
 **Zielgruppe:** Personen, die Prüfungen bewerten und Noten an HISinOne bzw. die Studienabteilung melden  
 **Datenschutz:** Alle Prüfungsdaten bleiben **im Browser** (IndexedDB). Es gibt **keine** Übertragung von Notenlisten an einen App-Server.
 
@@ -124,12 +124,13 @@ Typische Felder:
 - **JSON importieren** (eine oder mehrere Dateien) bzw. **Semester-ZIP** – stellt Projekte in **diesem** Browser wieder her  
 - **Semester sichern** – alle Prüfungen des aktuellen Semesters als ZIP  
 
-Existiert die Prüfung bereits im Browser (gleiche Projekt-ID oder gleicher Name + Semester + Prüfungsform), öffnet sich ein **Konflikt-Dialog**:
+Existiert die Prüfung bereits im Browser (gleiche Projekt-ID, oder Name + Semester + Form **und** gleiche nicht-leere Prüfungsnummer), öffnet sich ein **Konflikt-Dialog**:
 
 1. Gegenüberstellung **Browser jetzt** vs. **Sicherung** (Änderungszeit mit Kennzeichnung „aktueller“, Zähler zu HIS, Punkten, Noten, …)  
 2. **Als neue Version importieren** – zusätzliche Prüfung mit Namenszusatz `(Import …)` und Badge **Import-Kopie** auf der Karte  
 3. **Bestehende ersetzen** – nur nach ausdrücklicher Bestätigung (Checkbox); die lokale Version wird überschrieben  
 4. **Überspringen** bzw. bei mehreren Konflikten **Alle verbleibenden abbrechen**  
+5. Esc / Dialog schließen bricht den restlichen Import ab (kein stilles Überspringen)  
 
 Dateinamen der Sicherung typisch: Datum + Name + Schritt (z. B. `…_nach-Noten.json`), ohne Uhrzeit.
 
@@ -236,7 +237,8 @@ Seite: **Importe**.
 
 - Offizielle Excel-Vorlage(n) aus HISinOne  
 - **Mehrere Dateien** möglich (verschiedene Studiengänge) – werden als getrennte Quellen geführt  
-- Die **Originaldatei** wird für den formatgetreuen Re-Export mitgespeichert  
+- Gleiche Prüfungsnummer, andere Datei: Nachfrage (zusätzlich behalten oder ersetzen), kein stilles Überschreiben  
+- Die **Originaldatei** wird für den formatgetreuen Re-Export mitgespeichert   
 
 ### 7.2 Antritt (THE / elektrP)
 

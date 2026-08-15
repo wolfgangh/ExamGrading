@@ -71,7 +71,9 @@ function hasPointData(p: ExamProject["points"][number]): boolean {
 
 /**
  * Findet bereits gespeicherte Prüfungen, die zur importierten passen.
- * 1) gleiche id · 2) Name + Semester + examType (+ examNumber wenn beide gesetzt)
+ * 1) gleiche id
+ * 2) Name + Semester + examType + Prüfungsnr. (beide nicht leer und gleich)
+ *    Leere Prüfungsnr. ist kein hartes Match.
  */
 export function findExistingExamMatches(
   imported: ExamProject,
@@ -93,8 +95,8 @@ export function findExistingExamMatches(
       if ((e.semester || "").trim() !== semester) return false;
       if (e.examType !== examType) return false;
       const en = (e.examNumber || "").trim();
-      if (examNumber && en && examNumber !== en) return false;
-      return true;
+      if (!examNumber || !en) return false;
+      return examNumber === en;
     })
     .sort((a, b) => ts(b.updatedAt) - ts(a.updatedAt));
 

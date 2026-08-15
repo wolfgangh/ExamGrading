@@ -84,12 +84,12 @@ export function ImportConflictDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) onResolve({ action: "skip" });
+        if (!next) onResolve({ action: "abort_remaining" });
       }}
     >
       <DialogContent
         className="max-h-[min(90vh,40rem)] overflow-y-auto sm:max-w-lg"
-        showCloseButton
+        showCloseButton={false}
       >
         <DialogHeader>
           <DialogTitle>
@@ -104,7 +104,8 @@ export function ImportConflictDialog({
             Diese Sicherung entspricht einer Prüfung, die bereits in diesem
             Browser gespeichert ist
             {byId ? " (gleiche Projekt-ID)" : " (Name, Semester, Form)"}.
-            Wählen Sie, wie fortgefahren werden soll.
+            Wählen Sie, wie fortgefahren werden soll. Esc oder Schließen
+            bricht den restlichen Import ab (kein stilles Überspringen).
           </DialogDescription>
         </DialogHeader>
 
