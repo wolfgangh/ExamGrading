@@ -109,7 +109,12 @@ export function computeStatistics(
   const mismatches = unique.filter((r) => r.status === "mismatch").length;
 
   const grades = unique
-    .filter((r) => r.finalGrade != null && r.attended !== false && r.hasPoints)
+    .filter(
+      (r) =>
+        r.finalGrade != null &&
+        r.attended !== false &&
+        r.status !== "no_show"
+    )
     .map((r) => r.finalGrade as number);
 
   const points = unique

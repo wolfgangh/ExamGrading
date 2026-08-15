@@ -446,7 +446,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     const hasPoints =
       totalPoints != null ||
       calculatedGrade != null ||
-      (isHisManualAssessmentExam(project.examType) && gradeOverride != null);
+      gradeOverride != null;
     const needsGradingCount = pointsRec?.needsGrading?.length ?? 0;
     const notAttended = pointsRec?.notAttended === true;
     const missingCriteria =
@@ -633,7 +633,10 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       student,
       inHis: false,
       attended: true,
-      hasPoints: totalPoints != null || calculatedGrade != null,
+      hasPoints:
+        totalPoints != null ||
+        calculatedGrade != null ||
+        gradeOverride != null,
       totalPoints,
       percent,
       calculatedGrade,

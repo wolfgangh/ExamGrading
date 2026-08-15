@@ -1202,6 +1202,48 @@ function portfolioPointsProject(units: number[], scale: "percent" | "points") {
   check("W4P1", miss === 0, `all-disabled TL not missing: ${miss}`);
 }
 
+{
+  const project = createEmptyExamProject({
+    name: "Walk Klausur Stats",
+    examType: "written",
+  });
+  project.hisRows = [
+    {
+      matriculationNumber: "3513589",
+      lastName: "Test",
+      firstName: "A",
+      orderIndex: 0,
+    },
+  ];
+  project.students = {
+    "3513589": {
+      matriculationNumber: "3513589",
+      lastName: "Test",
+      firstName: "A",
+    },
+  };
+  project.points = [
+    {
+      matriculationNumber: "3513589",
+      bySubArea: {},
+      totalPoints: null,
+      gradeOverride: 2.3,
+      source: "manual",
+    },
+  ];
+  const rows = buildEnrichedRows(project);
+  const stats = computeStatistics(rows, project.gradeSchema, undefined, project);
+  check(
+    "W4K1",
+    rows[0]?.finalGrade === 2.3 &&
+      rows[0]?.hasPoints === true &&
+      stats.gradeSampleSize === 1 &&
+      stats.averageGrade === 2.3 &&
+      stats.passRate === 1,
+    `klausur override stats: grade=${rows[0]?.finalGrade} hasPoints=${rows[0]?.hasPoints} n=${stats.gradeSampleSize} avg=${stats.averageGrade} pass=${stats.passRate}`
+  );
+}
+
 // Summary
 const passed = results.filter((r) => r.status === "pass").length;
 const failed = results.filter((r) => r.status === "fail");

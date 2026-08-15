@@ -116,7 +116,10 @@ export function gradeBucketLabel(grade: number): string {
 
 export function computeGradeBuckets(rows: EnrichedStudentRow[]) {
   const graded = rows.filter(
-    (r) => r.finalGrade != null && r.attended !== false && r.hasPoints
+    (r) =>
+      r.finalGrade != null &&
+      r.attended !== false &&
+      r.status !== "no_show"
   );
   const n = graded.length || 1;
   const buckets = [
