@@ -82,6 +82,8 @@ import {
   UserX,
   Users,
 } from "lucide-react";
+import { AssessmentRemainingBar } from "@/components/exam/assessment-remaining-bar";
+import { listAssessmentRemaining } from "@/lib/grades/assessment-remaining";
 import {
   GroupFilterBar,
   type GroupFillStatusMap,
@@ -302,6 +304,23 @@ export default function AssessmentPage() {
     () => filteredRows.map((r) => r.key),
     [filteredRows]
   );
+  const remaining = useMemo(
+    () => listAssessmentRemaining(sortedRows, visibleKeys),
+    [sortedRows, visibleKeys]
+  );
+
+  const jumpToRemaining = (mat: string) => {
+    setShowNoShows(true);
+    setGroupFilter("all");
+    setNameQuery("");
+    setHighlightMat(mat);
+    window.setTimeout(() => {
+      const el = document.querySelector(
+        `[data-mat-row="${CSS.escape(mat)}"]`
+      );
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 80);
+  };
   /** Mitglieder der konkret gewählten Gruppe (nicht Alle / Ohne Gruppe) */
   const groupMemberKeys = useMemo(() => {
     if (groupFilter === "all" || groupFilter === "none") return [] as string[];
@@ -1208,6 +1227,12 @@ export default function AssessmentPage() {
                     </span>
                   )}
                 </CardDescription>
+                <div className="mt-3">
+                  <AssessmentRemainingBar
+                    data={remaining}
+                    onJump={jumpToRemaining}
+                  />
+                </div>
                 {isCriteria && (
                   <p className="mt-1.5 text-[0.6875rem] leading-snug text-muted-foreground">
                     Eingabe je Spalte:{" "}

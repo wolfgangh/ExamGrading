@@ -1,15 +1,18 @@
 "use client";
 
-import type { ExamStatistics } from "@/lib/types";
+import type { ExamStatistics, ExamType } from "@/lib/types";
+import { isHisOnlyImportExam } from "@/lib/types";
 import { cn, formatGrade, formatPercent, formatStat } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function SummaryPanel({
   stats,
   compact = false,
+  examType,
 }: {
   stats: ExamStatistics | null;
   compact?: boolean;
+  examType?: ExamType;
 }) {
   if (!stats) {
     return (
@@ -24,65 +27,86 @@ export function SummaryPanel({
     );
   }
 
+  const hisOnly = examType ? isHisOnlyImportExam(examType) : false;
+  const passN = stats.gradeSampleSize ?? 0;
+  const passLabel =
+    passN > 0
+      ? `${formatPercent(stats.passRate)} (n=${passN})`
+      : formatPercent(stats.passRate);
+
   const items: {
     label: string;
     value: string;
     warn?: boolean;
-  }[] = [
-    { label: "Anmeldungen (HIS)", value: String(stats.registered) },
-    {
-      label: "Antritte gematcht",
-      value: String(stats.attended),
-    },
-    {
-      label: "Antritte (Moodle)",
-      value: String(stats.attendanceImported),
-    },
-    {
-      label: "Antritt ohne HIS",
-      value: String(stats.attendedOrphan),
-      warn: stats.attendedOrphan > 0,
-    },
-    {
-      label: "No-Shows",
-      value: stats.hasAttendanceList ? String(stats.noShow) : "–",
-    },
-    {
-      label: "No-Show-Quote",
-      value: stats.hasAttendanceList
-        ? formatPercent(stats.noShowRate)
-        : "–",
-    },
-    {
-      label: "Ø Note",
-      value: formatGrade(stats.averageGrade),
-    },
-    {
-      label: "Median Note",
-      value: formatGrade(stats.medianGrade),
-    },
-    {
-      label: "25%-Quantil",
-      value: formatGrade(stats.q25Grade),
-    },
-    {
-      label: "75%-Quantil",
-      value: formatGrade(stats.q75Grade),
-    },
-    {
-      label: "Stabw. Note",
-      value: formatStat(stats.stdDevGrade, 2),
-    },
-    {
-      label: "Bestehensquote",
-      value: formatPercent(stats.passRate),
-    },
-    {
-      label: "Unstimmigkeiten",
-      value: String(stats.mismatches),
-      warn: stats.mismatches > 0,
-    },
-  ];
+  }[] = hisOnly
+    ? [
+        { label: "Anmeldungen (HIS)", value: String(stats.registered) },
+        { label: "Bewertet", value: String(stats.graded) },
+        { label: "Exportbereit", value: String(stats.exportReady) },
+        { label: "Ø Note", value: formatGrade(stats.averageGrade) },
+        { label: "Median Note", value: formatGrade(stats.medianGrade) },
+        { label: "Bestehensquote", value: passLabel },
+        {
+          label: "Unstimmigkeiten",
+          value: String(stats.mismatches),
+          warn: stats.mismatches > 0,
+        },
+      ]
+    : [
+        { label: "Anmeldungen (HIS)", value: String(stats.registered) },
+        {
+          label: "Antritte gematcht",
+          value: String(stats.attended),
+        },
+        {
+          label: "Antritte (Moodle)",
+          value: String(stats.attendanceImported),
+        },
+        {
+          label: "Antritt ohne HIS",
+          value: String(stats.attendedOrphan),
+          warn: stats.attendedOrphan > 0,
+        },
+        {
+          label: "No-Shows",
+          value: stats.hasAttendanceList ? String(stats.noShow) : "–",
+        },
+        {
+          label: "No-Show-Quote",
+          value: stats.hasAttendanceList
+            ? formatPercent(stats.noShowRate)
+            : "–",
+        },
+        {
+          label: "Ø Note",
+          value: formatGrade(stats.averageGrade),
+        },
+        {
+          label: "Median Note",
+          value: formatGrade(stats.medianGrade),
+        },
+        {
+          label: "25%-Quantil",
+          value: formatGrade(stats.q25Grade),
+        },
+        {
+          label: "75%-Quantil",
+          value: formatGrade(stats.q75Grade),
+        },
+        {
+          label: "Stabw. Note",
+          value: formatStat(stats.stdDevGrade, 2),
+        },
+        {
+          label: "Bestehensquote",
+          value: passLabel,
+        },
+        {
+          label: "Unstimmigkeiten",
+          value: String(stats.mismatches),
+          warn: stats.mismatches > 0,
+        },
+      ];
 
   if (compact) {
     return (

@@ -4,7 +4,7 @@
 
 © Prof. Dr. Wolfgang Hößl · OTH Regensburg · *Client-seitig · Keine Serverübertragung*
 
-**Aktuelle Version:** 0.4.56 (siehe auch `package.json` und App-Footer)
+**Aktuelle Version:** 0.4.71 (siehe auch `package.json` und App-Footer)
 
 **Noten-Regression:** `npm run test:grades` führt `scripts/grade-constellation-matrix.mts` aus (Konstellationen A–E, Szenarien, Grenzfälle). Workflow: `.grok/workflows/test-grade-constellations.rhai`.
 

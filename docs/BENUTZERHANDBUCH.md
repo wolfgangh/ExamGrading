@@ -2,7 +2,7 @@
 
 Vollständige Anleitung für Prüferinnen und Prüfer – Einstieg und Nachschlagewerk.
 
-**App-Version:** 0.4.57  
+**App-Version:** 0.4.71  
 **Zielgruppe:** Personen, die Prüfungen bewerten und Noten an HISinOne bzw. die Studienabteilung melden  
 **Datenschutz:** Alle Prüfungsdaten bleiben **im Browser** (IndexedDB). Es gibt **keine** Übertragung von Notenlisten an einen App-Server.
 
@@ -165,10 +165,12 @@ Dateinamen der Sicherung typisch: Datum + Name + Schritt (z. B. `…_nach-Note
 | Punkteerfassung / Detailpunkte | Klausur, THE, elektrP |
 | Kriterienbewertung / Teilnoten | StA-Kriterien bzw. Portfolio |
 | Notenübersicht | Tabelle, Filter, Overrides, Szenario-Umschalter |
-| Notenszenarien | Bestehensgrenzen, Vergleich (nicht bei StA manuell) |
+| Notenszenarien | Bestehensgrenzen, Vergleich – nur wenn Punkte/Prozent in die Note eingehen |
 | Dokumente | PDFs, HISinOne-Excel, Notenspiegel |
 | Sicherung | JSON-Download / Status |
 | Einstellungen | Metadaten, Struktur, Gruppen, Dozenten |
+
+Auf schmalen Bildschirmen ist die Sidebar ein Overlay (Menü-Symbol oben links).
 
 ### 5.2 Workflow-Schritte (Beispiele)
 
@@ -341,6 +343,35 @@ Für HISinOne-angemeldete Personen, die **nicht** bewertet werden (z. B. ohne 
 ### 10.6 Schriftgröße
 
 Matrix- und Tabellentexte skalieren mit der Appearance-Schriftgröße (Standard / Groß / Sehr groß).
+
+### 10.7 Generative KI und Kriterien
+
+KI-Werkzeuge (ChatGPT, Copilot u. Ä.) sind in der Regel zulässig, sofern Prüfungsordnung oder Aufgabenstellung nichts anderes vorgeben. Die Bewertung darf sich **nicht** auf Stil, Sprache oder Formalia allein stützen – ein Modell erzeugt diese zuverlässig.
+
+**Standardkatalog Studienarbeit** (wird bei neuen StA-Kriterienprüfungen angelegt; unter Einstellungen nachladbar):
+
+| Kürzel | Kriterium | Gewicht | Warum prüfbar |
+|--------|-----------|---------|----------------|
+| ABZ | Aufgabenbezug und Fragestellung | 2 | Konkrete Aufgabenstellung getroffen? |
+| FACH | Fachliche Korrektheit | 3 | Rechnung, Code oder Begriff stichproben |
+| METH | Methode und Begründung | 2 | Warum dieses Vorgehen, welche Grenzen? |
+| QUEL | Quellen und Belege | 2 | Drei zentrale Belege prüfen |
+| SPEZ | Spezifität statt Generik | 2 | Eigene Daten/Fall/Zahlen, keine Lehrbuchphrasen |
+| REPR | Reproduzierbarkeit | 2 | Workflow/Notebook **ausführen**, nicht nur lesen |
+
+Einheitliche Skala **Punkte 0–6** mit Stufen in der Beschreibung (6 / 3 / 0). Kolloquium und Individualbeitrag nur anlegen, wenn mündlich bzw. gruppenindividuell bewertet wird.
+
+**Quellenstichprobe:** drei zentrale Belege (DOI, Seitenzahl, Inhalt). Tote oder erfundene Quellen → niedriger Wert bei QUEL.
+
+**Nicht als alleiniges Kriterium:** Sprache/Form; holistisches „Inhalt“ ohne Anker; Prozent ohne Stufen.
+
+**Portfolio-Standard:** Teilleistung **Arbeitsergebnis** (ABZ, FACH, SPEZ) und **Nachvollziehbarkeit** (METH, QUEL, REPR). Kriterienmodus unter Einstellungen aktivieren.
+
+Kriterien und Beschreibungen sind jederzeit anpassbar.
+
+### 10.8 Restliste in der Matrix
+
+Die Bewertungsmatrix zeigt **Noch n von m** für Personen in HISinOne ohne Note (No-Shows zählen als erledigt). Die Restliste listet auch Personen, die hinter Filter oder Suche verborgen sind – ein Klick setzt die Ansicht zurück und springt zur Zeile.
 
 ---
 

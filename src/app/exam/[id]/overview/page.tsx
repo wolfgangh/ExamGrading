@@ -19,7 +19,17 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn, formatGrade, formatPercent } from "@/lib/utils";
 import { orphanCount } from "@/lib/matching/merge-candidates";
 import { listUnresolvedOrphans } from "@/lib/matching/orphan-resolution";
-import { HISINONE_LABEL, isOnlineStyleExam } from "@/lib/types";
+import {
+  EXAM_TYPE_LABELS,
+  HISINONE_LABEL,
+  isOnlineStyleExam,
+  isPortfolioExam,
+  isStaCriteriaExam,
+  isStaManualExam,
+} from "@/lib/types";
+import { examUsesGradeScenarios } from "@/lib/grades/scenarios";
+import { mergeDefaultStaCriteria } from "@/lib/grades/sta-criteria";
+import { createId } from "@/lib/id";
 import {
   buildWorkflowSteps,
   isWorkflowManuallyCompleted,
@@ -28,6 +38,7 @@ import {
 import {
   AlertCircle,
   CheckCircle2,
+  ClipboardList,
   FileSpreadsheet,
   GitMerge,
   PenLine,
@@ -75,52 +86,63 @@ export default function OverviewPage() {
   const orphans = rows.filter((r) => r.attendanceWithoutHis);
   const noShows = rows.filter((r) => r.status === "no_show");
 
+  const usesScenarios = examUsesGradeScenarios(project);
+  const showMatching = onlineStyle && (orphanN > 0 || unresolvedN > 0);
+  const showPointsChart =
+    !isStaManualExam(project.examType) &&
+    stats.averagePoints != null &&
+    (stats.pointsHistogram ?? []).some((b) => b.count > 0);
+
+  const seedDefaultCriteria = () => {
+    setProject((prev) => ({
+      ...prev,
+      criteria: mergeDefaultStaCriteria(prev.criteria, createId),
+    }));
+  };
+
+  const quickLinkClass = (primary?: boolean) =>
+    cn(
+      buttonVariants({ variant: primary ? "default" : "outline", size: "sm" }),
+      "gap-1.5"
+    );
+
   const quickLinks = (
     <div className="flex flex-wrap gap-2">
-      <Link
-        href={`/exam/${id}/export#sicherung`}
-        className={cn(
-          buttonVariants({ variant: "outline", size: "sm" }),
-          "gap-1.5"
-        )}
-      >
+      <Link href={`/exam/${id}/export#sicherung`} className={quickLinkClass()}>
         <Download className="size-3.5" />
         Sichern
       </Link>
-      <Link
-        href={`/exam/${id}/import`}
-        className={cn(
-          buttonVariants({ variant: "outline", size: "sm" }),
-          "gap-1.5"
-        )}
-      >
+      <Link href={`/exam/${id}/import`} className={quickLinkClass()}>
         <FileSpreadsheet className="size-3.5" />
         Importe
       </Link>
-      <Link
-        href={`/exam/${id}/points`}
-        className={cn(
-          buttonVariants({ variant: "outline", size: "sm" }),
-          "gap-1.5"
-        )}
-      >
-        <PenLine className="size-3.5" />
-        Punkte
-      </Link>
-      <Link
-        href={`/exam/${id}/grades`}
-        className={cn(
-          buttonVariants({ variant: "outline", size: "sm" }),
-          "gap-1.5"
-        )}
-      >
+      {showMatching && (
+        <Link href={`/exam/${id}/matching`} className={quickLinkClass()}>
+          <GitMerge className="size-3.5" />
+          Zuordnung
+        </Link>
+      )}
+      {isStaCriteriaExam(project.examType) ? (
+        <Link href={`/exam/${id}/assessment`} className={quickLinkClass()}>
+          <ClipboardList className="size-3.5" />
+          Kriterien
+        </Link>
+      ) : isPortfolioExam(project.examType) ? (
+        <Link href={`/exam/${id}/assessment`} className={quickLinkClass()}>
+          <ClipboardList className="size-3.5" />
+          Teilnoten
+        </Link>
+      ) : isStaManualExam(project.examType) ? null : (
+        <Link href={`/exam/${id}/points`} className={quickLinkClass()}>
+          <PenLine className="size-3.5" />
+          Punkte
+        </Link>
+      )}
+      <Link href={`/exam/${id}/grades`} className={quickLinkClass()}>
         <Table2 className="size-3.5" />
         Noten
       </Link>
-      <Link
-        href={`/exam/${id}/documents`}
-        className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}
-      >
+      <Link href={`/exam/${id}/documents`} className={quickLinkClass(true)}>
         <Download className="size-3.5" />
         Dokumente
       </Link>
@@ -144,7 +166,7 @@ export default function OverviewPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Übersicht</h1>
         <p className="text-muted-foreground">
-          Status und Kennzahlen zur Prüfung
+          {EXAM_TYPE_LABELS[project.examType]} · Status und Kennzahlen
         </p>
       </div>
 
@@ -210,16 +232,18 @@ export default function OverviewPage() {
                   )}
                 </dd>
               </div>
-              <div className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:items-start sm:gap-3">
-                <dt className="text-muted-foreground">Szenario</dt>
-                <dd>
-                  <span className="font-medium">{scenarioLabel}</span>
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · Bestehen ab {project.gradeSchema.passThreshold} Pkt.
-                  </span>
-                </dd>
-              </div>
+              {usesScenarios && (
+                <div className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:items-start sm:gap-3">
+                  <dt className="text-muted-foreground">Szenario</dt>
+                  <dd>
+                    <span className="font-medium">{scenarioLabel}</span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · Bestehen ab {project.gradeSchema.passThreshold} Pkt.
+                    </span>
+                  </dd>
+                </div>
+              )}
               {stats.failCount > 0 && (
                 <div className="grid gap-1 sm:grid-cols-[7.5rem_1fr] sm:items-start sm:gap-3">
                   <dt className="text-muted-foreground">Durchfaller</dt>
@@ -306,6 +330,30 @@ export default function OverviewPage() {
                     Zur Zuordnung
                   </Link>
                 )}
+              </div>
+            </div>
+          )}
+
+          {isStaCriteriaExam(project.examType) &&
+            (project.criteria?.length ?? 0) === 0 && (
+            <div className="rounded-xl border border-sky-300 bg-sky-50 px-3 py-2.5 text-sm dark:border-sky-800 dark:bg-sky-950/30">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium leading-snug">
+                    Noch keine Bewertungskriterien
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Standardkatalog (ABZ, FACH, METH, QUEL, SPEZ, REPR) –
+                    Punkte 0–6, KI-tauglich operationalisiert.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={seedDefaultCriteria}
+                >
+                  Standardkatalog einfügen
+                </Button>
               </div>
             </div>
           )}
@@ -506,7 +554,7 @@ export default function OverviewPage() {
         </div>
 
         <div className="flex flex-col gap-4 lg:col-span-5 lg:sticky lg:top-4 lg:self-start">
-          <SummaryPanel stats={stats} />
+          <SummaryPanel stats={stats} examType={project.examType} />
 
           <Card className="surface-panel">
             <CardHeader className="pb-2">
@@ -515,24 +563,26 @@ export default function OverviewPage() {
             <CardContent>{quickLinks}</CardContent>
           </Card>
 
-          <Card className="surface-panel">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Punkteverteilung</CardTitle>
-              <CardDescription>
-                Max. {project.gradeSchema.maxPoints} Punkte · Bestehensgrenze{" "}
-                {project.gradeSchema.passThreshold}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <ExpandableChart
-                title="Punkteverteilung"
-                description={`Max. ${project.gradeSchema.maxPoints} · Bestehen ab ${project.gradeSchema.passThreshold}`}
-                filenameBase={`ExamGrade_${project.name || "Pruefung"}_Punkteverteilung`}
-              >
-                <PointsHistogramChart stats={stats} className="h-52 w-full" />
-              </ExpandableChart>
-            </CardContent>
-          </Card>
+          {showPointsChart && (
+            <Card className="surface-panel">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Punkteverteilung</CardTitle>
+                <CardDescription>
+                  Max. {project.gradeSchema.maxPoints} Punkte · Bestehensgrenze{" "}
+                  {project.gradeSchema.passThreshold}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ExpandableChart
+                  title="Punkteverteilung"
+                  description={`Max. ${project.gradeSchema.maxPoints} · Bestehen ab ${project.gradeSchema.passThreshold}`}
+                  filenameBase={`ExamGrade_${project.name || "Pruefung"}_Punkteverteilung`}
+                >
+                  <PointsHistogramChart stats={stats} className="h-52 w-full" />
+                </ExpandableChart>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

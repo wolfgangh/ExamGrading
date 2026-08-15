@@ -19,6 +19,7 @@ import {
   PenLine,
   Settings,
   Table2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -35,7 +36,7 @@ import {
   workflowProgress,
 } from "@/lib/workflow-steps";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
+import { examUsesGradeScenarios } from "@/lib/grades/scenarios";
 
 const SIDEBAR_COLLAPSED_KEY = "examgrade-sidebar-collapsed";
 
@@ -81,14 +82,13 @@ function buildNav(
 
   items.push({ href: "grades", label: "Notenübersicht", icon: Table2 });
 
-  // Notenszenarien: Klausur/THE/StA-Kriterien + Portfolio mit Punkte/Prozent-TLs
-  const showScenarios =
-    examType &&
-    !isStaManualExam(examType) &&
-    (!isPortfolioExam(examType) ||
-      (project != null && portfolioUsesGradeScenarios(project)) ||
-      // Portfolio ohne geladenes Project: Link trotzdem zeigen wenn Kriterienmodus
-      (isPortfolioExam(examType) && project?.portfolioCriteriaMode === true));
+  const showScenarios = project
+    ? examUsesGradeScenarios(project)
+    : Boolean(
+        examType &&
+          !isStaManualExam(examType) &&
+          !isPortfolioExam(examType)
+      );
 
   if (showScenarios) {
     items.push({ href: "scenarios", label: "Notenszenarien", icon: Layers });
@@ -106,9 +106,13 @@ function buildNav(
 export function ExamSidebar({
   examId,
   examType,
+  mobileOpen = false,
+  onMobileOpenChange,
 }: {
   examId: string;
   examType?: ExamType;
+  mobileOpen?: boolean;
+  onMobileOpenChange?: (open: boolean) => void;
 }) {
   const pathname = usePathname();
   const base = `/exam/${examId}`;
@@ -124,6 +128,21 @@ export function ExamSidebar({
       /* ignore */
     }
   }, []);
+
+  useEffect(() => {
+    onMobileOpenChange?.(false);
+    // Nur bei Seitenwechsel schließen – Setter-Identität ignorieren
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onMobileOpenChange?.(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen, onMobileOpenChange]);
 
   const toggleCollapsed = () => {
     setCollapsed((c) => {
@@ -142,16 +161,12 @@ export function ExamSidebar({
       ? buildWorkflowSteps(project, rows, stats, examId)
       : [];
   const progress = steps.length > 0 ? workflowProgress(steps) : null;
+  const compact = collapsed && !mobileOpen;
 
-  return (
-    <aside
-      className={cn(
-        "surface-panel flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-r transition-[width] duration-200",
-        collapsed ? "w-14" : "w-56"
-      )}
-    >
+  const navBody = (
+    <>
       <div className="flex shrink-0 items-center gap-1 border-b p-2">
-        {!collapsed && (
+        {!compact && (
           <Link
             href="/"
             className={cn(
@@ -164,26 +179,39 @@ export function ExamSidebar({
             Zurück
           </Link>
         )}
+        {mobileOpen && (
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="outline"
+            className="md:hidden"
+            onClick={() => onMobileOpenChange?.(false)}
+            aria-label="Navigation schließen"
+            title="Schließen"
+          >
+            <X className="size-4" />
+          </Button>
+        )}
         <Button
           type="button"
           size="icon-sm"
           variant="outline"
-          className={cn(collapsed && "mx-auto")}
+          className={cn("hidden md:inline-flex", compact && "mx-auto")}
           onClick={toggleCollapsed}
-          title={collapsed ? "Navigation einblenden" : "Navigation ausblenden"}
-          aria-expanded={!collapsed}
+          title={compact ? "Navigation einblenden" : "Navigation ausblenden"}
+          aria-expanded={!compact}
           aria-label={
-            collapsed ? "Navigation einblenden" : "Navigation ausblenden"
+            compact ? "Navigation einblenden" : "Navigation ausblenden"
           }
         >
-          {collapsed ? (
+          {compact ? (
             <ChevronRight className="size-4" />
           ) : (
             <ChevronLeft className="size-4" />
           )}
         </Button>
       </div>
-      {!collapsed && (
+      {!compact && (
         <div className="shrink-0 border-b px-3 py-2">
           <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <ClipboardList className="size-3.5" />
@@ -202,20 +230,20 @@ export function ExamSidebar({
               title={label}
               className={cn(
                 "flex items-center gap-2 rounded-lg text-sm transition-colors",
-                collapsed ? "justify-center px-2 py-2.5" : "px-2.5 py-2",
+                compact ? "justify-center px-2 py-2.5" : "px-2.5 py-2",
                 active
                   ? "bg-primary text-primary-foreground"
                   : "text-foreground hover:bg-muted"
               )}
             >
               <Icon className="size-4 shrink-0" />
-              {!collapsed && <span className="truncate">{label}</span>}
+              {!compact && <span className="truncate">{label}</span>}
             </Link>
           );
         })}
       </nav>
 
-      {progress && !collapsed && (
+      {progress && !compact && (
         <div className="shrink-0 border-t bg-card/80 p-3 backdrop-blur-sm">
           <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <ListChecks className="size-3.5" />
@@ -264,6 +292,30 @@ export function ExamSidebar({
           </Link>
         </div>
       )}
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-50 bg-black/40 md:hidden"
+          aria-label="Navigation schließen"
+          onClick={() => onMobileOpenChange?.(false)}
+        />
+      )}
+      <aside
+        className={cn(
+          "surface-panel flex min-h-0 shrink-0 flex-col overflow-hidden border-r transition-[width] duration-200",
+          "fixed inset-y-0 left-0 z-50 h-full w-56 md:static md:z-auto md:h-full",
+          collapsed ? "md:w-14" : "md:w-56",
+          mobileOpen ? "flex" : "hidden md:flex"
+        )}
+        aria-label="Prüfungsnavigation"
+      >
+        {navBody}
+      </aside>
+    </>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { AppHeader } from "@/components/layout/app-header";
 import { ExamSidebar } from "@/components/layout/exam-sidebar";
 import { SummaryPanel } from "@/components/layout/summary-panel";
@@ -17,6 +18,7 @@ function ExamShell({
 }) {
   const { project, loading, error, saveStatus, lastSavedAt, stats } =
     useExamContext();
+  const [navOpen, setNavOpen] = useState(false);
 
   if (loading) {
     return (
@@ -55,6 +57,7 @@ function ExamShell({
     <div className="page-shell flex min-h-0 flex-1 flex-col overflow-hidden">
       <AppHeader
         subtitle={project.name}
+        onOpenNav={() => setNavOpen(true)}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {backupNeeded && (
@@ -77,10 +80,19 @@ function ExamShell({
       />
       <BackupBanner />
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <ExamSidebar examId={examId} examType={project.examType} />
+        <ExamSidebar
+          examId={examId}
+          examType={project.examType}
+          mobileOpen={navOpen}
+          onMobileOpenChange={setNavOpen}
+        />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="shrink-0 border-b bg-card/50 px-4 py-2">
-            <SummaryPanel stats={stats} compact />
+            <SummaryPanel
+              stats={stats}
+              compact
+              examType={project.examType}
+            />
           </div>
           <main className="min-h-0 flex-1 overflow-auto p-4 md:p-6">
             {children}

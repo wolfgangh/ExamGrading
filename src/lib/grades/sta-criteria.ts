@@ -244,3 +244,148 @@ export function recomputeStaCriteriaRecord(
 export function projectHasCriteria(project: ExamProject): boolean {
   return (project.criteria?.length ?? 0) > 0;
 }
+
+/** Einheitliche KI-taugliche Punktskala für Standardkriterien */
+export const DEFAULT_CRITERION_MAX_POINTS = 6;
+
+export const DEFAULT_STA_CRITERION_CODES = [
+  "ABZ",
+  "FACH",
+  "METH",
+  "QUEL",
+  "SPEZ",
+  "REPR",
+] as const;
+
+export type DefaultStaCriterionCode =
+  (typeof DEFAULT_STA_CRITERION_CODES)[number];
+
+/** Portfolio-TL Arbeitsergebnis */
+export const PORTFOLIO_RESULT_CRITERION_CODES = [
+  "ABZ",
+  "FACH",
+  "SPEZ",
+] as const;
+
+/** Portfolio-TL Nachvollziehbarkeit */
+export const PORTFOLIO_TRACE_CRITERION_CODES = [
+  "METH",
+  "QUEL",
+  "REPR",
+] as const;
+
+type DefaultStaDef = {
+  name: string;
+  weight: number;
+  full: string;
+  mid: string;
+  none: string;
+};
+
+const DEFAULT_STA_DEFS: Record<DefaultStaCriterionCode, DefaultStaDef> = {
+  ABZ: {
+    name: "Aufgabenbezug und Fragestellung",
+    weight: 2,
+    full: "Aufgabenstellung vollständig und konkret getroffen.",
+    mid: "Bezug erkennbar, aber teilweise allgemein oder unvollständig.",
+    none: "Fragestellung verfehlt oder nur oberflächlich berührt.",
+  },
+  FACH: {
+    name: "Fachliche Korrektheit",
+    weight: 3,
+    full: "Rechnung, Code oder Begriffe in der Stichprobe korrekt.",
+    mid: "Wesentliche Teile richtig, einzelne fachliche Fehler.",
+    none: "Zentrale Aussagen fachlich falsch oder nicht prüfbar.",
+  },
+  METH: {
+    name: "Methode und Begründung",
+    weight: 2,
+    full: "Vorgehen begründet, Alternativen und Grenzen benannt.",
+    mid: "Methode erkennbar, Begründung dünn oder lückenhaft.",
+    none: "Kein nachvollziehbares Vorgehen oder reine Behauptung.",
+  },
+  QUEL: {
+    name: "Quellen und Belege",
+    weight: 2,
+    full: "Zentrale Belege vorhanden, prüfbar und inhaltlich passend.",
+    mid: "Quellen vorhanden, aber lückenhaft oder schwach belegt.",
+    none: "Fehlende, tote oder erfundene Belege (DOI/Seiten/Inhalt).",
+  },
+  SPEZ: {
+    name: "Spezifität statt Generik",
+    weight: 2,
+    full: "Eigene Daten, Fall oder Zahlen – keine Lehrbuchphrasen.",
+    mid: "Teilweise konkret, teilweise austauschbar allgemein.",
+    none: "Rein generischer Text ohne erkennbaren eigenen Bezug.",
+  },
+  REPR: {
+    name: "Reproduzierbarkeit",
+    weight: 2,
+    full: "Workflow/Notebook ausführbar, Ergebnis nachvollziehbar.",
+    mid: "Schritte grob nachvollziehbar, Ausführung lückenhaft.",
+    none: "Nicht ausführbar oder nur beschreibend ohne Artefakt.",
+  },
+};
+
+/** Stufenanker 6 / 3 / 0 für die Punkte-Skala */
+export function criterionPointsRubric(
+  full: string,
+  mid: string,
+  none: string
+): string {
+  return `Skala 0–6 Punkte.\n6: ${full}\n3: ${mid}\n0: ${none}`;
+}
+
+export function defaultStaCriteria(
+  createId: (prefix: string) => string,
+  codes: readonly DefaultStaCriterionCode[] = DEFAULT_STA_CRITERION_CODES
+): AssessmentCriterion[] {
+  return codes.map((code) => {
+    const d = DEFAULT_STA_DEFS[code];
+    return {
+      id: createId("crit"),
+      name: d.name,
+      code,
+      weight: d.weight,
+      scale: "points" as const,
+      maxPoints: DEFAULT_CRITERION_MAX_POINTS,
+      description: criterionPointsRubric(d.full, d.mid, d.none),
+    };
+  });
+}
+
+/**
+ * Fehlende Standardkriterien anhängen (bestehende IDs/Werte bleiben).
+ */
+export function mergeDefaultStaCriteria(
+  existing: AssessmentCriterion[] | undefined,
+  createId: (prefix: string) => string,
+  codes: readonly DefaultStaCriterionCode[] = DEFAULT_STA_CRITERION_CODES
+): AssessmentCriterion[] {
+  const current = existing ?? [];
+  const have = new Set(current.map((c) => c.code.trim().toUpperCase()));
+  const missing = codes.filter((code) => !have.has(code));
+  if (missing.length === 0) return current;
+  return [...current, ...defaultStaCriteria(createId, missing)];
+}
+
+export function defaultCriteriaForPortfolioComponent(
+  component: { code?: string; name?: string },
+  index: number,
+  createId: (prefix: string) => string
+): AssessmentCriterion[] {
+  const blob = `${component.code ?? ""} ${component.name ?? ""}`.toLowerCase();
+  if (
+    index === 0 ||
+    /arbeit|ergebnis|\bae\b|tl1/.test(blob)
+  ) {
+    return defaultStaCriteria(createId, PORTFOLIO_RESULT_CRITERION_CODES);
+  }
+  if (
+    index === 1 ||
+    /nachvoll|\bnv\b|tl2/.test(blob)
+  ) {
+    return defaultStaCriteria(createId, PORTFOLIO_TRACE_CRITERION_CODES);
+  }
+  return defaultStaCriteria(createId, ["ABZ", "FACH"]);
+}

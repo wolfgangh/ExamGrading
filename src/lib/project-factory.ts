@@ -16,6 +16,7 @@ import {
 } from "@/lib/types";
 import { DEFAULT_MOODLE_ROUND_STEP } from "@/lib/grades/round-half-points";
 import { defaultPortfolioComponents } from "@/lib/grades/portfolio";
+import { defaultStaCriteria } from "@/lib/grades/sta-criteria";
 
 export interface CreateExamInput {
   name: string;
@@ -88,7 +89,8 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     moodlePointsRoundStep: isOnlineStyleExam(examType)
       ? (input.moodlePointsRoundStep ?? DEFAULT_MOODLE_ROUND_STEP)
       : undefined,
-    criteria: examType === "sta_criteria" ? [] : undefined,
+    criteria:
+      examType === "sta_criteria" ? defaultStaCriteria(createId) : undefined,
     portfolioComponents:
       examType === "portfolio" ? defaultPortfolioComponents(createId) : undefined,
   };

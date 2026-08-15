@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { AppearanceControls } from "@/components/layout/appearance-controls";
 import { AppLogo } from "@/components/layout/app-logo";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,11 @@ import { clearAuthentication } from "@/lib/app-auth";
 export function AppHeader({
   subtitle,
   actions,
+  onOpenNav,
 }: {
   subtitle?: string;
   actions?: React.ReactNode;
+  onOpenNav?: () => void;
 }) {
   const logout = () => {
     clearAuthentication();
@@ -22,6 +24,19 @@ export function AppHeader({
   return (
     <header className="surface-header sticky top-0 z-40 border-b">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+        {onOpenNav && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            className="md:hidden"
+            onClick={onOpenNav}
+            aria-label="Prüfungsnavigation öffnen"
+            title="Navigation"
+          >
+            <Menu className="size-4" />
+          </Button>
+        )}
         <Link
           href="/"
           className="flex min-w-0 max-w-full shrink items-center gap-3 sm:max-w-[min(100%,18rem)] md:max-w-[min(100%,24rem)]"

@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import {
   ensureScenarios,
+  examUsesGradeScenarios,
   formatThresholdDual,
   getCustomThresholdsScenario,
   getEditableScenario,
@@ -141,6 +142,7 @@ export default function ScenariosPage() {
 
   if (!project) return null;
 
+  const usesScenarios = examUsesGradeScenarios(project);
   const activeId = project.activeScenarioId ?? scenarios[0]?.id;
   const active =
     scenarios.find((s) => s.id === activeId) ?? scenarios[0] ?? null;
@@ -196,6 +198,14 @@ export default function ScenariosPage() {
           Nur intern – keine Studierenden-Kommunikation.
         </p>
       </div>
+
+      {!usesScenarios && (
+        <div className="rounded-xl border border-muted bg-muted/40 px-3 py-2.5 text-sm">
+          Diese Prüfung nutzt keine Notenszenarien (reine Notenskala oder
+          manuelle Note). Die Navigation blendet diese Seite aus, sobald Sie
+          sie verlassen.
+        </div>
+      )}
 
       {gradingLocked && (
         <div

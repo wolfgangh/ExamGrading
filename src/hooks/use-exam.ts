@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExamProject } from "@/lib/types";
 import { getDraft, getExam, saveExam } from "@/lib/storage";
+import { pickNewerProject } from "@/lib/project-load";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { buildEnrichedRows } from "@/lib/matching/match";
 import { computeStatistics } from "@/lib/grades/statistics";
@@ -24,12 +25,7 @@ export function useExam(id: string) {
       const draft = await getDraft(id);
       const stored = await getExam(id);
       if (seq !== loadSeq.current) return;
-      const chosen =
-        draft && stored
-          ? new Date(draft.updatedAt) > new Date(stored.updatedAt)
-            ? draft
-            : stored
-          : draft ?? stored;
+      const chosen = pickNewerProject(draft, stored);
       if (!chosen) {
         setError("Prüfung nicht gefunden");
         setProject(null);

@@ -1,6 +1,7 @@
 import { createId } from "@/lib/id";
 import { generateLinearGradeSchema } from "@/lib/grades/schema";
 import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
+import { staCriteriaAllGradeScale } from "@/lib/grades/sta-criteria";
 import { parseProgramCode, summarizeExamNumbers } from "@/lib/his-sources";
 import type {
   ExamProject,
@@ -8,7 +9,39 @@ import type {
   GradeSchema,
   GradeThreshold,
 } from "@/lib/types";
-import { GERMAN_GRADES } from "@/lib/types";
+import {
+  GERMAN_GRADES,
+  isPortfolioExam,
+  isStaCriteriaExam,
+  isStaManualExam,
+} from "@/lib/types";
+
+/**
+ * Notenszenarien wirken nur, wenn eine Punkte-/Prozent-Skala in die Note eingeht.
+ * Reine Note-Kriterien, StA manuell und Note-TLs brauchen die Nav nicht.
+ */
+export function examUsesGradeScenarios(
+  project: Pick<
+    ExamProject,
+    | "examType"
+    | "criteria"
+    | "portfolioCriteriaMode"
+    | "portfolioComponents"
+  > | null
+    | undefined
+): boolean {
+  if (!project) return false;
+  if (isStaManualExam(project.examType)) return false;
+  if (isPortfolioExam(project.examType)) {
+    return portfolioUsesGradeScenarios(project);
+  }
+  if (isStaCriteriaExam(project.examType)) {
+    const list = project.criteria ?? [];
+    if (list.length === 0) return true;
+    return !staCriteriaAllGradeScale(list);
+  }
+  return true;
+}
 
 /** Pass-Schwellen relativ zu max=90 (Excel-Vorbild) */
 const PRESET_PASS_45 = 45;

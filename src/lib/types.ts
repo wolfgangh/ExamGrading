@@ -593,6 +593,8 @@ export interface ExamStatistics {
   stdDevPoints: number | null;
   failCount: number;
   borderlineCount: number;
+  /** Eindeutige Personen in Ø/Bestehensquote (nach Matrikel) */
+  gradeSampleSize: number;
   gradeDistribution: { grade: number; count: number }[];
   pointsHistogram: { bin: string; from: number; to: number; count: number }[];
 }

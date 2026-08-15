@@ -34,6 +34,17 @@ import {
   isFailedGrade,
 } from "../src/lib/grades/next-grade.ts";
 import { gradeFromCriterionValues } from "../src/lib/grades/portfolio.ts";
+import { autoMapColumns } from "../src/lib/excel/column-detect.ts";
+import { normalizeMatriculation } from "../src/lib/matching/matriculation.ts";
+import {
+  createEmptyExamProject,
+  duplicateExamProject,
+} from "../src/lib/project-factory.ts";
+import { pickNewerProject } from "../src/lib/project-load.ts";
+import { examUsesGradeScenarios } from "../src/lib/grades/scenarios.ts";
+import { defaultStaCriteria } from "../src/lib/grades/sta-criteria.ts";
+import { listAssessmentRemaining } from "../src/lib/grades/assessment-remaining.ts";
+import { uniqueRowsByMatriculation } from "../src/lib/grades/statistics.ts";
 
 type Status = "pass" | "fail";
 type CaseResult = { id: string; status: Status; message: string };
@@ -849,6 +860,195 @@ function portfolioPointsProject(units: number[], scale: "percent" | "points") {
 // ========== A3 override already E3; explicit ==========
 {
   check("A3", true, "covered by E3 gradeOverride");
+}
+
+// ========== W3: Header / Matrikel / Klon / Statistik / Defaults ==========
+{
+  const map = autoMapColumns([
+    "Nachname",
+    "Vorname",
+    "ID-Nummer",
+    "Matrikelnummer",
+    "Bewertung",
+    "Bewertung/90,00",
+  ]);
+  check(
+    "W3H1",
+    map.matriculation === 3 && map.totalPoints === 5,
+    `headers: mat=${map.matriculation} pts=${map.totalPoints} (exp 3 / 5)`
+  );
+}
+
+{
+  check(
+    "W3H2a",
+    normalizeMatriculation("3513589,0") === "3513589",
+    `3513589,0 → ${normalizeMatriculation("3513589,0")}`
+  );
+  check(
+    "W3H2b",
+    normalizeMatriculation("3513589.0") === "3513589",
+    `3513589.0 → ${normalizeMatriculation("3513589.0")}`
+  );
+}
+
+{
+  const src = createEmptyExamProject({
+    name: "Klonquelle",
+    examType: "the",
+    semester: "SoSe 2026",
+  });
+  src.hisSources = [
+    {
+      id: "his-1",
+      programCode: "MEB",
+      examNumber: "MEB 1",
+      label: "MEB",
+      rows: [],
+      meta: {},
+    },
+  ];
+  src.hisRows = [
+    {
+      matriculationNumber: "1234567",
+      lastName: "Test",
+      firstName: "A",
+      orderIndex: 0,
+    },
+  ];
+  const clone = duplicateExamProject(src, {
+    clearData: true,
+    semester: "WiSe 2026/27",
+  });
+  check(
+    "W3H3",
+    (clone.hisSources?.length ?? 0) === 0 &&
+      clone.hisRows.length === 0 &&
+      clone.semester === "WiSe 2026/27" &&
+      clone.id !== src.id,
+    `clone hisSources=${clone.hisSources?.length} rows=${clone.hisRows.length} sem=${clone.semester}`
+  );
+}
+
+{
+  const older = { updatedAt: "2026-01-01T10:00:00.000Z" } as any;
+  const newer = { updatedAt: "2026-01-02T10:00:00.000Z" } as any;
+  check(
+    "W3H4",
+    pickNewerProject(older, newer) === newer &&
+      pickNewerProject(newer, older) === newer,
+    "pickNewerProject takes later updatedAt (two-tab)"
+  );
+}
+
+{
+  const schema = generateLinearGradeSchema(100, 50, true);
+  const twin: any[] = [
+    {
+      key: "111",
+      inHis: true,
+      attended: true,
+      hasPoints: true,
+      finalGrade: 2.0,
+      isFailed: false,
+      totalPoints: 80,
+      status: "export_ready",
+    },
+    {
+      key: "111",
+      inHis: true,
+      attended: true,
+      hasPoints: true,
+      finalGrade: 2.0,
+      isFailed: false,
+      totalPoints: 80,
+      status: "export_ready",
+    },
+  ];
+  const stats = computeStatistics(twin as any, schema, 2);
+  check(
+    "W3S1",
+    stats.registered === 1 &&
+      stats.gradeSampleSize === 1 &&
+      stats.averageGrade === 2.0 &&
+      uniqueRowsByMatriculation(twin as any).length === 1,
+    `dedupe registered=${stats.registered} n=${stats.gradeSampleSize} avg=${stats.averageGrade}`
+  );
+}
+
+{
+  const crits = defaultStaCriteria((p) => `${p}-x`);
+  const codes = crits.map((c) => c.code).join(",");
+  check(
+    "W3C1",
+    crits.length === 6 &&
+      codes === "ABZ,FACH,METH,QUEL,SPEZ,REPR" &&
+      crits.every((c) => c.scale === "points" && c.maxPoints === 6),
+    `defaultStaCriteria ${codes}`
+  );
+  const staPoints = { examType: "sta_criteria", criteria: crits } as any;
+  const staGrade = {
+    examType: "sta_criteria",
+    criteria: [{ id: "k", name: "N", code: "N", weight: 1, scale: "grade" }],
+  } as any;
+  const staMan = { examType: "sta_manual" } as any;
+  const portGrade = {
+    examType: "portfolio",
+    portfolioCriteriaMode: true,
+    portfolioComponents: [
+      {
+        id: "c",
+        criteriaScale: "grade",
+        criteria: [{ id: "k", scale: "grade", weight: 1 }],
+      },
+    ],
+  } as any;
+  check(
+    "W3C2",
+    examUsesGradeScenarios(staPoints) &&
+      !examUsesGradeScenarios(staGrade) &&
+      !examUsesGradeScenarios(staMan) &&
+      !examUsesGradeScenarios(portGrade),
+    "examUsesGradeScenarios points=yes, grade/manual/note-TL=no"
+  );
+}
+
+{
+  const rem = listAssessmentRemaining(
+    [
+      {
+        key: "a",
+        inHis: true,
+        status: "graded",
+        finalGrade: 2,
+        student: { lastName: "A", firstName: "1", matriculationNumber: "a" },
+      },
+      {
+        key: "b",
+        inHis: true,
+        status: "registered",
+        finalGrade: null,
+        student: { lastName: "B", firstName: "2", matriculationNumber: "b" },
+      },
+      {
+        key: "c",
+        inHis: true,
+        status: "no_show",
+        finalGrade: null,
+        student: { lastName: "C", firstName: "3", matriculationNumber: "c" },
+      },
+    ] as any,
+    ["a"]
+  );
+  check(
+    "W3R1",
+    rem.total === 3 &&
+      rem.done === 2 &&
+      rem.remaining.length === 1 &&
+      rem.remaining[0].key === "b" &&
+      rem.remaining[0].hiddenByFilter === true,
+    `remaining ${rem.remaining.length}/${rem.total} done=${rem.done} hidden=${rem.remaining[0]?.hiddenByFilter}`
+  );
 }
 
 // Summary

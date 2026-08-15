@@ -61,6 +61,7 @@ import {
   withActiveScenario,
 } from "@/lib/grades/scenarios";
 import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
+import { examUsesGradeScenarios } from "@/lib/grades/scenarios";
 import {
   computeGradeBuckets,
   computeScenarioImpact,
@@ -173,7 +174,8 @@ export default function GradesPage() {
 
   /** Stats + Buckets je sichtbares Szenario für Vergleichsgrafiken */
   const scenarioChartSeries = useMemo(() => {
-    if (!project || scenarios.length === 0) return [];
+    if (!project || scenarios.length === 0 || !examUsesGradeScenarios(project))
+      return [];
     const all = ensureScenarios(project);
     return scenarios.map((sc) => {
       const scRows = buildEnrichedRows({
@@ -194,7 +196,8 @@ export default function GradesPage() {
   }, [project, scenarios]);
 
   const impactVs40 = useMemo(() => {
-    if (!project || scenarios.length < 2) return null;
+    if (!project || scenarios.length < 2 || !examUsesGradeScenarios(project))
+      return null;
     const a =
       scenarios.find((s) => s.id === project.activeScenarioId) ?? scenarios[0];
     const b =
@@ -233,6 +236,7 @@ export default function GradesPage() {
 
   if (!project) return null;
 
+  const usesScenarios = examUsesGradeScenarios(project);
   const gradingLocked = hasOpenGrading(project);
   const backupOk = canAccessProtectedExport(project);
   const orphansLocked = hasUnresolvedOrphans(project, rows);
@@ -357,8 +361,9 @@ export default function GradesPage() {
           Notenübersicht
         </h1>
         <p className="text-muted-foreground">
-          Aktives Szenario steuert Noten und Grenzfälle. Auswertung nur
-          intern für Prüfer.
+          {usesScenarios
+            ? "Aktives Szenario steuert Noten und Grenzfälle. Auswertung nur intern für Prüfer."
+            : "Gesamtnoten aus Kriterien bzw. Teilnoten. Auswertung nur intern für Prüfer."}
         </p>
       </div>
 
@@ -397,6 +402,7 @@ export default function GradesPage() {
         </div>
       )}
 
+      {usesScenarios && (
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Szenario:</span>
         {scenarios.map((sc) => {
@@ -453,6 +459,7 @@ export default function GradesPage() {
           </p>
         )}
       </div>
+      )}
 
       {scenarioChartSeries.length > 0 && (
         <div

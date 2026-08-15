@@ -15,7 +15,6 @@ import {
   isOnlineStyleExam,
   isPortfolioExam,
   isStaCriteriaExam,
-  isStaManualExam,
   supportsStudentGroups,
 } from "@/lib/types";
 import {
@@ -30,7 +29,10 @@ import {
   seedLecturerGradesFromSimple,
   withComponentCriteriaScale,
 } from "@/lib/grades/portfolio";
-import { ensurePortfolioScenarios } from "@/lib/grades/scenarios";
+import {
+  ensurePortfolioScenarios,
+  examUsesGradeScenarios,
+} from "@/lib/grades/scenarios";
 import { Switch } from "@/components/ui/switch";
 import {
   createStudentGroup,
@@ -73,8 +75,14 @@ import {
   hasOpenGrading,
   openGradingSummary,
 } from "@/lib/grades/open-grading";
-import { CRITERION_SCALE_LABELS } from "@/lib/grades/sta-criteria";
-import { recomputeStaCriteriaRecord } from "@/lib/grades/sta-criteria";
+import {
+  CRITERION_SCALE_LABELS,
+  DEFAULT_CRITERION_MAX_POINTS,
+  defaultCriteriaForPortfolioComponent,
+  defaultStaCriteria,
+  mergeDefaultStaCriteria,
+  recomputeStaCriteriaRecord,
+} from "@/lib/grades/sta-criteria";
 import { semesterSelectOptions } from "@/lib/semester";
 import { ComboboxField } from "@/components/ui/combobox-field";
 import { LecturerPicker } from "@/components/exam/lecturer-picker";
@@ -99,7 +107,10 @@ export default function SettingsPage() {
     setProject((prev) => {
       const next = { ...prev, [key]: value };
       if (key === "examType" && value === "sta_criteria") {
-        next.criteria = next.criteria ?? [];
+        next.criteria =
+          next.criteria && next.criteria.length > 0
+            ? next.criteria
+            : defaultStaCriteria(createId);
       }
       if (key === "examType" && value === "portfolio") {
         next.portfolioComponents =
@@ -159,10 +170,7 @@ export default function SettingsPage() {
     });
   };
 
-  const showScenariosCard =
-    !isStaManualExam(project.examType) &&
-    (!isPortfolio ||
-      project.portfolioCriteriaMode === true);
+  const showScenariosCard = examUsesGradeScenarios(project);
 
   const metaCard = (
       <Card className="surface-panel">
@@ -461,39 +469,53 @@ export default function SettingsPage() {
                 Bewertungskriterien (StA)
               </CardTitle>
               <CardDescription>
-                Gewichte relativ (müssen nicht 100 ergeben). Skala: Prozent,
-                Punkte oder Note. Gesamtwert → Notenschlüssel.
+                Gewichte relativ. Standard: Punkte 0–6 mit Stufen 6/3/0.
+                Katalog ABZ/FACH/METH/QUEL/SPEZ/REPR (KI-tauglich).
               </CardDescription>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                setProject((prev) => ({
-                  ...prev,
-                  criteria: [
-                    ...(prev.criteria ?? []),
-                    {
-                      id: createId("crit"),
-                      name: "Neues Kriterium",
-                      code: `K${(prev.criteria?.length ?? 0) + 1}`,
-                      weight: 1,
-                      scale: "percent" as CriterionScale,
-                      maxPoints: 10,
-                    },
-                  ],
-                }))
-              }
-            >
-              <Plus className="size-4" />
-              Kriterium
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setProject((prev) => ({
+                    ...prev,
+                    criteria: mergeDefaultStaCriteria(prev.criteria, createId),
+                  }))
+                }
+              >
+                Standardkatalog
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setProject((prev) => ({
+                    ...prev,
+                    criteria: [
+                      ...(prev.criteria ?? []),
+                      {
+                        id: createId("crit"),
+                        name: "Neues Kriterium",
+                        code: `K${(prev.criteria?.length ?? 0) + 1}`,
+                        weight: 1,
+                        scale: "points" as CriterionScale,
+                        maxPoints: DEFAULT_CRITERION_MAX_POINTS,
+                      },
+                    ],
+                  }))
+                }
+              >
+                <Plus className="size-4" />
+                Kriterium
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {(project.criteria ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Noch keine Kriterien – bitte hinzufügen, dann unter
-                Kriterienbewertung die Werte eintragen.
+                Noch keine Kriterien – Standardkatalog einfügen oder einzeln
+                anlegen, dann unter Kriterienbewertung bewerten.
               </p>
             ) : (
               (project.criteria ?? []).map((c) => (
@@ -632,9 +654,9 @@ export default function SettingsPage() {
                 Teilleistungen (Portfolio)
               </CardTitle>
               <CardDescription>
-                Standard: zwei Teilleistungen mit gleichem Gewicht. Namen und
-                Gewichte anpassen; Gesamtnote = gewichteter Mittelwert der
-                Teilnoten (nächste deutsche Note).
+                Standard: Arbeitsergebnis und Nachvollziehbarkeit (gleiches
+                Gewicht). Gesamtnote = gewichteter Mittelwert der Teilnoten
+                (nächste deutsche Note).
               </CardDescription>
             </div>
             <Button
@@ -669,7 +691,9 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground">
                   Pro Teilleistung gewichtete Kriterien (Prozent, Punkte oder
                   Note) → berechnete Teilnote. Kombinierbar mit „je Dozent“.
-                  Standard: aus (direkte Teilnote).
+                  Standard: aus (direkte Teilnote). Beim Einschalten:
+                  Arbeitsergebnis erhält ABZ/FACH/SPEZ, Nachvollziehbarkeit
+                  METH/QUEL/REPR (Punkte 0–6).
                 </p>
               </div>
               <Switch
@@ -681,21 +705,16 @@ export default function SettingsPage() {
                       ...prev,
                       portfolioCriteriaMode: on,
                       portfolioComponents: (prev.portfolioComponents ?? []).map(
-                        (pc) => {
+                        (pc, idx) => {
                           if (on && !(pc.criteria?.length)) {
                             return withComponentCriteriaScale(
                               {
                                 ...pc,
-                                criteria: [
-                                  {
-                                    id: createId("crit"),
-                                    name: "Inhalt",
-                                    code: "K1",
-                                    weight: 1,
-                                    scale: "points",
-                                    maxPoints: 6,
-                                  },
-                                ],
+                                criteria: defaultCriteriaForPortfolioComponent(
+                                  pc,
+                                  idx,
+                                  createId
+                                ),
                               },
                               "points"
                             );
@@ -898,9 +917,47 @@ export default function SettingsPage() {
                       </Button>
                     </div>
                     {(c.criteria ?? []).length === 0 ? (
-                      <p className="text-xs text-amber-800 dark:text-amber-200">
-                        Noch keine Kriterien – bitte hinzufügen.
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-amber-800 dark:text-amber-200">
+                          Noch keine Kriterien – bitte hinzufügen.
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            const idx = (
+                              project.portfolioComponents ?? []
+                            ).findIndex((pc) => pc.id === c.id);
+                            setProject((prev) => ({
+                              ...prev,
+                              portfolioComponents: (
+                                prev.portfolioComponents ?? []
+                              ).map((pc, i) =>
+                                pc.id === c.id
+                                  ? withComponentCriteriaScale(
+                                      {
+                                        ...pc,
+                                        criteria:
+                                          defaultCriteriaForPortfolioComponent(
+                                            pc,
+                                            i >= 0 ? i : idx,
+                                            createId
+                                          ),
+                                      },
+                                      resolveComponentCriteriaScale(pc) ===
+                                        "grade"
+                                        ? "points"
+                                        : resolveComponentCriteriaScale(pc)
+                                    )
+                                  : pc
+                              ),
+                            }));
+                          }}
+                        >
+                          Standardkriterien
+                        </Button>
+                      </div>
                     ) : (
                       (c.criteria ?? []).map((crit) => (
                         <div

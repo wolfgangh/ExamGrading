@@ -43,45 +43,68 @@ export function resolveNextGradeUnit(
   return "points";
 }
 
+/**
+ * Dieselbe Person in mehreren HIS-Quellen erscheint mehrfach in `rows`.
+ * Kennzahlen (Ø, Quote, Anmeldungen) zählen jede Matrikel nur einmal.
+ */
+export function uniqueRowsByMatriculation(
+  rows: EnrichedStudentRow[]
+): EnrichedStudentRow[] {
+  const seen = new Set<string>();
+  const out: EnrichedStudentRow[] = [];
+  for (const r of rows) {
+    const k = r.key?.trim();
+    if (!k) {
+      out.push(r);
+      continue;
+    }
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out;
+}
+
 export function computeStatistics(
   rows: EnrichedStudentRow[],
   schema: GradeSchema,
   borderlineMax?: number,
   project?: ExamProject | null
 ): ExamStatistics {
-  const unit = resolveNextGradeUnit(rows);
+  const unique = uniqueRowsByMatriculation(rows);
+  const unit = resolveNextGradeUnit(unique);
   const effectiveBorderline =
     borderlineMax ?? defaultBorderlineMax(unit, schema.maxPoints);
   const hasAttendanceList = (project?.attendance.length ?? 0) > 0;
   const attendanceImported = project?.attendance.length ?? 0;
 
-  const inHis = rows.filter((r) => r.inHis);
+  const inHis = unique.filter((r) => r.inHis);
   const registered = inHis.length;
   const attended = inHis.filter((r) => r.attended === true).length;
-  const attendedOrphan = rows.filter(
+  const attendedOrphan = unique.filter(
     (r) => r.attendanceWithoutHis || (!r.inHis && r.attended === true)
   ).length;
   const noShow = inHis.filter(
     (r) => r.status === "no_show" || r.attended === false
   ).length;
-  const withPoints = rows.filter((r) => r.hasPoints).length;
-  const graded = rows.filter((r) => r.finalGrade != null).length;
-  const exportReady = rows.filter(
+  const withPoints = unique.filter((r) => r.hasPoints).length;
+  const graded = unique.filter((r) => r.finalGrade != null).length;
+  const exportReady = unique.filter(
     (r) => r.status === "export_ready" || r.status === "no_show"
   ).length;
-  const mismatches = rows.filter((r) => r.status === "mismatch").length;
+  const mismatches = unique.filter((r) => r.status === "mismatch").length;
 
-  const grades = rows
+  const grades = unique
     .filter((r) => r.finalGrade != null && r.attended !== false && r.hasPoints)
     .map((r) => r.finalGrade as number);
 
-  const points = rows
+  const points = unique
     .filter((r) => r.totalPoints != null)
     .map((r) => r.totalPoints as number);
 
   const passed = grades.filter((g) => g <= 4.0).length;
-  const failCount = rows.filter((r) => r.isFailed).length;
-  const borderlineCount = rows.filter(
+  const failCount = unique.filter((r) => r.isFailed).length;
+  const borderlineCount = unique.filter(
     (r) =>
       r.pointsToNext != null &&
       r.pointsToNext <= effectiveBorderline &&
@@ -137,6 +160,7 @@ export function computeStatistics(
     stdDevPoints: stdDevSample(points),
     failCount,
     borderlineCount,
+    gradeSampleSize: grades.length,
     gradeDistribution,
     pointsHistogram,
   };
@@ -146,7 +170,7 @@ export function computeStatistics(
 export function computeFailerAnalysis(
   rows: EnrichedStudentRow[]
 ): FailerAnalysis {
-  const failers = rows.filter((r) => r.isFailed);
+  const failers = uniqueRowsByMatriculation(rows).filter((r) => r.isFailed);
   const pts = failers
     .map((r) => r.totalPoints)
     .filter((p): p is number => p != null);

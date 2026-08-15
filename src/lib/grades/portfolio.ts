@@ -1080,14 +1080,14 @@ export function defaultPortfolioComponents(
   return [
     {
       id: createId("pc"),
-      name: "Teilleistung 1",
-      code: "TL1",
+      name: "Arbeitsergebnis",
+      code: "AE",
       weight: 1,
     },
     {
       id: createId("pc"),
-      name: "Teilleistung 2",
-      code: "TL2",
+      name: "Nachvollziehbarkeit",
+      code: "NV",
       weight: 1,
     },
   ];
