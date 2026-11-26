@@ -1,5 +1,6 @@
 "use client";
 
+import { ParticipantSourceBadges } from "@/components/exam/participant-source-badges";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   flexRender,
@@ -411,18 +412,29 @@ export function StudentsTable({
             </>
           );
           const href = assessmentHrefForRow?.(row.original);
+          const badges = (
+            <ParticipantSourceBadges row={row.original} className="ml-1" />
+          );
           if (href) {
             return (
-              <a
-                href={href}
-                className="font-medium text-primary underline-offset-2 hover:underline"
-                title="Zu Teilnoten / Kriterienbewertung dieser Person"
-              >
-                {label}
-              </a>
+              <span>
+                <a
+                  href={href}
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                  title="Zu Teilnoten / Kriterienbewertung dieser Person"
+                >
+                  {label}
+                </a>
+                {badges}
+              </span>
             );
           }
-          return <span>{label}</span>;
+          return (
+            <span>
+              {label}
+              {badges}
+            </span>
+          );
         },
       },
       ...(Object.keys(groupNames).length > 0

@@ -27,6 +27,7 @@ import {
   portfolioUsesGradeScenarios,
 } from "@/lib/grades/portfolio";
 import { flattenHisRows, getHisSources } from "@/lib/his-sources";
+import { takeoverNotice } from "@/lib/manual-participants";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { deriveStudentStatus } from "@/lib/matching/status";
 import type {
@@ -443,7 +444,9 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       email: stored?.email,
       attempt: stored?.attempt ?? null,
       groupId: stored?.groupId ?? null,
+      takenOverFromManual: stored?.takenOverFromManual,
     };
+    const fromManualList = src?.kind === "manual";
 
     // Mit Antrittsliste: fehlend = No-Show; ohne Liste: unbekannt (null)
     let attended: boolean | null = attendanceByKey.has(key)
@@ -526,6 +529,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     });
 
     const warnings: string[] = [];
+    const takeover = takeoverNotice(student);
+    if (takeover) warnings.push(takeover);
     if (notAttended) {
       warnings.push("Als nicht angetreten markiert – keine Teilnoten nötig");
     }
@@ -597,7 +602,8 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       attempt: student.attempt ?? null,
       orderIndex: rows.length,
       hisSourceId: his.sourceId,
-      programCode: src?.programCode,
+      programCode: his.programCode?.trim() || src?.programCode || undefined,
+      fromManualList,
       examNumber: his.examNumber || src?.examNumber,
       mergedFromMatriculation: mergedFrom?.[0],
       multiProgram,
@@ -765,7 +771,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
       calculatedGrade,
       finalGrade,
       status: "mismatch",
-      warnings: ["Punkte vorhanden, aber nicht in HIS-Masterliste"],
+      warnings: ["Punkte vorhanden, aber nicht in der Teilnehmerliste"],
       subAreaPoints,
       gradeOverride,
       comment: pointsRec.comment,
@@ -848,7 +854,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
             groupId: stored.groupId,
           })
         : 0;
-    const warnings = ["Manuell hinzugefügt – nicht in HISinOne-Masterliste"];
+    const warnings = ["Nicht in der Teilnehmerliste (verwaiste Stammdaten)"];
     if (notAttended) {
       warnings.push("Als nicht angetreten markiert");
     }

@@ -142,6 +142,8 @@ export interface Student {
   attempt?: number | null;
   /** Gruppe (StA / Portfolio) */
   groupId?: string | null;
+  /** Aus manueller Teilnehmerliste in eine HISinOne-Datei übernommen */
+  takenOverFromManual?: { at: string; previousName?: string };
 }
 
 /** Arbeitsgruppe für StA / Portfolioprüfung */
@@ -246,6 +248,8 @@ export interface HISTemplateRow {
   orderIndex: number;
   /** Verweis auf HisSource.id (Multi-Studiengang) */
   sourceId?: string;
+  /** Studiengang je Person (manuelle Teilnehmerliste); sonst aus der Quelle */
+  programCode?: string;
   /** 1-basierte Excel-Zeile in der Originalvorlage */
   sourceExcelRow?: number;
   examPlanId?: string;
@@ -287,6 +291,11 @@ export interface HisTemplateMeta {
 /** Eine HISinOne-Quelle = ein Studiengang / eine Prüfungsnummer */
 export interface HisSource {
   id: string;
+  /**
+   * "manual" = manuelle Teilnehmerliste (ohne HISinOne-Datei, kein HIS-Export);
+   * fehlt/"hisinone" = importierte HISinOne-Datei.
+   */
+  kind?: "hisinone" | "manual";
   /** z. B. MEB, MBW */
   programCode: string;
   /** z. B. "MEB 20242 8010260 RMT" */
@@ -452,6 +461,8 @@ export interface ExamProject {
    * (siehe lib/grades/grade-average). Fehlt = 1 (bis v0.4.74).
    */
   gradeRulesVersion?: number;
+  /** Bisherige manuelle „Extras“ wurden in die manuelle Teilnehmerliste übernommen */
+  manualExtrasMigrated?: boolean;
   /** Studentengruppen (StA / Portfolio) */
   studentGroups?: StudentGroup[];
 
@@ -555,6 +566,8 @@ export interface EnrichedStudentRow {
       nextGradeDirection: "better" | "worse" | null;
     }
   >;
+  /** Person stammt aus der manuellen Teilnehmerliste (keine HISinOne-Datei) */
+  fromManualList?: boolean;
   /** Portfolio ohne Ausgleich: Code/Name der nicht bestandenen Teilleistung */
   failedComponentLabel?: string | null;
   /** Note > 4,0 und mit Bewertung */

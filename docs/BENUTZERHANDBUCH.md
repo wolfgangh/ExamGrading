@@ -2,7 +2,7 @@
 
 Vollständige Anleitung für Prüferinnen und Prüfer – Einstieg und Nachschlagewerk.
 
-**App-Version:** 0.4.75  
+**App-Version:** 0.4.76  
 **Zielgruppe:** Personen, die Prüfungen bewerten und Noten an HISinOne bzw. die Studienabteilung melden  
 **Datenschutz:** Alle Prüfungsdaten bleiben **im Browser** (IndexedDB). Es gibt **keine** Übertragung von Notenlisten an einen App-Server.
 
@@ -234,7 +234,9 @@ Die **aktive** Bestehensgrenze steuert die Noten bei punkte-/prozentbasierten Pf
 
 Seite: **Importe**.
 
-### 7.1 HISinOne (Masterliste / Noteneintrag)
+Die **Teilnehmerliste** einer Prüfung besteht aus den **HISinOne-Dateien** (§7.1) und/oder der **manuellen Teilnehmerliste** (§7.4). Beide Wege sind gleichrangig: Antritt, Punkte, Zuordnung, Statistik, No-Show und Export-Freigabe beziehen sich auf die gesamte Teilnehmerliste.
+
+### 7.1 Teilnehmerliste: HISinOne-Datei
 
 - Offizielle Excel-Vorlage(n) aus HISinOne  
 - **Mehrere Dateien** möglich (verschiedene Studiengänge) – werden als getrennte Quellen geführt  
@@ -251,9 +253,29 @@ Seite: **Importe**.
 - Moodle-Punkte / Bewertungsexcel oder Klausur-Vorlage  
 - Offene manuelle Aufgaben später unter Detailpunkte schließen  
 
-### 7.4 Manuell Personen (StA / Portfolio)
+### 7.4 Manuelle Teilnehmerliste (alle Prüfungsformen)
 
-Personen ohne HIS-Import hinzufügen – Export über HISinOne nur, wenn sie in der Masterliste sind; sonst manuelle Notenmeldung-PDF.
+Für Prüfungen, deren Teilnehmende nicht (vollständig) in HISinOne stehen, z. B. in berufsbegleitenden Studiengängen.
+
+**Pflichtfelder:** Matrikelnummer, Nachname, Vorname. **Optional:** Studiengang, E-Mail, Versuch (1–3), Gruppe (StA/Portfolio).
+
+| Weg | Vorgehen |
+|-----|----------|
+| Einzeln erfassen | Formular „Person hinzufügen“ |
+| Liste einfügen | Zeilen aus Excel/Outlook kopieren, **Prüfen** → Vorschau mit gültigen Zeilen und Problemen → **übernehmen** |
+| Excel/CSV-Datei | beliebige Liste hochladen; Spalten werden über die Kopfzeile erkannt (Matrikelnummer, Nachname, Vorname bzw. „Name, Vorname“, Studiengang, E-Mail, Versuch) |
+
+Ohne Kopfzeile gilt die Reihenfolge: Matrikelnummer, Nachname, Vorname, Studiengang, E-Mail, Versuch. Doppelte Matrikelnummern (in der Eingabe, in HISinOne oder schon erfasst) und fehlende Pflichtfelder werden mit Grund übersprungen.
+
+**Bearbeiten/Löschen:** Tabelle unter der Eingabe. Eine geänderte Matrikelnummer nimmt Punkte und Bewertungen mit. Hat eine Person schon Bewertungen, fragt ExamGrade vor dem Löschen nach.
+
+**Später doch HISinOne-Datei:** Steht eine manuell erfasste Matrikelnummer in einer neu importierten HISinOne-Datei, hat HISinOne Vorrang. Die Person wechselt in die HISinOne-Quelle (Name aus HISinOne), Bewertungen bleiben erhalten. Das Import-Protokoll nennt die übernommenen Personen, und an der Person steht dauerhaft der Hinweis **„von manuell → HISinOne“** (mit bisherigem Namen, falls abweichend).
+
+**Kennzeichnung:** In Notenübersicht und Bewertungsmatrix tragen Personen der manuellen Liste das Kennzeichen **„manuell“**.
+
+**Notenmeldung:** Für manuelle Teilnehmende gibt es keinen HISinOne-Export. Stattdessen gibt es unter Dokumente die **Excel-Notenliste** und die **manuelle Notenmeldung (PDF)**, siehe §13.
+
+Bis v0.4.75 bei StA/Portfolio „manuell hinzugefügte Personen“ werden beim Öffnen einmalig in die manuelle Teilnehmerliste übernommen und zählen damit als angemeldet.
 
 ### 7.5 Größenlimits
 
@@ -518,7 +540,7 @@ Seite: **Dokumente** (geschützte Exporte erfordern i. d. R. aktuelle **JSON
 ### 13.2 HISinOne-Excel
 
 - Formatgetreu aus der **importierten Originalvorlage** (nur Notenspalte)  
-- **Eine Datei pro importierter HIS-Quelle / Studiengang**  
+- **Eine Datei pro importierter HISinOne-Datei / Studiengang** (nicht für die manuelle Teilnehmerliste)  
 - Bei mehreren Quellen:  
   - deutlicher Hinweis „N separate Dateien“  
   - **eigener Button pro Studiengang** (Kürzel, Prüfungsnummer, Anmeldezahlen, Dateiname)  
@@ -528,7 +550,8 @@ Seite: **Dokumente** (geschützte Exporte erfordern i. d. R. aktuelle **JSON
 
 | Export | Verwendung |
 |--------|------------|
-| Manuelle Notenmeldung PDF | Personen ohne HIS / Sonderfälle |
+| **Excel-Notenliste** | alle Teilnehmenden mit Matrikel, Name, Studiengang, Quelle (HISinOne/manuell), Note, Bemerkung – Notenmeldung für die manuelle Teilnehmerliste |
+| Manuelle Notenmeldung PDF | Personen ohne HISinOne-Anmeldung: manuelle Teilnehmerliste und Sonderfälle |
 | Durchfaller / Zweitkorrektur PDF | Zweitkorrektur dokumentieren |
 | Notenänderungen PDF | Korrekturen nach Einsicht |
 | Notenspiegel PDF/Excel | aggregiert, ohne Personenliste |
@@ -640,6 +663,8 @@ Header → Schriftgröße „Groß“ oder „Sehr groß“.
 | Begriff | Bedeutung |
 |---------|-----------|
 | **HISinOne** | Campus-Management; Noteneintrag über Excel-Vorlage |
+| **Teilnehmerliste** | Alle angemeldeten Personen: HISinOne-Dateien und manuelle Teilnehmerliste |
+| **Manuelle Teilnehmerliste** | In ExamGrade erfasste Teilnehmende ohne HISinOne-Datei |
 | **Orphan** | Antritt/Punkte-Matrikel ohne Treffer in HISinOne |
 | **Teilleistung (TL)** | Bestandteil einer Portfolioprüfung |
 | **Teilkriterium** | Einzelkriterium innerhalb einer TL oder StA |

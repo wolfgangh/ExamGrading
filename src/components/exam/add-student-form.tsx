@@ -4,13 +4,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { normalizeMatriculation } from "@/lib/matching/matriculation";
-import type { ExamProject, PointsRecord, Student } from "@/lib/types";
+import type { ExamProject } from "@/lib/types";
 import { supportsStudentGroups } from "@/lib/types";
+import { addManualParticipants } from "@/lib/manual-participants";
 import { clearStructuralBackupMilestones } from "@/lib/workflow-milestones";
 import { StudentGroupSelect } from "@/components/exam/student-group-select";
 import { UserPlus } from "lucide-react";
 
+/** Einzelne Person zur manuellen Teilnehmerliste hinzufügen. */
 export function AddStudentForm({
   project,
   onAdd,
@@ -22,6 +23,8 @@ export function AddStudentForm({
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [programCode, setProgramCode] = useState("");
+  const [email, setEmail] = useState("");
+  const [attempt, setAttempt] = useState("");
   const [groupId, setGroupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -31,78 +34,39 @@ export function AddStudentForm({
     e.preventDefault();
     setError(null);
     setOk(null);
-    const key = normalizeMatriculation(mat);
-    if (!key) {
-      setError("Bitte gültige Matrikelnummer angeben.");
-      return;
-    }
-    if (!lastName.trim()) {
-      setError("Nachname fehlt.");
-      return;
-    }
-    if (
-      project.students[key] ||
-      project.hisRows.some(
-        (h) => normalizeMatriculation(h.matriculationNumber) === key
-      )
-    ) {
-      setError("Matrikelnummer ist bereits vorhanden.");
-      return;
-    }
-
-    const student: Student = {
-      matriculationNumber: mat.trim(),
-      lastName: lastName.trim(),
-      firstName: firstName.trim(),
+    const input = {
+      matriculationNumber: mat,
+      lastName,
+      firstName,
+      programCode,
+      email,
+      attempt: attempt.trim() ? Number(attempt) : null,
       groupId: showGroup ? groupId : null,
     };
-    const manualProgram = programCode.trim() || null;
-
-    onAdd((prev) => {
-      const rec: PointsRecord = {
-        matriculationNumber: key,
-        bySubArea: Object.fromEntries(prev.subAreas.map((s) => [s.id, null])),
-        totalPoints: null,
-        source: "manual",
-        manualProgramCode: manualProgram,
-        criterionValues:
-          prev.examType === "sta_criteria"
-            ? Object.fromEntries(
-                (prev.criteria ?? []).map((c) => [c.id, null])
-              )
-            : undefined,
-        portfolioGrades:
-          prev.examType === "portfolio"
-            ? Object.fromEntries(
-                (prev.portfolioComponents ?? []).map((c) => [c.id, null])
-              )
-            : undefined,
-      };
-      return clearStructuralBackupMilestones({
-        ...prev,
-        students: { ...prev.students, [key]: student },
-        points: [...prev.points, rec],
-      });
-    });
-    setOk(`„${student.lastName}, ${student.firstName}“ hinzugefügt.`);
+    // Validierung gegen den aktuellen Stand (gleiche Regeln wie beim Speichern)
+    const check = addManualParticipants(project, [input]);
+    if (check.added === 0) {
+      setError(check.issues[0]?.reason ?? "Person konnte nicht hinzugefügt werden.");
+      return;
+    }
+    onAdd((prev) =>
+      clearStructuralBackupMilestones(addManualParticipants(prev, [input]).project)
+    );
+    setOk(`„${lastName.trim()}, ${firstName.trim()}“ hinzugefügt.`);
     setMat("");
     setLastName("");
     setFirstName("");
     setProgramCode("");
+    setEmail("");
+    setAttempt("");
     setGroupId(null);
   };
 
   return (
     <form onSubmit={submit} className="grid gap-3">
-      <div
-        className={
-          showGroup
-            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-            : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-        }
-      >
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="grid gap-1.5">
-          <Label htmlFor="add-mat">Matrikelnummer</Label>
+          <Label htmlFor="add-mat">Matrikelnummer *</Label>
           <Input
             id="add-mat"
             value={mat}
@@ -112,7 +76,7 @@ export function AddStudentForm({
           />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="add-ln">Nachname</Label>
+          <Label htmlFor="add-ln">Nachname *</Label>
           <Input
             id="add-ln"
             value={lastName}
@@ -121,11 +85,12 @@ export function AddStudentForm({
           />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="add-fn">Vorname</Label>
+          <Label htmlFor="add-fn">Vorname *</Label>
           <Input
             id="add-fn"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
+            required
           />
         </div>
         <div className="grid gap-1.5">
@@ -135,6 +100,25 @@ export function AddStudentForm({
             value={programCode}
             onChange={(e) => setProgramCode(e.target.value)}
             placeholder="z. B. MEB, MBW"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="add-mail">E-Mail</Label>
+          <Input
+            id="add-mail"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="add-att">Versuch</Label>
+          <Input
+            id="add-att"
+            inputMode="numeric"
+            value={attempt}
+            onChange={(e) => setAttempt(e.target.value)}
+            placeholder="1, 2 oder 3"
           />
         </div>
         {showGroup && (
@@ -160,10 +144,6 @@ export function AddStudentForm({
         <UserPlus className="size-4" />
         Person hinzufügen
       </Button>
-      <p className="text-xs text-muted-foreground">
-        Manuelle Personen erscheinen in der Bewertung. Studiengang erscheint in
-        der manuellen Notenmeldung. Ohne HIS-Eintrag nicht im HISinOne-Excel.
-      </p>
     </form>
   );
 }

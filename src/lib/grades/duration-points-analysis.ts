@@ -67,7 +67,9 @@ function resolveProgramCode(
     const row = src.rows?.find(
       (hr) => normalizeMatriculation(hr.matriculationNumber) === matKey
     );
-    if (row && src.programCode) return src.programCode;
+    if (row && (row.programCode?.trim() || src.programCode)) {
+      return row.programCode?.trim() || src.programCode;
+    }
   }
   const his = project.hisRows?.find(
     (hr) => normalizeMatriculation(hr.matriculationNumber) === matKey

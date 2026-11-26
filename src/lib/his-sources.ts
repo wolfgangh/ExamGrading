@@ -87,7 +87,10 @@ export function parseHisFileName(fileName: string): {
 }
 
 export function summarizeExamNumbers(sources: HisSource[]): string {
-  const nums = sources.map((s) => s.examNumber).filter(Boolean);
+  const nums = sources
+    .filter((s) => s.kind !== "manual")
+    .map((s) => s.examNumber)
+    .filter(Boolean);
   if (nums.length === 0) return "";
   if (nums.length === 1) return nums[0];
   return nums.join(", ");
@@ -145,7 +148,10 @@ export function hasOriginalHisTemplate(source: HisSource): boolean {
 export function sourcesMissingOriginalTemplate(
   project: ExamProject
 ): HisSource[] {
-  return getHisSources(project).filter((s) => !hasOriginalHisTemplate(s));
+  // Manuelle Teilnehmerliste hat keine Vorlage (kein HISinOne-Export)
+  return getHisSources(project).filter(
+    (s) => s.kind !== "manual" && !hasOriginalHisTemplate(s)
+  );
 }
 
 /** Sync legacy hisRows aus hisSources (Kompatibilität) */
@@ -159,7 +165,8 @@ export function syncLegacyHisFields(project: ExamProject): ExamProject {
     ...project,
     hisSources: sources,
     hisRows,
-    hisTemplateMeta: sources[0]?.meta ?? project.hisTemplateMeta,
+    hisTemplateMeta:
+      sources.find((s) => s.kind !== "manual")?.meta ?? project.hisTemplateMeta,
     examNumber: summarizeExamNumbers(sources) || project.examNumber,
     schemaVersion: (Math.max(project.schemaVersion ?? 1, 3) as 1 | 2 | 3),
   };
@@ -204,12 +211,17 @@ export function upsertHisSource(
     }
     return false;
   });
-  const next =
+  const merged =
     idx >= 0
       ? existing.map((s, i) =>
           i === idx ? { ...source, id: s.id } : s
         )
       : [...existing, source];
+  // manuelle Teilnehmerliste immer zuletzt
+  const next = [
+    ...merged.filter((s) => s.kind !== "manual"),
+    ...merged.filter((s) => s.kind === "manual"),
+  ];
   return syncLegacyHisFields({ ...project, hisSources: next });
 }
 

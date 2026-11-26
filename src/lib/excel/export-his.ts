@@ -246,7 +246,8 @@ export async function exportHisExcel(
   options?: { sourceId?: string }
 ): Promise<void> {
   void stats;
-  const all = getHisSources(project);
+  // Manuelle Teilnehmerliste hat keine HISinOne-Vorlage → Excel-Notenliste nutzen
+  const all = getHisSources(project).filter((s) => s.kind !== "manual");
   if (all.length === 0) {
     throw new Error(
       "Keine HIS-Quelle vorhanden. Bitte zuerst die HisinOne-Noteneintragsdatei(en) importieren."

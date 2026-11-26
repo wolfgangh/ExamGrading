@@ -95,7 +95,7 @@ Kernobjekt: **`ExamProject`** (`src/lib/types.ts`).
 Wichtige Felder (vereinfacht):
 
 - Identität: `id`, `name`, `examNumber`, `semester`, `lecturers[]`, `examType`, `schemaVersion`  
-- HISinOne: `hisSources[]` (inkl. `originalXlsxBase64`), abgeleitet `hisRows`  
+- Teilnehmerliste: `hisSources[]` – HISinOne-Dateien (inkl. `originalXlsxBase64`) und höchstens eine **manuelle Teilnehmerliste** (`kind: "manual"`, ohne Vorlage, immer letzte Quelle, `programCode` je Zeile); abgeleitet `hisRows`. Logik: `lib/manual-participants.ts` (Hinzufügen/Bearbeiten/Löschen, Einlesen aus Text/Excel/CSV, Übernahme bei HISinOne-Import → `Student.takenOverFromManual`, einmalige Migration alter StA/Portfolio-Extras über `manualExtrasMigrated`). Export: HISinOne-XLSX nur für HISinOne-Dateien; `lib/excel/export-grade-list.ts` = Excel-Notenliste aller Teilnehmenden  
 - `attendance[]`, `points[]` (inkl. `criterionValues`, `portfolioGrades`, `portfolioGradesByLecturer`), `students{}` (inkl. `groupId`)  
 - StA/Portfolio: `criteria[]`, `portfolioComponents[]`, `portfolioPerLecturerGrading`, `studentGroups[]`  
 - Noten: `gradeSchema`, `gradeScenarios[]`, `activeScenarioId`  
@@ -167,7 +167,7 @@ Details: [SECURITY.md](../SECURITY.md).
 
 Bei Releases `package.json`, `app-version.ts` und README-Footer abstimmen.
 
-**Stand dieser Doku:** App v0.4.75.
+**Stand dieser Doku:** App v0.4.76.
 
 **Noten aus Punkten:** `calculateGrade` vergleicht exakte Punkte mit `minPoints` (≥, Epsilon gegen FP). Kein `Math.ceil`/ROUNDUP auf ganze Punkte vor der Zuordnung.
 
