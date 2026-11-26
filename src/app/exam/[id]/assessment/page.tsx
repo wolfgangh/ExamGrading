@@ -8,6 +8,8 @@ import {
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
+import { staCriteriaMixedScales } from "@/lib/grades/sta-criteria";
+import { STA_MIXED_SCALES_MESSAGE } from "@/lib/validations";
 import { useParams, useSearchParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -1255,6 +1257,14 @@ export default function AssessmentPage() {
                     </span>
                   )}
                 </CardDescription>
+                {isCriteria && staCriteriaMixedScales(criteria) && (
+                  <p
+                    role="alert"
+                    className="mt-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100"
+                  >
+                    {STA_MIXED_SCALES_MESSAGE}
+                  </p>
+                )}
                 <div className="mt-3 space-y-2">
                   <AssessmentRemainingBar
                     data={remaining}
@@ -2048,9 +2058,17 @@ export default function AssessmentPage() {
                                           r.student.groupId,
                                           project.gradeSchema
                                         );
+                                        // „bis nächste Note“ aus dem ungerundeten Korrektorenmittel
+                                        const avgRaw =
+                                          averageLecturerGradesForComponent(
+                                            rec?.portfolioGradesByLecturer,
+                                            c.id,
+                                            lecturers,
+                                            true
+                                          );
                                         const unit =
-                                          avgG != null
-                                            ? (5 - avgG) / 4
+                                          avgRaw != null
+                                            ? (5 - avgRaw) / 4
                                             : null;
                                         const tlNext = tlNextFromUnit(
                                           unit,

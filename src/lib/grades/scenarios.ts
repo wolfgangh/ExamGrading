@@ -50,10 +50,11 @@ const PRESET_PASS_40 = 40;
 /** Portfolio-Szenarien: kanonisches Maximum = 100 (Prozent-Skala) */
 export const PORTFOLIO_SCENARIO_MAX = 100;
 
+/** Preset-Grenze proportional skalieren – exakt, ohne Aufrunden (75 → 37,5). */
 function scalePass(maxPoints: number, referencePass: number): number {
   if (maxPoints <= 0) return referencePass;
   if (Math.abs(maxPoints - 90) < 0.01) return referencePass;
-  return Math.round((maxPoints * referencePass) / 90);
+  return Math.round(((maxPoints * referencePass) / 90) * 100) / 100;
 }
 
 export function scoreToPercent(score: number, maxPoints: number): number {
@@ -463,7 +464,8 @@ export function rebuildScenariosForMaxPoints(
     } else {
       // editierbares Szenario: Pass-Anteil beibehalten
       const oldMax = s.schema.maxPoints || maxPoints;
-      pass = Math.round((s.passThreshold * maxPoints) / (oldMax || 1));
+      pass =
+        Math.round(((s.passThreshold * maxPoints) / (oldMax || 1)) * 100) / 100;
     }
     const schema = generateLinearGradeSchema(maxPoints, pass, true);
     return { ...s, passThreshold: pass, schema };

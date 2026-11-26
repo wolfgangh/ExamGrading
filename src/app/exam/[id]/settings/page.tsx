@@ -82,7 +82,11 @@ import {
   defaultStaCriteria,
   mergeDefaultStaCriteria,
   recomputeStaCriteriaRecord,
+  staCriteriaMixedScales,
+  staCriteriaScale,
+  withStaCriteriaScale,
 } from "@/lib/grades/sta-criteria";
+import { STA_MIXED_SCALES_MESSAGE } from "@/lib/validations";
 import { semesterSelectOptions } from "@/lib/semester";
 import { ComboboxField } from "@/components/ui/combobox-field";
 import { LecturerPicker } from "@/components/exam/lecturer-picker";
@@ -150,6 +154,18 @@ export default function SettingsPage() {
       const criteria = (prev.criteria ?? []).map((c) =>
         c.id === cid ? { ...c, ...patch } : c
       );
+      const max = prev.gradeSchema.maxPoints;
+      const points = prev.points.map((p) =>
+        recomputeStaCriteriaRecord(p, criteria, max)
+      );
+      return { ...prev, criteria, points };
+    });
+  };
+
+  /** StA: genau eine Skala je Prüfung – Umschalten setzt alle Kriterien um. */
+  const setAllCriteriaScale = (scale: CriterionScale) => {
+    setProject((prev) => {
+      const criteria = withStaCriteriaScale(prev.criteria, scale);
       const max = prev.gradeSchema.maxPoints;
       const points = prev.points.map((p) =>
         recomputeStaCriteriaRecord(p, criteria, max)
@@ -484,9 +500,18 @@ export default function SettingsPage() {
                 Bewertungskriterien (StA)
               </CardTitle>
               <CardDescription>
-                Gewichte relativ. Standard: Punkte 0–6 mit Stufen 6/3/0.
-                Katalog ABZ/FACH/METH/QUEL/SPEZ/REPR (KI-tauglich).
+                Gewichte relativ. Eine Skala für alle Kriterien (Umschalten
+                ändert alle). Standard: Punkte 0–6 mit Stufen 6/3/0. Katalog
+                ABZ/FACH/METH/QUEL/SPEZ/REPR (KI-tauglich).
               </CardDescription>
+              {staCriteriaMixedScales(project.criteria) && (
+                <p
+                  role="alert"
+                  className="mt-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100"
+                >
+                  {STA_MIXED_SCALES_MESSAGE}
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -514,7 +539,8 @@ export default function SettingsPage() {
                         name: "Neues Kriterium",
                         code: `K${(prev.criteria?.length ?? 0) + 1}`,
                         weight: 1,
-                        scale: "points" as CriterionScale,
+                        scale: (staCriteriaScale(prev.criteria) ??
+                          "points") as CriterionScale,
                         maxPoints: DEFAULT_CRITERION_MAX_POINTS,
                       },
                     ],
@@ -575,10 +601,7 @@ export default function SettingsPage() {
                       <Select
                         value={c.scale}
                         onValueChange={(v) =>
-                          v &&
-                          updateCriterion(c.id, {
-                            scale: v as CriterionScale,
-                          })
+                          v && setAllCriteriaScale(v as CriterionScale)
                         }
                       >
                         <SelectTrigger className="w-full">
@@ -776,6 +799,28 @@ export default function SettingsPage() {
                       : collapseLecturerGradesToSimple(prev)
                   );
                 }}
+              />
+            </div>
+            <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-0.5">
+                <Label htmlFor="portfolio-compensation" className="text-sm">
+                  Nicht bestandene Teilleistung kann ausgeglichen werden
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  An: Gesamtnote = gewichtetes Mittel aller Teilnoten, auch mit
+                  einer 5,0. Aus: eine Teilnote 5,0 ergibt Gesamtnote 5,0.
+                  Maßgeblich ist die Modulbeschreibung. Standard: an.
+                </p>
+              </div>
+              <Switch
+                id="portfolio-compensation"
+                checked={project.portfolioAllowCompensation !== false}
+                onCheckedChange={(on) =>
+                  setProject((prev) => ({
+                    ...prev,
+                    portfolioAllowCompensation: on,
+                  }))
+                }
               />
             </div>
             {(project.portfolioComponents ?? []).length === 0 ? (

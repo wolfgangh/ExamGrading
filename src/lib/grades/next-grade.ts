@@ -1,7 +1,10 @@
 import type { GradeSchema } from "@/lib/types";
-import { GERMAN_GRADES } from "@/lib/types";
 import { calculateGrade } from "@/lib/grades/schema";
-import { roundToNearestGermanGrade } from "@/lib/grades/portfolio";
+import {
+  gradeAverageDistanceToBetter,
+  roundGradeAverage,
+  truncateGradeAverage,
+} from "@/lib/grades/grade-average";
 
 export interface NextGradeInfo {
   currentGrade: number;
@@ -86,14 +89,11 @@ export interface AdjacentGermanGradeInfo extends NextGradeInfo {
 }
 
 /**
- * Abstand des ungerundeten Notenmittels zu den **benachbarten Notenstufen**
- * (Ankerwerte, nicht Rundungsgrenze).
- *
- * - dBetter = raw − bessereNote, dWorse = schlechtereNote − raw
- * - Wenn dBetter > dWorse → schlechtere Note (näher am Abstieg)
- * - Sonst (inkl. Gleichstand) → bessere Note
- *
- * `pointsNeeded` = Abstand in **Notengraden** (Δ Note), nicht Klausurpunkte.
+ * „Bis nächste Note“ für ein **Notenmittel** (Portfolio, StA mit Note-Kriterien):
+ * Abstand in Notengraden vom abgeschnittenen Notenmittel bis zu dem Wert, ab dem
+ * die nächstbessere Notenstufe herauskommt (gleiche Regel wie die Note).
+ * Beispiel: 2,4 → 2,3; ab 2,1 → 2,0 ⇒ 0,3.
+ * Richtung immer „better“; bei 1,0 kein nächster Wert.
  */
 export function getAdjacentGermanGradeInfo(
   rawAverage: number
@@ -107,77 +107,22 @@ export function getAdjacentGermanGradeInfo(
       direction: null,
     };
   }
-  const raw = Math.min(5, Math.max(1, rawAverage));
-  const currentGrade = roundToNearestGermanGrade(raw);
-  const grades = [...GERMAN_GRADES];
-  const idx = grades.findIndex((g) => Math.abs(g - currentGrade) < 1e-9);
-  if (idx < 0) {
+  const currentGrade = roundGradeAverage(rawAverage);
+  const d = gradeAverageDistanceToBetter(rawAverage);
+  if (!d) {
     return {
       currentGrade,
       nextGrade: null,
       pointsNeeded: null,
       thresholdForNext: null,
       direction: null,
-    };
-  }
-
-  const better = idx > 0 ? grades[idx - 1] : null;
-  const worse = idx < grades.length - 1 ? grades[idx + 1] : null;
-
-  const dBetter =
-    better != null
-      ? Math.round(Math.max(0, raw - better) * 1000) / 1000
-      : null;
-  const dWorse =
-    worse != null
-      ? Math.round(Math.max(0, worse - raw) * 1000) / 1000
-      : null;
-
-  if (better == null && worse == null) {
-    return {
-      currentGrade,
-      nextGrade: null,
-      pointsNeeded: null,
-      thresholdForNext: null,
-      direction: null,
-    };
-  }
-  if (better == null && worse != null && dWorse != null) {
-    return {
-      currentGrade,
-      nextGrade: worse,
-      pointsNeeded: dWorse,
-      thresholdForNext: worse,
-      direction: "worse",
-    };
-  }
-  if (worse == null && better != null && dBetter != null) {
-    return {
-      currentGrade,
-      nextGrade: better,
-      pointsNeeded: dBetter,
-      thresholdForNext: better,
-      direction: "better",
-    };
-  }
-
-  const pickWorse =
-    dBetter != null && dWorse != null && dBetter > dWorse + 1e-9;
-
-  if (pickWorse && worse != null && dWorse != null) {
-    return {
-      currentGrade,
-      nextGrade: worse,
-      pointsNeeded: dWorse,
-      thresholdForNext: worse,
-      direction: "worse",
     };
   }
   return {
     currentGrade,
-    nextGrade: better,
-    pointsNeeded: dBetter,
-    thresholdForNext: better,
+    nextGrade: d.next,
+    pointsNeeded: d.distance,
+    thresholdForNext: d.next,
     direction: "better",
   };
 }
@@ -189,8 +134,12 @@ export function getNextGermanGradeInfo(
   return getAdjacentGermanGradeInfo(rawAverage);
 }
 
-/** Abstand des Roh-Mittels zur Note 4,0 (positiv = schlechter / darüber). */
+/**
+ * Abstand des abgeschnittenen Notenmittels zur 4,0
+ * (positiv = schlechter als 4,0, also nicht bestanden).
+ */
 export function gradePointsBelowPass(rawAverage: number | null): number | null {
   if (rawAverage == null || !Number.isFinite(rawAverage)) return null;
-  return Math.round((rawAverage - 4) * 1000) / 1000;
+  const t = truncateGradeAverage(Math.min(5, Math.max(1, rawAverage)));
+  return Math.round((t - 4) * 10) / 10;
 }

@@ -6,7 +6,7 @@ import type {
   PointsRecord,
 } from "@/lib/types";
 import { calculateGrade } from "@/lib/grades/schema";
-import { roundToNearestGermanGrade } from "@/lib/grades/portfolio";
+import { roundGradeAverage } from "@/lib/grades/grade-average";
 
 export const CRITERION_SCALE_LABELS: Record<CriterionScale, string> = {
   percent: "Prozent (0–100)",
@@ -204,31 +204,81 @@ export function staCriteriaAllGradeScale(
 }
 
 /**
- * Amtsnote StA: reine Note-Kriterien → gewichtetes Notenmittel;
- * sonst Erfüllung × Schema (wie bisher).
+ * Aktive Kriterien nutzen unterschiedliche Skalen (z. B. Note + Punkte).
+ * Nicht zulässig: eine StA hat genau eine Skala (Export gesperrt bis vereinheitlicht).
+ */
+export function staCriteriaMixedScales(
+  criteria: AssessmentCriterion[] | undefined | null
+): boolean {
+  const scales = new Set(
+    (criteria ?? []).filter((c) => isActiveWeight(c.weight)).map((c) => c.scale)
+  );
+  return scales.size > 1;
+}
+
+/** Eine Skala für alle Kriterien setzen (Punkte: Max-Default 6). */
+export function withStaCriteriaScale(
+  criteria: AssessmentCriterion[] | undefined | null,
+  scale: CriterionScale
+): AssessmentCriterion[] {
+  return (criteria ?? []).map((c) => ({
+    ...c,
+    scale,
+    maxPoints:
+      scale === "points"
+        ? c.maxPoints != null && c.maxPoints > 0
+          ? c.maxPoints
+          : DEFAULT_CRITERION_MAX_POINTS
+        : c.maxPoints,
+  }));
+}
+
+/** Gemeinsame Skala aller aktiven Kriterien (null wenn gemischt/leer). */
+export function staCriteriaScale(
+  criteria: AssessmentCriterion[] | undefined | null
+): CriterionScale | null {
+  const active = (criteria ?? []).filter((c) => isActiveWeight(c.weight));
+  if (!active.length || staCriteriaMixedScales(active)) return null;
+  return active[0].scale;
+}
+
+/**
+ * Notenmittel einer StA mit reinen Note-Kriterien (ungerundet);
+ * null wenn nicht alle aktiven Kriterien gesetzt oder keine reine Note-Skala.
+ */
+export function computeStaGradeAverage(
+  criterionValues: Record<string, number | null | undefined> | undefined,
+  criteria: AssessmentCriterion[]
+): number | null {
+  if (!staCriteriaAllGradeScale(criteria)) return null;
+  const vals = criterionValues ?? {};
+  let wSum = 0;
+  let acc = 0;
+  for (const c of criteria) {
+    if (!isActiveWeight(c.weight)) continue;
+    const v = vals[c.id];
+    if (v == null || !Number.isFinite(v)) return null;
+    acc += Math.min(5, Math.max(1, v)) * c.weight;
+    wSum += c.weight;
+  }
+  if (wSum <= 0) return null;
+  return acc / wSum;
+}
+
+/**
+ * Note StA: reine Note-Kriterien → gewichtetes Notenmittel → Notenstufe (RaPO);
+ * Punkte-/Prozent-Kriterien → Erfüllung × Schema.
  */
 export function computeStaFinalGrade(
   criterionValues: Record<string, number | null | undefined> | undefined,
   criteria: AssessmentCriterion[],
   schema: GradeSchema
 ): number | null {
-  const active = criteria.filter(
-    (c) => Number.isFinite(c.weight) && c.weight > 0
-  );
+  const active = criteria.filter((c) => isActiveWeight(c.weight));
   if (!active.length) return null;
   if (staCriteriaAllGradeScale(criteria)) {
-    const vals = criterionValues ?? {};
-    let wSum = 0;
-    let acc = 0;
-    for (const c of active) {
-      const v = vals[c.id];
-      if (v == null || !Number.isFinite(v)) return null;
-      const w = c.weight;
-      acc += Math.min(5, Math.max(1, v)) * w;
-      wSum += w;
-    }
-    if (wSum <= 0) return null;
-    return roundToNearestGermanGrade(acc / wSum);
+    const raw = computeStaGradeAverage(criterionValues, criteria);
+    return raw == null ? null : roundGradeAverage(raw);
   }
   const pts = computeCriteriaTotalPoints(criterionValues, criteria, schema.maxPoints);
   if (pts == null) return null;

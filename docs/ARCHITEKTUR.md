@@ -167,11 +167,17 @@ Details: [SECURITY.md](../SECURITY.md).
 
 Bei Releases `package.json`, `app-version.ts` und README-Footer abstimmen.
 
-**Stand dieser Doku:** App v0.4.56.
+**Stand dieser Doku:** App v0.4.75.
 
 **Noten aus Punkten:** `calculateGrade` vergleicht exakte Punkte mit `minPoints` (≥, Epsilon gegen FP). Kein `Math.ceil`/ROUNDUP auf ganze Punkte vor der Zuordnung.
 
-**Portfolio (points/percent-TLs):** Gesamtnote = `unitAvg × schemaMax → calculateGrade` (Schema oft 0–100). **Anzeige** bei reinen Punkte-Kriterien: echte Rohpunkte/Max (z. B. 11×6=66); PDF-Bestehensgrenze skaliert in diese Max-Punkte. Reine Note-TLs: linear `5−4·unit`.
+**Notenmittel → Notenstufe** (`lib/grades/grade-average.ts`, RaPO Bayern / APO OTH): Notenmittel auf eine Dezimale **abschneiden**, > 4,0 → 5,0, sonst nächste Stufe (Gleichstand → bessere, 1,5 → 1,3). Gilt für Portfolio-Gesamtnote, StA mit reinen Note-Kriterien, lineare Note-TLs und Korrektorenmittel je TL (Teilnote = Notenstufe). Regelversion `GRADE_RULES_VERSION = 2`; `runWithGradeRules(1, …)` rechnet die alte Regel (bis v0.4.74) nur für den Hinweisdialog alt → neu (`grade-rules-review.ts`, `ExamProject.gradeRulesVersion`). Entscheidung: [ADR 0001](adr/0001-portfolio-gesamtnote-aus-teilnoten.md).
+
+**Portfolio:** Gesamtnote = gewichtetes Notenmittel der **Teilnoten** → Notenstufe (`computePortfolioGradeForProject`). Teilnote je TL: Punkte-/Prozent-Kriterien `unit × schemaMax → calculateGrade` (aktives Szenario), Note-Kriterien linear `5−4·unit` → Notenstufe. `portfolioAllowCompensation === false`: eine Teilnote 5,0 → Gesamtnote 5,0. „Bis nächste Note“, Grenzfall und Abstand zur 4,0 kommen aus demselben Notenmittel (Notengrade, bezogen auf das abgeschnittene Mittel). **Anzeige** %: gewichtete Erfüllung (TL-Gewichte); bei reinen Punkte-Kriterien Punkte = Erfüllung × Rohpunkte-Max (z. B. 66,7 % × 48 = 32,0); PDF-Bestehensgrenze skaliert in diese Max-Punkte.
+
+**StA-Kriterien:** genau **eine Skala** je Prüfung (`withStaCriteriaScale`); gemischte Skalen sperren den Export (`staCriteriaMixedScales`). Reine Note-Kriterien: Notenmittel → Notenstufe, keine Punkte-Spalte. Punkte/Prozent: Erfüllung × Schema → `calculateGrade`.
+
+**Szenario-Presets bei anderem Maximum:** exakt proportional (`scalePass`, z. B. Max 75 → 37,5), kein Aufrunden.
 
 **Nicht angetreten (Portfolio/StA):** `PointsRecord.notAttended` → Status `no_show`, keine Teilnoten nötig; zählt für Workflow-Vollständigkeit; HIS-Export mit leerer Note. Export-Validierung (`validateForExport`) nimmt No-Shows von „Teilnoten unvollständig“ aus.
 

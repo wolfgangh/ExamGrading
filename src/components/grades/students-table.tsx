@@ -648,6 +648,16 @@ export function StudentsTable({
         ),
         cell: ({ row }) => {
           const r = row.original;
+          if (r.failedComponentLabel) {
+            return (
+              <span
+                className="inline-flex rounded-md border border-rose-500/80 bg-rose-100 px-1.5 py-0.5 text-xs font-semibold text-rose-950 dark:border-rose-400 dark:bg-rose-950/70 dark:text-rose-50"
+                title="Ausgleich nicht bestandener Teilleistungen ist ausgeschaltet (Einstellungen)"
+              >
+                TL {r.failedComponentLabel} nicht bestanden
+              </span>
+            );
+          }
           if (r.pointsToNext == null || r.nextGrade == null) {
             return <span className="text-muted-foreground">–</span>;
           }

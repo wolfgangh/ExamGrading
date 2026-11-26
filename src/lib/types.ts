@@ -441,6 +441,17 @@ export interface ExamProject {
    * Default false. Kombinierbar mit portfolioPerLecturerGrading.
    */
   portfolioCriteriaMode?: boolean;
+  /**
+   * Portfolio: Ausgleich einer nicht bestandenen Teilleistung (Teilnote 5,0)
+   * durch andere Teilleistungen. Default true / undefined = erlaubt;
+   * false = eine Teilnote 5,0 ergibt Gesamtnote 5,0.
+   */
+  portfolioAllowCompensation?: boolean;
+  /**
+   * Version der Notenregeln, mit der das Projekt zuletzt bestätigt wurde
+   * (siehe lib/grades/grade-average). Fehlt = 1 (bis v0.4.74).
+   */
+  gradeRulesVersion?: number;
   /** Studentengruppen (StA / Portfolio) */
   studentGroups?: StudentGroup[];
 
@@ -516,8 +527,9 @@ export interface EnrichedStudentRow {
   attempt?: number | null;
   orderIndex: number;
   /**
-   * Abstand bis zur angezeigten Nachbar-Note.
-   * Klausur: Punkte; Portfolio: Notengrade (Δ im ungerundeten Mittel).
+   * Abstand bis zur nächstbesseren Notenstufe, in der Größe, aus der die Note entsteht.
+   * Klausur/StA-Punkte: Punkte; Notenmittel (Portfolio, StA-Noten): Notengrade
+   * bezogen auf das abgeschnittene Notenmittel.
    */
   pointsToNext: number | null;
   nextGrade: number | null;
@@ -543,6 +555,8 @@ export interface EnrichedStudentRow {
       nextGradeDirection: "better" | "worse" | null;
     }
   >;
+  /** Portfolio ohne Ausgleich: Code/Name der nicht bestandenen Teilleistung */
+  failedComponentLabel?: string | null;
   /** Note > 4,0 und mit Bewertung */
   isFailed: boolean;
   /** Abstand zur Bestehensgrenze (positiv = darunter) */

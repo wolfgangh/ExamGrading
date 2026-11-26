@@ -63,6 +63,9 @@ import {
 } from "../src/lib/grades/portfolio.ts";
 import { countMissingCriteria } from "../src/lib/grades/sta-criteria.ts";
 import { validateForExport } from "../src/lib/validations.ts";
+import { runWithGradeRules } from "../src/lib/grades/grade-average.ts";
+import { averageLecturerGradesForComponent } from "../src/lib/grades/portfolio.ts";
+import { listGradeRuleChanges } from "../src/lib/grades/grade-rules-review.ts";
 
 type Status = "pass" | "fail";
 type CaseResult = { id: string; status: Status; message: string };
@@ -137,9 +140,20 @@ function studentsFromHis(his: ReturnType<typeof makeHis>) {
     gradeFromUnitAvg(0.85, "percent", s50) === calculateGrade(85, s50),
     `unit 0.85 schema → ${gradeFromUnitAvg(0.85, "percent", s50)}`
   );
-  check("C6a", roundToNearestGermanGrade(4.5) === 5.0, `4,5 → ${roundToNearestGermanGrade(4.5)}`);
-  check("C6b", roundToNearestGermanGrade(4.49) === 4.0, `4,49 → ${roundToNearestGermanGrade(4.49)}`);
-  check("C6c", roundToNearestGermanGrade(4.51) === 5.0, `4,51 → ${roundToNearestGermanGrade(4.51)}`);
+  // C6: RaPO – erste Dezimale abschneiden, > 4,0 → 5,0
+  check("C6a", roundToNearestGermanGrade(4.0) === 4.0, `4,0 → ${roundToNearestGermanGrade(4.0)}`);
+  check("C6b", roundToNearestGermanGrade(4.04) === 4.0, `4,04 (abgeschnitten 4,0) → ${roundToNearestGermanGrade(4.04)}`);
+  check("C6c", roundToNearestGermanGrade(4.1) === 5.0, `4,1 → ${roundToNearestGermanGrade(4.1)}`);
+  check("C6d", roundToNearestGermanGrade(4.49) === 5.0, `4,49 → ${roundToNearestGermanGrade(4.49)}`);
+  check("C6e", roundToNearestGermanGrade(2.16) === 2.0, `2,16 (abgeschnitten 2,1) → ${roundToNearestGermanGrade(2.16)}`);
+  check("C6f", roundToNearestGermanGrade(1.5) === 1.3, `1,5 Gleichstand → ${roundToNearestGermanGrade(1.5)}`);
+  check("C6g", roundToNearestGermanGrade(2.1) === 2.0, `2,1 (FP) → ${roundToNearestGermanGrade(2.1)}`);
+  check(
+    "C6h",
+    runWithGradeRules(1, () => roundToNearestGermanGrade(4.2)) === 4.0 &&
+      runWithGradeRules(1, () => roundToNearestGermanGrade(2.16)) === 2.3,
+    "Legacy-Regel v1 für Vergleich alt→neu"
+  );
 }
 
 // ========== D3 defaults ==========
@@ -620,7 +634,15 @@ function portfolioPointsProject(units: number[], scale: "percent" | "points") {
 {
   const { project } = portfolioPointsProject([0.82], "percent");
   const row = buildEnrichedRows(project)[0];
-  check("D1", row?.nextGradeUnit === "points" && row.pointsToNext != null && row.pointsToNext > 0.3, `scenario path unit=points next=${row?.pointsToNext}`);
+  // Portfolio-Note = Notenmittel der Teilnoten → Abstand in Notengraden (82 % → TL 2,0 → ab 1,8 → 1,7)
+  check(
+    "D1",
+    row?.finalGrade === 2.0 &&
+      row?.nextGradeUnit === "grade" &&
+      nearly(row.pointsToNext, 0.2, 1e-6) &&
+      row.nextGrade === 1.7,
+    `scenario portfolio unit=${row?.nextGradeUnit} next=${row?.pointsToNext}→${row?.nextGrade}`
+  );
 
   const components = [
     {
@@ -675,22 +697,20 @@ function portfolioPointsProject(units: number[], scale: "percent" | "points") {
 
 // ========== D4 D5 borderline cohort ==========
 {
-  // D4: grade-unit distances with old max=1 → almost all
-  const grades = [1.05, 1.35, 1.75, 2.05, 2.35, 2.75, 3.05, 3.35];
-  let withOld = 0;
-  let withNew = 0;
-  for (const raw of grades) {
-    const adj = getAdjacentGermanGradeInfo(raw);
-    if (adj.pointsNeeded != null && adj.pointsNeeded > 0 && adj.pointsNeeded <= 1)
-      withOld++;
-    if (
-      adj.pointsNeeded != null &&
-      adj.pointsNeeded > 0 &&
-      adj.pointsNeeded <= defaultBorderlineMax("grade")
-    )
-      withNew++;
-  }
-  check("D4", withOld === grades.length && withNew < grades.length, `old max=1: ${withOld}/${grades.length}; new 0.1: ${withNew}/${grades.length}`);
+  // D4: Abstand vom abgeschnittenen Notenmittel bis zur besseren Stufe
+  const d24 = getAdjacentGermanGradeInfo(2.4);
+  const d245 = getAdjacentGermanGradeInfo(2.45);
+  const d41 = getAdjacentGermanGradeInfo(4.1);
+  const d10 = getAdjacentGermanGradeInfo(1.05);
+  check(
+    "D4",
+    d24.currentGrade === 2.3 && d24.nextGrade === 2.0 && nearly(d24.pointsNeeded, 0.3, 1e-6) &&
+      nearly(d245.pointsNeeded, 0.3, 1e-6) &&
+      d41.currentGrade === 5.0 && d41.nextGrade === 4.0 && nearly(d41.pointsNeeded, 0.1, 1e-6) &&
+      d10.nextGrade === null &&
+      d24.direction === "better",
+    `2,4→${d24.pointsNeeded}→${d24.nextGrade}; 2,45→${d245.pointsNeeded}; 4,1→${d41.pointsNeeded}→${d41.nextGrade}; 1,05→${d10.nextGrade}`
+  );
 
   // D5: points path cohort
   const units = [0.69, 0.76, 0.835, 0.815, 0.79, 0.837, 0.818, 0.697, 0.938, 0.938, 0.58, 0.72, 0.88, 0.91, 0.65];
@@ -703,7 +723,7 @@ function portfolioPointsProject(units: number[], scale: "percent" | "points") {
     stats.borderlineCount < n && stats.borderlineCount >= 0,
     `points borderline ${stats.borderlineCount}/${n} (not all)`
   );
-  check("D6", resolveNextGradeUnit(rows) === "points", `resolveNextGradeUnit=${resolveNextGradeUnit(rows)}`);
+  check("D6", resolveNextGradeUnit(rows) === "grade", `resolveNextGradeUnit=${resolveNextGradeUnit(rows)}`);
 }
 
 // ========== D7 TL details schema points ==========
@@ -1315,6 +1335,144 @@ function portfolioPointsProject(units: number[], scale: "percent" | "points") {
       cellToString({ richText: [{ text: "A" }, { text: "B" }] }) === "AB" &&
       cellToString({ result: 3513589 }) === "3513589",
     `cellToString unwraps excel objects`
+  );
+}
+
+
+// ========== R: Notenregeln (RaPO, Ausgleich, StA-Skala, Anzeige) ==========
+function twoTlProject(
+  vals: [number[], number[]][],
+  opts: { allowComp?: boolean; weights?: [number, number] } = {}
+) {
+  const scenarios = baseScenarios();
+  const crit = (p: string) =>
+    [1, 2, 3, 4].map((i) => ({
+      id: `${p}k${i}`, name: `K${i}`, code: `K${i}`,
+      scale: "points" as const, weight: 1, maxPoints: 6,
+    }));
+  const [w1, w2] = opts.weights ?? [60, 40];
+  const components = [
+    { id: "deck", name: "Deck", code: "D", weight: w1, criteriaScale: "points" as const, criteria: crit("d") },
+    { id: "vor", name: "Vortrag", code: "V", weight: w2, criteriaScale: "points" as const, criteria: crit("v") },
+  ];
+  const mats = vals.map((_, i) => String(9100 + i));
+  const his = makeHis(mats);
+  const points = vals.map(([d, v], i) => ({
+    matriculationNumber: mats[i],
+    bySubArea: {},
+    portfolioCriterionValues: {
+      deck: Object.fromEntries(d.map((x, j) => [`dk${j + 1}`, x])),
+      vor: Object.fromEntries(v.map((x, j) => [`vk${j + 1}`, x])),
+    },
+  }));
+  return {
+    id: "r", name: "R", examType: "portfolio", portfolioCriteriaMode: true,
+    portfolioComponents: components, portfolioPerLecturerGrading: false,
+    portfolioAllowCompensation: opts.allowComp,
+    studentGroups: [], lecturers: [], subAreas: [], attendance: [], points,
+    students: studentsFromHis(his), hisRows: his, hisSources: [],
+    gradeScenarios: scenarios, activeScenarioId: scenarios[0].id,
+    gradeSchema: scenarios[0].schema, criteria: [], identityMerges: [],
+  } as any;
+}
+
+{
+  // R1: TL 5,0 (8/24) + 3,0 (16/24), 60/40 → Mittel 4,2 → 5,0; Anzeige konsistent
+  const r = buildEnrichedRows(twoTlProject([[[3, 3, 1, 1], [4, 4, 4, 4]]]))[0];
+  check(
+    "R1",
+    r?.finalGrade === 5.0 && r.isFailed === true && (r.pointsBelowPass ?? 0) > 0 &&
+      r.nextGrade === 4.0 && r.nextGradeUnit === "grade",
+    `TL 5,0/3,0 → ${r?.finalGrade} failed=${r?.isFailed} belowPass=${r?.pointsBelowPass} next=${r?.pointsToNext}→${r?.nextGrade}`
+  );
+  const changes = listGradeRuleChanges(twoTlProject([[[3, 3, 1, 1], [4, 4, 4, 4]]]));
+  check(
+    "R1b",
+    changes.length === 1 && changes[0].oldGrade === 4.0 && changes[0].newGrade === 5.0,
+    `Regelvergleich: ${changes.map((c) => `${c.oldGrade}→${c.newGrade}`).join(",")}`
+  );
+}
+
+{
+  // R2: Ausgleich – TL 5,0 (11/24) + 1,0 (24/24): an → 3,3; aus → 5,0 + Label
+  const on = buildEnrichedRows(twoTlProject([[[3, 3, 3, 2], [6, 6, 6, 6]]]))[0];
+  const off = buildEnrichedRows(
+    twoTlProject([[[3, 3, 3, 2], [6, 6, 6, 6]]], { allowComp: false })
+  )[0];
+  check(
+    "R2",
+    on?.finalGrade === 3.3 && off?.finalGrade === 5.0 &&
+      off.failedComponentLabel === "D" && off.isFailed === true && off.pointsToNext == null,
+    `Ausgleich an=${on?.finalGrade} aus=${off?.finalGrade} label=${off?.failedComponentLabel}`
+  );
+}
+
+{
+  // R3: Korrektorenmittel als Notenstufe: 2,7 + 3,7 → 3,2 → 3,3; ungerundet 3,2
+  const byL = { c1: { A: 2.7, B: 3.7 } };
+  const g = averageLecturerGradesForComponent(byL, "c1", ["A", "B"]);
+  const raw = averageLecturerGradesForComponent(byL, "c1", ["A", "B"], true);
+  check("R3", g === 3.3 && nearly(raw, 3.2, 1e-6), `Korrektorenmittel ${raw} → Teilnote ${g}`);
+}
+
+{
+  // R4: %-Spalte gewichtet: 14/24 (60) + 19/24 (40) → 66,7 %, Punkte 32,0/48
+  const r = buildEnrichedRows(twoTlProject([[[3, 3, 4, 4], [5, 5, 5, 4]]]))[0];
+  check(
+    "R4",
+    nearly(r?.percent, 0.6667, 0.001) && nearly(r?.totalPoints, 32.0, 1e-6),
+    `percent=${r?.percent} points=${r?.totalPoints}`
+  );
+}
+
+{
+  // R5: StA reine Note-Kriterien 4,0/4,0 → 4,0, keine Punkte, kein „unter Bestehen“
+  const scenarios = createDefaultScenarios(100);
+  const his = makeHis(["9201"]);
+  const mk = (criteria: any[], vals: Record<string, number>) => ({
+    id: "r5", name: "S", examType: "sta_criteria", criteria, subAreas: [], attendance: [],
+    points: [{ matriculationNumber: "9201", bySubArea: {}, criterionValues: vals }],
+    students: studentsFromHis(his), hisRows: his, hisSources: [],
+    gradeScenarios: scenarios, activeScenarioId: scenarios[0].id,
+    gradeSchema: scenarios[0].schema, identityMerges: [], lecturers: [], studentGroups: [],
+  }) as any;
+  const g = (id: string) => ({ id, name: id, code: id, scale: "grade" as const, weight: 1 });
+  const pt = (id: string) => ({ id, name: id, code: id, scale: "points" as const, weight: 1, maxPoints: 6 });
+  const r = buildEnrichedRows(mk([g("a"), g("b")], { a: 4, b: 4 }))[0];
+  check(
+    "R5",
+    r?.finalGrade === 4.0 && r.totalPoints == null && r.isFailed === false &&
+      (r.pointsBelowPass ?? 0) <= 0 && r.nextGradeUnit === "grade" &&
+      r.nextGrade === 3.7 && nearly(r.pointsToNext, 0.2, 1e-6),
+    `StA Noten 4,0: final=${r?.finalGrade} pts=${r?.totalPoints} below=${r?.pointsBelowPass} next=${r?.pointsToNext}→${r?.nextGrade}`
+  );
+  // R6: gemischte Skalen → Export gesperrt
+  const mixed = mk([g("a"), pt("b")], { a: 4, b: 3 });
+  const items = validateForExport(mixed, buildEnrichedRows(mixed));
+  check(
+    "R6",
+    items.some((i) => i.level === "error" && i.message.includes("unterschiedliche Skalen")),
+    "StA mit gemischten Skalen blockiert Export"
+  );
+}
+
+{
+  // R7: Presets bei Max 75 exakt skaliert (37,5 statt 38)
+  const sc = createDefaultScenarios(75);
+  check(
+    "R7",
+    nearly(sc[0].passThreshold, 37.5, 1e-9) && nearly(sc[1].passThreshold, 33.33, 1e-9),
+    `max 75: pass=${sc[0].passThreshold} / ${sc[1].passThreshold}`
+  );
+}
+
+{
+  // R8: Neue Prüfung ohne Typ → elektrP; neue Projekte gelten als bestätigt
+  const p = createEmptyExamProject({ name: "X", semester: "WiSe 2026/27" });
+  check(
+    "R8",
+    p.examType === "elektr_p" && p.gradeRulesVersion === 2,
+    `default examType=${p.examType} rules=${p.gradeRulesVersion}`
   );
 }
 

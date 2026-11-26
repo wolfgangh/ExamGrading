@@ -6,8 +6,11 @@ import type {
   PointsRecord,
   PortfolioComponent,
 } from "@/lib/types";
-import { GERMAN_GRADES } from "@/lib/types";
 import { calculateGrade } from "@/lib/grades/schema";
+import {
+  roundGradeAverage,
+  roundsLecturerMean,
+} from "@/lib/grades/grade-average";
 import {
   countMissingCriteria,
   gradeToUnit,
@@ -15,23 +18,12 @@ import {
   normalizeCriterionValue,
 } from "@/lib/grades/sta-criteria";
 
-/** Nächste zulässige deutsche Note (1,0 … 5,0) */
+/**
+ * Notenmittel → Notenstufe (RaPO: erste Dezimale abschneiden, > 4,0 → 5,0).
+ * @deprecated Name historisch; nutze roundGradeAverage aus grade-average.
+ */
 export function roundToNearestGermanGrade(raw: number): number {
-  if (!Number.isFinite(raw)) return 5.0;
-  const clamped = Math.min(5, Math.max(1, raw));
-  // PO-Regel: ab 4,5 nicht bestanden (nicht zur besseren Note 4,0 runden)
-  if (clamped + 1e-12 >= 4.5) return 5.0;
-  let best: number = GERMAN_GRADES[GERMAN_GRADES.length - 1];
-  let bestDist = Infinity;
-  for (const g of GERMAN_GRADES) {
-    if (g >= 5) continue;
-    const d = Math.abs(g - clamped);
-    if (d < bestDist - 1e-9 || (Math.abs(d - bestDist) < 1e-9 && g < best)) {
-      best = g;
-      bestDist = d;
-    }
-  }
-  return best;
+  return roundGradeAverage(raw);
 }
 
 /**
@@ -65,16 +57,18 @@ export function computePortfolioGrade(
 ): number | null {
   const raw = computePortfolioRawAverage(portfolioGrades, components);
   if (raw == null) return null;
-  return roundToNearestGermanGrade(raw);
+  return roundGradeAverage(raw);
 }
 
-/** Gleichgewichtetes Mittel der Dozenten-Noten für eine Teilleistung */
+/** Teilnote aus dem gleichgewichteten Mittel der Korrektorennoten (als Notenstufe) */
 export function averageLecturerGradesForComponent(
   byLecturer:
     | Record<string, Record<string, number | null | undefined>>
     | undefined,
   componentId: string,
-  lecturers: string[]
+  lecturers: string[],
+  /** true = ungerundetes Korrektorenmittel (z. B. für „bis nächste Note“) */
+  unrounded = false
 ): number | null {
   const names = lecturers.map((l) => l.trim()).filter(Boolean);
   if (names.length === 0) return null;
@@ -85,7 +79,9 @@ export function averageLecturerGradesForComponent(
     if (g == null || !Number.isFinite(g)) return null;
     acc += Math.min(5, Math.max(1, g));
   }
-  return Math.round((acc / names.length) * 1000) / 1000;
+  const mean = Math.round((acc / names.length) * 1000) / 1000;
+  // Teilnote = Notenstufe (Korrektorenmittel nach RaPO-Regel)
+  return !unrounded && roundsLecturerMean() ? roundGradeAverage(mean) : mean;
 }
 
 export type GradeFromCriteriaOptions = {
@@ -123,7 +119,7 @@ export function gradeFromCriterionValues(
   if (wSum <= 0) return null;
   const unitAvg = acc / wSum;
   // unit 1 = best → Note 1,0; unit 0 → Note 5,0
-  return roundToNearestGermanGrade(5 - 4 * unitAvg);
+  return roundGradeAverage(5 - 4 * unitAvg);
 }
 
 export type PortfolioProjectSlice = Pick<
@@ -133,6 +129,7 @@ export type PortfolioProjectSlice = Pick<
   | "lecturers"
   | "portfolioComponents"
   | "studentGroups"
+  | "portfolioAllowCompensation"
 >;
 
 export type PortfolioGradeContext = {
@@ -356,7 +353,7 @@ export function gradeFromUnitAvg(
 ): number {
   const u = Math.min(1, Math.max(0, unitAvg));
   if (scale === "grade" || !schema || schema.maxPoints <= 0) {
-    return roundToNearestGermanGrade(5 - 4 * u);
+    return roundGradeAverage(5 - 4 * u);
   }
   // points / percent: Notenschlüssel des aktiven Szenarios
   return calculateGrade(u * schema.maxPoints, schema);
@@ -873,24 +870,53 @@ export function groupPortfolioFillStatus(
   return "partial";
 }
 
+/** Ausgleich nicht bestandener Teilleistungen erlaubt? (Standard: ja) */
+export function portfolioAllowsCompensation(
+  project: Pick<ExamProject, "portfolioAllowCompensation">
+): boolean {
+  return project.portfolioAllowCompensation !== false;
+}
+
 /**
- * Portfolio-Gesamtnote.
- * Bei points/percent-TLs + Schema: unitAvg × max → calculateGrade (Szenario).
- * Sonst: Mittel der Teilnoten (linear bzw. schema-basierte TL-Noten), gerundet.
+ * Erste nicht bestandene Teilleistung (Teilnote > 4,0), sofern kein Ausgleich
+ * erlaubt ist; sonst null.
+ */
+export function failedPortfolioComponentWithoutCompensation(
+  project: PortfolioProjectSlice,
+  rec: PointsRecord | undefined | null,
+  ctx?: PortfolioGradeContext
+): PortfolioComponent | null {
+  if (portfolioAllowsCompensation(project)) return null;
+  const grades = effectivePortfolioGrades(project, rec, ctx);
+  for (const c of project.portfolioComponents ?? []) {
+    if (!isPortfolioComponentActiveForGroup(project, c, ctx?.groupId)) continue;
+    const g = grades[c.id];
+    if (g != null && Number.isFinite(g) && g > 4.0 + 1e-9) return c;
+  }
+  return null;
+}
+
+/**
+ * Portfolio-Gesamtnote = gewichtetes Notenmittel der Teilnoten → Notenstufe
+ * (RaPO: erste Dezimale abschneiden, > 4,0 → 5,0). Teilnoten bei
+ * Punkte-/Prozent-TLs über das aktive Notenszenario, sonst linear.
+ * Ohne Ausgleich: eine Teilnote 5,0 → Gesamtnote 5,0.
  */
 export function computePortfolioGradeForProject(
   project: PortfolioProjectSlice,
   rec: PointsRecord | undefined | null,
   ctx?: PortfolioGradeContext
 ): number | null {
-  // Gesamtnote = Mittel der (ggf. szenariobasierten) TL-Noten – nicht unitAvg×Schema.
   const components = (project.portfolioComponents ?? []).filter((c) =>
     isPortfolioComponentActiveForGroup(project, c, ctx?.groupId)
   );
-  return computePortfolioGrade(
-    effectivePortfolioGrades(project, rec, ctx),
-    components
-  );
+  const grades = effectivePortfolioGrades(project, rec, ctx);
+  const grade = computePortfolioGrade(grades, components);
+  if (grade == null) return null;
+  if (failedPortfolioComponentWithoutCompensation(project, rec, ctx)) {
+    return 5.0;
+  }
+  return grade;
 }
 
 /**
