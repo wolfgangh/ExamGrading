@@ -50,7 +50,7 @@ export function validateForExport(
   if (project.hisRows.length === 0) {
     items.push({
       level: "error",
-      message: `Keine ${HISINONE_LABEL}-Masterliste importiert – Export unvollständig.`,
+      message: `Keine Teilnehmerliste – ${HISINONE_LABEL}-Datei importieren oder Teilnehmende manuell erfassen.`,
       href: `/exam/${project.id}/import`,
       actionLabel: "Zu Importe",
     });
@@ -133,7 +133,7 @@ export function validateForExport(
       if (incomplete.length > 0) {
         items.push({
           level: "error",
-          message: `Kriterien unvollständig bei ${incomplete.length} Person(en) in HISinOne.`,
+          message: `Kriterien unvollständig bei ${incomplete.length} Person(en) der Teilnehmerliste.`,
           count: incomplete.length,
           href: `/exam/${project.id}/assessment`,
           actionLabel: "Zur Matrix",
@@ -152,7 +152,7 @@ export function validateForExport(
     if (missingGrade.length > 0) {
       items.push({
         level: "error",
-        message: `Manuelle Note fehlt bei ${missingGrade.length} Person(en) in HISinOne.`,
+        message: `Manuelle Note fehlt bei ${missingGrade.length} Person(en) der Teilnehmerliste.`,
         count: missingGrade.length,
         href: `/exam/${project.id}/grades`,
         actionLabel: "Zur Notenübersicht",
@@ -187,7 +187,7 @@ export function validateForExport(
       if (incomplete.length > 0) {
         items.push({
           level: "error",
-          message: `Teilnoten unvollständig bei ${incomplete.length} Person(en) in HISinOne.`,
+          message: `Teilnoten unvollständig bei ${incomplete.length} Person(en) der Teilnehmerliste.`,
           count: incomplete.length,
           href: `/exam/${project.id}/assessment`,
           actionLabel: "Zur Matrix",
@@ -206,7 +206,7 @@ export function validateForExport(
     if (emptyHis.length > 0) {
       items.push({
         level: "error",
-        message: `${emptyHis.length} Person(en) in HISinOne ohne Note und nicht als No-Show – leere Exportzelle wirkt wie Nichtantritt. Bitte Note eintragen oder als nicht angetreten markieren.`,
+        message: `${emptyHis.length} Person(en) der Teilnehmerliste ohne Note und nicht als No-Show – leere Exportzelle wirkt wie Nichtantritt. Bitte Note eintragen oder als nicht angetreten markieren.`,
         count: emptyHis.length,
         href: `/exam/${project.id}/grades`,
         actionLabel: "Zur Notenübersicht",

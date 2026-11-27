@@ -3,6 +3,7 @@ import { generateLinearGradeSchema } from "@/lib/grades/schema";
 import { portfolioUsesGradeScenarios } from "@/lib/grades/portfolio";
 import { staCriteriaAllGradeScale } from "@/lib/grades/sta-criteria";
 import { parseProgramCode, summarizeExamNumbers } from "@/lib/his-sources";
+import { migrateManualExtrasToParticipantList } from "@/lib/manual-participants";
 import type {
   ExamProject,
   GradeScenario,
@@ -581,6 +582,9 @@ export function migrateExamProject(raw: ExamProject): ExamProject {
   if (portfolioUsesGradeScenarios(project)) {
     project = ensurePortfolioScenarios(project);
   }
+
+  // Bisherige manuelle „Extras“ (StA/Portfolio) → manuelle Teilnehmerliste
+  project = migrateManualExtrasToParticipantList(project);
 
   return project;
 }

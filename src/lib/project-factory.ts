@@ -71,6 +71,7 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     updatedAt: now,
     schemaVersion: 2,
     gradeRulesVersion: GRADE_RULES_VERSION,
+    manualExtrasMigrated: true,
     name: displayName,
     examNumber: input.examNumber?.trim() ?? "",
     semester: input.semester?.trim() ?? "",

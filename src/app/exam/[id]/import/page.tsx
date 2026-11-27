@@ -25,7 +25,6 @@ import { parsePointsMatrix } from "@/lib/excel/parse-moodle-points";
 import {
   buildHisSourceFromParse,
   findHisSourceExamNumberConflict,
-  getHisSources,
   removeHisSource,
   upsertHisSource,
 } from "@/lib/his-sources";
@@ -41,6 +40,7 @@ import {
 } from "@/lib/grades/round-half-points";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import type {
+  ExamProject,
   ImportLogEntry,
   ImportType,
   PointsRecord,
@@ -50,10 +50,15 @@ import { Button } from "@/components/ui/button";
 import { exportPointsTemplate } from "@/lib/excel/export-points-template";
 import { Download, Trash2 } from "lucide-react";
 import {
+  HISINONE_LABEL,
   isHisManualAssessmentExam,
   isOnlineStyleExam,
 } from "@/lib/types";
-import { AddStudentForm } from "@/components/exam/add-student-form";
+import { ManualParticipantsPanel } from "@/components/import/manual-participants-panel";
+import {
+  getHisinoneSources,
+  takeOverManualParticipantsByHis,
+} from "@/lib/manual-participants";
 import {
   PageSectionNav,
   SECTION_SCROLL_MT,
@@ -121,9 +126,26 @@ function mergeStudents(
       email: s.email || prev?.email,
       attempt: s.attempt ?? prev?.attempt ?? null,
       groupId: prev?.groupId ?? s.groupId ?? null,
+      takenOverFromManual: prev?.takenOverFromManual,
     };
   }
   return next;
+}
+
+/** HISinOne hat Vorrang: Personen der manuellen Liste in die HIS-Quelle übernehmen. */
+function withHisTakeover(p: ExamProject): ExamProject {
+  const { project: q, takeovers } = takeOverManualParticipantsByHis(p);
+  if (takeovers.length === 0) return q;
+  const msg = `${takeovers.length} Person(en) aus der manuellen Teilnehmerliste in ${HISINONE_LABEL} übernommen (Bewertungen bleiben): ${takeovers
+    .map((t) => `${t.newName} (${t.key})`)
+    .join(", ")}`;
+  const [first, ...rest] = q.importLogs;
+  return {
+    ...q,
+    importLogs: first
+      ? [{ ...first, warnings: [msg, ...first.warnings] }, ...rest]
+      : q.importLogs,
+  };
 }
 
 export default function ImportPage() {
@@ -246,7 +268,7 @@ export default function ImportPage() {
               ...prev.importLogs,
             ].slice(0, 30),
           };
-          return clearWorkflowMilestonesOnImport(next);
+          return clearWorkflowMilestonesOnImport(withHisTakeover(next));
         });
       },
     });
@@ -278,7 +300,7 @@ export default function ImportPage() {
         const extraWarn = conflict
           ? `Prüfungsnr. ${source.examNumber} schon in „${conflict.originalFileName || conflict.label}“ – als weitere Quelle behalten.`
           : null;
-        return clearWorkflowMilestonesOnImport({
+        return clearWorkflowMilestonesOnImport(withHisTakeover({
           ...upsertHisSource(prev, source),
           lecturers,
           students,
@@ -293,7 +315,7 @@ export default function ImportPage() {
             }),
             ...prev.importLogs,
           ].slice(0, 30),
-        });
+        }));
       });
     }
   };
@@ -513,7 +535,7 @@ export default function ImportPage() {
   const lastByType = (type: ImportType) =>
     project.importLogs.find((l) => l.type === type);
 
-  const hisSources = getHisSources(project);
+  const hisSources = getHisinoneSources(project);
   const isKlausur = project.examType === "written";
   const isHisManual = isHisManualAssessmentExam(project.examType);
   const canExportTemplate = project.hisRows.length > 0;
@@ -529,18 +551,19 @@ export default function ImportPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Importe</h1>
         <p className="text-muted-foreground">
           {isHisManual
-            ? "HISinOne-Masterliste importieren, optional weitere Personen manuell hinzufügen (StA / Portfolio)."
+            ? "Teilnehmerliste aus HISinOne-Datei(en) und/oder manuell erfassen (StA / Portfolio)."
             : isKlausur
-              ? "Klausur: HIS-Masterliste, dann Punkte-Vorlage ausfüllen und importieren."
-              : "HIS-Masterliste (ggf. mehrere Studiengänge), Antrittsliste und Punkte. Matching über Matrikelnummer / Anmeldename."}
+              ? "Klausur: Teilnehmerliste (HISinOne-Datei und/oder manuell), dann Punkte-Vorlage ausfüllen und importieren."
+              : "Teilnehmerliste (HISinOne-Dateien, ggf. mehrere Studiengänge, und/oder manuell), Antrittsliste und Punkte. Matching über Matrikelnummer / Anmeldename."}
         </p>
       </div>
 
       <PageSectionNav
         sections={[
-          { id: "import-his", label: "HIS" },
+          { id: "import-his", label: "HISinOne" },
+          { id: "import-manual", label: "Manuell" },
           ...(isHisManual
-            ? [{ id: "import-manual", label: "Person manuell" }]
+            ? []
             : isKlausur
               ? [
                   { id: "import-vorlage", label: "Vorlage" },
@@ -555,15 +578,17 @@ export default function ImportPage() {
 
       <div
         className={
-          isHisManual || isKlausur
-            ? "grid gap-4 md:grid-cols-2"
-            : "grid gap-4 md:grid-cols-3"
+          isHisManual
+            ? "grid gap-4"
+            : isKlausur
+              ? "grid gap-4 md:grid-cols-2"
+              : "grid gap-4 md:grid-cols-3"
         }
       >
         <div id="import-his" className={cn("space-y-2", SECTION_SCROLL_MT)}>
           <ImportDropzone
-            label="1. HIS / QIS Noteneintrag"
-            description="Eine oder mehrere Dateien (z. B. MEB + MBW). Wird ergänzt, nicht überschrieben."
+            label="1. Teilnehmerliste: HISinOne-Datei"
+            description="Eine oder mehrere Dateien (z. B. MEB + MBW). Wird ergänzt, nicht überschrieben. Ohne HISinOne-Daten: manuelle Teilnehmerliste unten."
             multiple
             onFiles={handleHisFiles}
           />
@@ -601,24 +626,7 @@ export default function ImportPage() {
           )}
         </div>
 
-        {isHisManual ? (
-          <Card
-            id="import-manual"
-            className={cn("surface-panel", SECTION_SCROLL_MT)}
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                2. Person manuell hinzufügen
-              </CardTitle>
-              <CardDescription>
-                Zusätzliche Studierende ohne oder mit späterem HIS-Eintrag.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AddStudentForm project={project} onAdd={setProject} />
-            </CardContent>
-          </Card>
-        ) : isKlausur ? (
+        {isHisManual ? null : isKlausur ? (
           <div className="space-y-3">
             <Card
               id="import-vorlage"
@@ -716,6 +724,13 @@ export default function ImportPage() {
           </>
         )}
       </div>
+
+      <ManualParticipantsPanel
+        id="import-manual"
+        className={cn("surface-panel", SECTION_SCROLL_MT)}
+        project={project}
+        setProject={setProject}
+      />
 
       <Card className="surface-panel">
         <CardHeader>

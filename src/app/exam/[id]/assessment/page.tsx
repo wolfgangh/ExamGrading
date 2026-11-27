@@ -9,6 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { staCriteriaMixedScales } from "@/lib/grades/sta-criteria";
+import { ParticipantSourceBadges } from "@/components/exam/participant-source-badges";
 import { STA_MIXED_SCALES_MESSAGE } from "@/lib/validations";
 import { useParams, useSearchParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
@@ -1720,6 +1721,7 @@ export default function AssessmentPage() {
                             <div className="flex flex-col items-start gap-1">
                               <span>
                                 {r.student.lastName}, {r.student.firstName}
+                                <ParticipantSourceBadges row={r} className="ml-1" />
                                 {ungrouped && (
                                   <Badge
                                     variant="outline"

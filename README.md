@@ -4,7 +4,7 @@
 
 © Prof. Dr. Wolfgang Hößl · OTH Regensburg · *Client-seitig · Keine Serverübertragung*
 
-**Aktuelle Version:** 0.4.75 (siehe auch `package.json` und App-Footer)
+**Aktuelle Version:** 0.4.76 (siehe auch `package.json` und App-Footer)
 
 **Noten-Regression:** `npm run test:grades` führt `scripts/grade-constellation-matrix.mts` aus (Konstellationen A–E, Szenarien, Grenzfälle). Workflow: `.grok/workflows/test-grade-constellations.rhai`.
 
@@ -31,7 +31,7 @@ Geeignet u. a. für:
 |--------|--------|
 | **Prüfungstypen** | THE, elektrP, Klausur, StA (Kriterien / manuell), Portfolio (optional Teilnoten je Dozent), Sonstige |
 | **Startseite** | Prüfungskarten mit Semester, Prüfungsform, Workflow-Status; Multi-JSON- und **Semester-ZIP**-Import/Export |
-| **Import** | HISinOne (auch mehrere Dateien), Moodle-Antritt, Moodle-/Punkte-Excel; manuell Personen (StA/Portfolio) |
+| **Import** | Teilnehmerliste aus HISinOne (auch mehrere Dateien) und/oder **manuell** (Formular, Einfügen, Excel/CSV – z. B. berufsbegleitende Studiengänge); Moodle-Antritt, Moodle-/Punkte-Excel |
 | **Zuordnung** | Matrikel-Tippfehler: Vorschläge, zusammenführen, ablehnen, rückgängig |
 | **Bewertung** | Detailpunkte, offene Aufgaben; **Bewertungsmatrix** (StA-Kriterien / Portfolio-Teilnoten) mit Skalenhinweisen, Gruppen, Namenssuche |
 | **Noten** | Szenarien (Bestehensgrenzen), Overrides, Notenspiegel, Szenario-Impact |
@@ -147,4 +147,4 @@ Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Deta
 ## Lizenz & Kontakt
 
 Internes Hochschul-Tool.  
-© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.75
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.76

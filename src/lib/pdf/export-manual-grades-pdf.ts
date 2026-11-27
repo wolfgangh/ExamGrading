@@ -15,7 +15,7 @@ import {
   startPdfWithHeader,
 } from "@/lib/pdf/pdf-common";
 
-/** Kandidaten ohne HIS-Anmeldung (Sonderfälle) */
+/** Kandidaten ohne HISinOne-Anmeldung: Sonderfälle und manuelle Teilnehmerliste */
 export function filterManualGradeRows(
   rows: EnrichedStudentRow[]
 ): EnrichedStudentRow[] {
@@ -23,7 +23,9 @@ export function filterManualGradeRows(
     .filter(
       (r) =>
         r.attendanceWithoutHis ||
-        (!r.inHis && (r.hasPoints || r.finalGrade != null))
+        (!r.inHis && (r.hasPoints || r.finalGrade != null)) ||
+        (r.fromManualList === true &&
+          (r.hasPoints || r.finalGrade != null || r.status === "no_show"))
     )
     .sort((a, b) => {
       const ln = a.student.lastName.localeCompare(b.student.lastName, "de");
@@ -51,7 +53,7 @@ export function exportManualGradesPdf(
   doc.setTextColor(60);
   doc.text(
     pdfText(
-      "Nur zur Erfassung von Sonderfällen (Teilnahme ohne HIS-Anmeldung)."
+      "Teilnahme ohne HISinOne-Anmeldung (Sonderfälle, manuelle Teilnehmerliste)."
     ),
     PDF_MARGIN,
     y

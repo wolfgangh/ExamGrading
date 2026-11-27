@@ -41,7 +41,11 @@ import {
 import { exportNotenspiegelPdf } from "@/lib/pdf/export-notenspiegel-pdf";
 import { exportNotenspiegelExcel } from "@/lib/excel/export-notenspiegel";
 import { exportHisExcel } from "@/lib/excel/export-his";
-import { getHisSources } from "@/lib/his-sources";
+import {
+  getHisinoneSources,
+  listManualParticipants,
+} from "@/lib/manual-participants";
+import { exportGradeListExcel } from "@/lib/excel/export-grade-list";
 import {
   findPointsRecord,
   resolveProgramCode,
@@ -126,7 +130,12 @@ export default function DocumentsPage() {
     [project, rows]
   );
   const hisSources = useMemo(
-    () => (project ? getHisSources(project) : []),
+    () => (project ? getHisinoneSources(project) : []),
+    [project]
+  );
+
+  const manualCount = useMemo(
+    () => (project ? listManualParticipants(project).length : 0),
     [project]
   );
 
@@ -453,7 +462,8 @@ export default function DocumentsPage() {
             )}
             {hisSources.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Keine HIS-Quelle – bitte unter Import die Noteneintragsdatei(en)
+                Keine {HISINONE_LABEL}-Datei – Teilnehmende der manuellen
+                Liste über die Excel-Notenliste unten melden; sonst unter Import die Noteneintragsdatei(en)
                 einlesen.
               </p>
             ) : hisSources.length === 1 ? (
@@ -586,6 +596,33 @@ export default function DocumentsPage() {
             <p className="text-xs text-muted-foreground">
               Bei älteren Projekten Originaldatei unter Import erneut einlesen.
             </p>
+            <div className="space-y-1.5 border-t pt-3">
+              <p className="text-sm font-medium">
+                Excel-Notenliste (alle Teilnehmenden)
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Matrikel, Name, Studiengang, Quelle ({HISINONE_LABEL} / manuell),
+                Note, Bemerkung – für Teilnehmende ohne {HISINONE_LABEL}-Datei
+                {manualCount > 0 ? ` (${manualCount} in der manuellen Liste)` : ""}.
+              </p>
+              <Button
+                size="sm"
+                variant={hisSources.length === 0 ? "default" : "outline"}
+                disabled={
+                  busy != null || !pdfAllowed || project.hisRows.length === 0
+                }
+                onClick={() =>
+                  run(
+                    "gradelist",
+                    () => exportGradeListExcel(project, rows),
+                    "Excel-Notenliste heruntergeladen."
+                  )
+                }
+              >
+                <FileSpreadsheet className="size-4" />
+                {busy === "gradelist" ? "…" : "Excel-Notenliste"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

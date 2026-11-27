@@ -66,6 +66,19 @@ import { validateForExport } from "../src/lib/validations.ts";
 import { runWithGradeRules } from "../src/lib/grades/grade-average.ts";
 import { averageLecturerGradesForComponent } from "../src/lib/grades/portfolio.ts";
 import { listGradeRuleChanges } from "../src/lib/grades/grade-rules-review.ts";
+import {
+  addManualParticipants,
+  listManualParticipants,
+  migrateManualExtrasToParticipantList,
+  parseParticipantMatrix,
+  participantHasAssessment,
+  removeManualParticipant,
+  takeOverManualParticipantsByHis,
+  textToMatrix,
+  updateManualParticipant,
+} from "../src/lib/manual-participants.ts";
+import { buildGradeListRows } from "../src/lib/excel/export-grade-list.ts";
+import { filterManualGradeRows } from "../src/lib/pdf/export-manual-grades-pdf.ts";
 
 type Status = "pass" | "fail";
 type CaseResult = { id: string; status: Status; message: string };
@@ -1473,6 +1486,162 @@ function twoTlProject(
     "R8",
     p.examType === "elektr_p" && p.gradeRulesVersion === 2,
     `default examType=${p.examType} rules=${p.gradeRulesVersion}`
+  );
+}
+
+// ========== M: Manuelle Teilnehmerliste ==========
+{
+  // M1: Einlesen – mit Kopfzeile (Spalten beliebig), ohne Kopfzeile, „Name, Vorname“
+  const withHeader = parseParticipantMatrix(
+    textToMatrix("Vorname;Nachname;Matrikelnummer;Studiengang\nErika;Muster;1234567;MBW\nMax;Mann;7654321;")
+  );
+  const noHeader = parseParticipantMatrix(
+    textToMatrix("1234567\tMuster\tErika\tMEB\t\t2")
+  );
+  const fullName = parseParticipantMatrix(
+    textToMatrix("Matrikelnummer,Vollständiger Name\n2345678,\"Muster, Erika\"")
+  );
+  check(
+    "M1",
+    withHeader.hasHeader && withHeader.rows.length === 2 &&
+      withHeader.rows[0].matriculationNumber === "1234567" &&
+      withHeader.rows[0].lastName === "Muster" && withHeader.rows[0].firstName === "Erika" &&
+      withHeader.rows[0].programCode === "MBW" &&
+      !noHeader.hasHeader && noHeader.rows[0].lastName === "Muster" &&
+      noHeader.rows[0].programCode === "MEB" && noHeader.rows[0].attempt === 2 &&
+      fullName.rows[0].lastName === "Muster" && fullName.rows[0].firstName === "Erika",
+    `header=${withHeader.hasHeader}/${withHeader.rows.length} noHeader=${noHeader.rows[0]?.lastName} full=${fullName.rows[0]?.lastName},${fullName.rows[0]?.firstName}`
+  );
+}
+
+function manualBaseProject(examType: string = "written") {
+  const p: any = createEmptyExamProject({ name: "BB", examType: examType as any, semester: "WiSe 2026/27" });
+  return p;
+}
+
+{
+  // M2: Hinzufügen – Pflichtfelder, Dubletten, zählt als angemeldet
+  const p0 = manualBaseProject("written");
+  const r = addManualParticipants(p0, [
+    { matriculationNumber: "1234567", lastName: "Muster", firstName: "Erika", programCode: "MBW" },
+    { matriculationNumber: "1234567", lastName: "Doppelt", firstName: "D" },
+    { matriculationNumber: "2345678", lastName: "Ohne", firstName: "" },
+    { matriculationNumber: "x", lastName: "A", firstName: "B" },
+    { matriculationNumber: "3456789", lastName: "Mann", firstName: "Max", attempt: 4 },
+  ]);
+  const rows = buildEnrichedRows(r.project);
+  const stats = computeStatistics(rows, r.project.gradeSchema, undefined, r.project);
+  const erika = rows.find((x) => x.key === "1234567");
+  check(
+    "M2",
+    r.added === 1 && r.issues.length === 4 &&
+      erika?.inHis === true && erika.fromManualList === true && erika.programCode === "MBW" &&
+      stats.registered === 1,
+    `added=${r.added} issues=${r.issues.map((i) => i.reason).join(" | ")} registered=${stats.registered}`
+  );
+  const vals = validateForExport(r.project, rows);
+  check(
+    "M2b",
+    !vals.some((v) => v.message.includes("Keine Teilnehmerliste")) &&
+      !vals.some((v) => v.message.includes("Original-")),
+    `manuelle Liste blockiert nicht: ${vals.filter((v) => v.level === "error").map((v) => v.message.slice(0, 40)).join(" | ")}`
+  );
+  const gl = buildGradeListRows(rows);
+  check("M2c", gl.length === 1 && gl[0].source === "manuell" && gl[0].programCode === "MBW", `Excel-Notenliste: ${JSON.stringify(gl[0])}`);
+}
+
+{
+  // M3: Bearbeiten mit neuer Matrikelnummer zieht Punkte mit; M4: Löschen
+  let p = addManualParticipants(manualBaseProject("written"), [
+    { matriculationNumber: "1234567", lastName: "Muster", firstName: "Erika" },
+  ]).project;
+  const sa = p.subAreas[0].id;
+  p = { ...p, points: [{ matriculationNumber: "1234567", bySubArea: { [sa]: 60 }, totalPoints: 60 }] };
+  const before = buildEnrichedRows(p).find((x) => x.key === "1234567")?.finalGrade;
+  const up = updateManualParticipant(p, "1234567", { matriculationNumber: "1234568", lastName: "Muster-Neu" });
+  const row = buildEnrichedRows(up.project).find((x) => x.key === "1234568");
+  check(
+    "M3",
+    !up.error && row?.finalGrade === before && row?.student.lastName === "Muster-Neu" &&
+      participantHasAssessment(up.project, "1234568") &&
+      !buildEnrichedRows(up.project).some((x) => x.key === "1234567"),
+    `rekey grade ${before}→${row?.finalGrade} name=${row?.student.lastName} err=${up.error}`
+  );
+  const del = removeManualParticipant(up.project, "1234568");
+  check(
+    "M4",
+    listManualParticipants(del).length === 0 && del.points.length === 0 && del.hisRows.length === 0,
+    `nach Löschen: manual=${listManualParticipants(del).length} points=${del.points.length}`
+  );
+}
+
+{
+  // M5: HISinOne-Import mit gleicher Matrikel → HISinOne hat Vorrang, Hinweis an der Person
+  let p = addManualParticipants(manualBaseProject("written"), [
+    { matriculationNumber: "1234567", lastName: "Mustr", firstName: "Erika" },
+    { matriculationNumber: "7654321", lastName: "Bleibt", firstName: "Manuell" },
+  ]).project;
+  const sa = p.subAreas[0].id;
+  p = { ...p, points: [{ matriculationNumber: "1234567", bySubArea: { [sa]: 70 }, totalPoints: 70 }] };
+  const gradeBefore = buildEnrichedRows(p).find((x) => x.key === "1234567")?.finalGrade;
+  const hisSource: any = {
+    id: "his1", programCode: "BW", examNumber: "BW 1", label: "BW", meta: {},
+    originalFileName: "bw.xlsx", originalXlsxBase64: "x",
+    rows: [{ matriculationNumber: "1234567", lastName: "Muster", firstName: "Erika", orderIndex: 0 }],
+  };
+  const t = takeOverManualParticipantsByHis(upsertHisSource(p, hisSource));
+  const rows = buildEnrichedRows(t.project);
+  const erika = rows.find((x) => x.key === "1234567");
+  check(
+    "M5",
+    t.takeovers.length === 1 && erika?.fromManualList === false && erika.programCode === "BW" &&
+      erika.finalGrade === gradeBefore &&
+      erika.warnings.some((w) => w.includes("bisher: Mustr, Erika")) &&
+      listManualParticipants(t.project).length === 1 &&
+      t.project.hisSources?.[t.project.hisSources.length - 1]?.kind === "manual",
+    `takeover=${t.takeovers.length} manual=${erika?.fromManualList} grade=${gradeBefore}→${erika?.finalGrade} warn=${erika?.warnings.join("|")}`
+  );
+}
+
+{
+  // M6: Migration bisheriger StA-Extras (einmalig)
+  const his = makeHis(["1111111"]);
+  const legacy: any = {
+    ...manualBaseProject("sta_criteria"),
+    manualExtrasMigrated: undefined,
+    hisSources: [{ id: "h", programCode: "MBW", examNumber: "MBW 1", label: "MBW", meta: {}, rows: his }],
+    hisRows: his,
+    students: {
+      "1111111": { matriculationNumber: "1111111", lastName: "His", firstName: "A" },
+      "2222222": { matriculationNumber: "2222222", lastName: "Extra", firstName: "B" },
+    },
+    points: [{ matriculationNumber: "2222222", bySubArea: {}, source: "manual", manualProgramCode: "MEB" }],
+  };
+  const m = migrateManualExtrasToParticipantList(legacy);
+  const again = migrateManualExtrasToParticipantList(m);
+  const extra = buildEnrichedRows(m).find((x) => x.key === "2222222");
+  check(
+    "M6",
+    m.manualExtrasMigrated === true && listManualParticipants(m).length === 1 &&
+      extra?.inHis === true && extra.fromManualList === true && extra.programCode === "MEB" &&
+      again === m,
+    `migrated=${listManualParticipants(m).length} inHis=${extra?.inHis} prog=${extra?.programCode}`
+  );
+}
+
+{
+  // M7: Manuelle Notenmeldung enthält bewertete Personen der manuellen Liste
+  let p = addManualParticipants(manualBaseProject("written"), [
+    { matriculationNumber: "1234567", lastName: "Muster", firstName: "Erika" },
+    { matriculationNumber: "7654321", lastName: "Leer", firstName: "Noch" },
+  ]).project;
+  const sa = p.subAreas[0].id;
+  p = { ...p, points: [{ matriculationNumber: "1234567", bySubArea: { [sa]: 70 }, totalPoints: 70 }] };
+  const manualRows = filterManualGradeRows(buildEnrichedRows(p));
+  check(
+    "M7",
+    manualRows.length === 1 && manualRows[0].key === "1234567",
+    `manuelle Notenmeldung: ${manualRows.map((r) => r.key).join(",")}`
   );
 }
 

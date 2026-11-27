@@ -152,7 +152,7 @@ export function buildWorkflowSteps(
     {
       id: "his",
       done: project.hisRows.length > 0,
-      label: `${HISINONE_LABEL}-Masterliste`,
+      label: "Teilnehmerliste",
       href: `/exam/${examId}/import`,
       detail:
         project.hisRows.length > 0
@@ -298,7 +298,7 @@ export function buildWorkflowSteps(
       href: `/exam/${examId}/export?stage=import#sicherung`,
       detail: !importsOk
         ? isHisManual || isKlausur
-          ? `Zuerst ${HISINONE_LABEL}-Masterliste importieren`
+          ? "Zuerst Teilnehmerliste importieren oder manuell erfassen"
           : `Zuerst ${HISINONE_LABEL}, Antritt und Punkte importieren`
         : importBackupDone
           ? `Erledigt${formatMilestoneAt(
