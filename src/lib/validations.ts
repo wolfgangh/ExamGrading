@@ -22,7 +22,10 @@ import {
   isStaCriteriaExam,
   isStaManualExam,
 } from "@/lib/types";
-import { countMissingCriteria } from "@/lib/grades/sta-criteria";
+import {
+  countMissingCriteria,
+  staCriteriaMixedScales,
+} from "@/lib/grades/sta-criteria";
 import { countMissingPortfolioCells } from "@/lib/grades/portfolio";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 
@@ -33,6 +36,10 @@ export interface ValidationItem {
   href?: string;
   actionLabel?: string;
 }
+
+/** Hinweis für StA-Prüfungen mit gemischten Kriterienskalen (Note + Punkte/Prozent). */
+export const STA_MIXED_SCALES_MESSAGE =
+  "Kriterien nutzen unterschiedliche Skalen (z. B. Note und Punkte). Eine Studienarbeit braucht genau eine Skala – unter Einstellungen vereinheitlichen. Export bis dahin gesperrt.";
 
 export function validateForExport(
   project: ExamProject,
@@ -103,6 +110,14 @@ export function validateForExport(
         actionLabel: "Einstellungen",
       });
     } else {
+      if (staCriteriaMixedScales(project.criteria)) {
+        items.push({
+          level: "error",
+          message: STA_MIXED_SCALES_MESSAGE,
+          href: `/exam/${project.id}/settings`,
+          actionLabel: "Skala vereinheitlichen",
+        });
+      }
       const incomplete = rows.filter((r) => {
         if (!r.inHis) return false;
         if (r.status === "no_show") return false;

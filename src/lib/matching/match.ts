@@ -10,7 +10,9 @@ import {
 import { ensureScenarios, getActiveScenario } from "@/lib/grades/scenarios";
 import {
   computeStaFinalGrade,
+  computeStaGradeAverage,
   countMissingCriteria,
+  staCriteriaAllGradeScale,
 } from "@/lib/grades/sta-criteria";
 import {
   computePortfolioComponentDetails,
@@ -21,6 +23,7 @@ import {
   computePortfolioScenarioGrade,
   countMissingPortfolioCells,
   effectivePortfolioGrades,
+  failedPortfolioComponentWithoutCompensation,
   portfolioUsesGradeScenarios,
 } from "@/lib/grades/portfolio";
 import { flattenHisRows, getHisSources } from "@/lib/his-sources";
@@ -126,6 +129,26 @@ function scenarioGradesForPoints(
   });
 }
 
+function gradeAverageExtras(
+  raw: number | null,
+  finalGrade: number | null
+) {
+  const next = raw != null ? getAdjacentGermanGradeInfo(raw) : null;
+  return {
+    pointsToNext: next?.pointsNeeded ?? null,
+    nextGrade: next?.nextGrade ?? null,
+    nextGradeDirection: next?.direction ?? null,
+    nextGradeUnit: "grade" as const,
+    isFailed: finalGrade != null && isFailedGrade(finalGrade),
+    pointsBelowPass:
+      raw != null && finalGrade != null
+        ? isFailedGrade(finalGrade)
+          ? gradePointsBelowPass(raw)
+          : Math.min(0, gradePointsBelowPass(raw) ?? 0)
+        : null,
+  };
+}
+
 function gradeExtras(
   totalPoints: number | null,
   finalGrade: number | null,
@@ -136,61 +159,59 @@ function gradeExtras(
     portfolioRawAverage?: number | null;
     groupId?: string | null;
     pointsRec?: PointsRecord;
-    /** Schema-Skala (unit×schema.max) für next-grade; kann von Anzeige-totalPoints abweichen */
+    /** historisch: unit×schema.max; Portfolio-Note entsteht aus Teilnoten */
     schemaPoints?: number | null;
   }
 ) {
   if (isPortfolioExam(project.examType)) {
+    // Gesamtnote = Notenmittel der Teilnoten → „bis nächste Note“ in Notengraden
     const raw = opts?.portfolioRawAverage ?? null;
-    const usesScenarios = portfolioUsesGradeScenarios(project);
-    const schemaPts =
-      opts?.schemaPoints != null ? opts.schemaPoints : totalPoints;
-    if (usesScenarios && schemaPts != null) {
-      const next = getNextGradeInfo(schemaPts, schema);
+    const failedComp = failedPortfolioComponentWithoutCompensation(
+      project,
+      opts?.pointsRec,
+      { groupId: opts?.groupId, schema }
+    );
+    const scenarioGrades = scenarioGradesForPoints(
+      project,
+      totalPoints,
+      gradeOverride,
+      opts?.groupId,
+      opts?.pointsRec
+    );
+    if (failedComp && gradeOverride == null) {
       return {
-        pointsToNext: next.pointsNeeded,
-        nextGrade: next.nextGrade,
-        nextGradeDirection: "better" as const,
-        nextGradeUnit: "points" as const,
-        isFailed: finalGrade != null && isFailedGrade(finalGrade),
-        pointsBelowPass: pointsBelowPass(schemaPts, schema),
-        scenarioGrades: scenarioGradesForPoints(
-          project,
-          schemaPts,
-          gradeOverride,
-          opts?.groupId,
-          opts?.pointsRec
-        ),
+        pointsToNext: null,
+        nextGrade: null,
+        nextGradeDirection: null,
+        nextGradeUnit: "grade" as const,
+        failedComponentLabel: failedComp.code || failedComp.name,
+        isFailed: true,
+        pointsBelowPass: null,
+        scenarioGrades,
       };
     }
-    const next =
-      raw != null
-        ? getAdjacentGermanGradeInfo(raw)
-        : {
-            currentGrade: 5,
-            nextGrade: null as number | null,
-            pointsNeeded: null as number | null,
-            thresholdForNext: null as number | null,
-            direction: null as "better" | "worse" | null,
-          };
     return {
-      pointsToNext: raw != null ? next.pointsNeeded : null,
-      nextGrade: raw != null ? next.nextGrade : null,
-      nextGradeDirection: raw != null ? next.direction : null,
-      nextGradeUnit: "grade" as const,
-      isFailed: finalGrade != null && isFailedGrade(finalGrade),
-      pointsBelowPass:
-        raw != null && isFailedGrade(finalGrade)
-          ? gradePointsBelowPass(raw)
-          : raw != null && finalGrade != null && !isFailedGrade(finalGrade)
-            ? Math.min(0, gradePointsBelowPass(raw) ?? 0)
-            : null,
+      ...gradeAverageExtras(raw, finalGrade),
+      failedComponentLabel: null,
+      scenarioGrades,
+    };
+  }
+
+  if (
+    isStaCriteriaExam(project.examType) &&
+    staCriteriaAllGradeScale(project.criteria)
+  ) {
+    // StA mit reinen Note-Kriterien: Note = Notenmittel der Kriterien
+    const raw = computeStaGradeAverage(
+      opts?.pointsRec?.criterionValues,
+      project.criteria ?? []
+    );
+    return {
+      ...gradeAverageExtras(raw, finalGrade),
       scenarioGrades: scenarioGradesForPoints(
         project,
         totalPoints,
-        gradeOverride,
-        opts?.groupId,
-        opts?.pointsRec
+        gradeOverride
       ),
     };
   }
@@ -259,11 +280,12 @@ function resolveOverviewMetrics(
       ctx
     );
     // Anzeige: echte Kriterien-Rohpunkte wenn reine Punkte-Skala; sonst unit×100
+    // Anzeige: gewichtete Erfüllung (TL-Gewichte); bei reinen Punkte-Kriterien
+    // als Punkte = Erfüllung × Rohpunkte-Maximum (z. B. 66,7 % × 48 = 32,0)
     let totalPoints: number | null = null;
-    let percent: number | null = ful?.percent ?? null;
-    if (critPts != null && critPts.max > 0) {
-      totalPoints = critPts.raw;
-      percent = critPts.raw / critPts.max;
+    const percent: number | null = ful?.percent ?? null;
+    if (critPts != null && critPts.max > 0 && ful != null) {
+      totalPoints = Math.round(ful.unitAvg * critPts.max * 10) / 10;
     } else if (ful != null) {
       totalPoints =
         portfolioUsesGradeScenarios(project) && maxPoints > 0
@@ -275,6 +297,21 @@ function resolveOverviewMetrics(
       percent,
       rawAverage,
       schemaPoints,
+    };
+  }
+  if (
+    isStaCriteriaExam(project.examType) &&
+    staCriteriaAllGradeScale(project.criteria)
+  ) {
+    // Reine Note-Kriterien: keine Punkte-Skala (Note = Notenmittel)
+    return {
+      totalPoints: null,
+      percent: null,
+      rawAverage: computeStaGradeAverage(
+        pointsRec?.criterionValues,
+        project.criteria ?? []
+      ),
+      schemaPoints: null,
     };
   }
   const totalPoints =

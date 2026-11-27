@@ -2,7 +2,7 @@
 
 Vollständige Anleitung für Prüferinnen und Prüfer – Einstieg und Nachschlagewerk.
 
-**App-Version:** 0.4.74  
+**App-Version:** 0.4.75  
 **Zielgruppe:** Personen, die Prüfungen bewerten und Noten an HISinOne bzw. die Studienabteilung melden  
 **Datenschutz:** Alle Prüfungsdaten bleiben **im Browser** (IndexedDB). Es gibt **keine** Übertragung von Notenlisten an einen App-Server.
 
@@ -116,7 +116,7 @@ Typische Felder:
 - Semester  
 - Prüfungsnummer(n)  
 - Dozentinnen/Dozenten (Liste / Freitext, Chips)  
-- **Prüfungstyp** (entscheidet den gesamten weiteren Ablauf)  
+- **Prüfungstyp** (entscheidet den gesamten weiteren Ablauf; Voreinstellung: **elektrP**)  
 - ggf. Teilgebiete und Punktemaxima (je nach Typ)
 
 ### 3.3 Sicherung von der Startseite
@@ -213,14 +213,15 @@ Seite: **Einstellungen**.
 | Typ | Typische Einstellungen |
 |-----|------------------------|
 | Klausur / THE | Teilgebiete, Maxima, Notenschema indirekt über Szenarien |
-| StA-Kriterien | Kriterienliste: Name, Code, Gewicht, Skala (%, Punkte, Note), Beschreibung |
+| StA-Kriterien | Kriterienliste: Name, Code, Gewicht, Beschreibung; **eine Skala** (%, Punkte oder Note) für alle Kriterien |
 | Portfolio | Teilleistungen (Code, Name, Gewicht); optional **Kriterienmodus**; optional **Teilnoten je Dozent** |
 | Gruppen | Anlegen, umbenennen, Reihenfolge; in der Matrix zuordnen |
 
 ### 6.3 Portfolio: Kriterien und Korrektoren
 
 - **Kriterienmodus:** je Teilleistung einheitliche Skala (Punkte / Prozent / Note) und Kriterien mit Gewicht und Maxima (bei Punkten z. B. 0–6).  
-- **Pro Dozent bewerten:** jeder Korrektor füllt die Matrix; Teilnote = Mittel der Dozenten.  
+- **Pro Dozent bewerten:** jeder Korrektor füllt die Matrix; Teilnote = Mittel der Dozenten, auf eine Notenstufe gebracht ([§12.5](#125-notenmittel-und-rundung)).  
+- **Ausgleich:** Schalter „Nicht bestandene Teilleistung kann ausgeglichen werden“ (Standard: an). Aus: eine Teilnote 5,0 ergibt Gesamtnote 5,0; die Notenübersicht zeigt dann „TL ‹Kürzel› nicht bestanden“.  
 - **Kriterien pro Gruppe deaktivieren:** unter Gruppensteuerung – deaktivierte Kriterien zählen nicht in die Note dieser Gruppe.
 
 ### 6.4 Notenszenarien (Voreinstellung)
@@ -319,7 +320,7 @@ Seite: **Kriterienbewertung** bzw. **Teilnoten**.
 
 ### 10.4 Dozenten / Korrektoren (Portfolio)
 
-Wenn „Teilnoten je Dozent“ aktiv: Bewerter wählen; jede Person braucht vollständige Werte **aller** Korrektoren für die Teilnote.
+Wenn „Teilnoten je Dozent“ aktiv: Bewerter wählen; jede Person braucht vollständige Werte **aller** Korrektoren für die Teilnote. Die Teilnote ist das Korrektorenmittel als Notenstufe (z. B. 2,7 und 3,7 → 3,2 → **3,3**); der Hinweis „bis nächste Note“ rechnet mit dem ungerundeten Mittel.
 
 Weichen die Korrektoren einer Teilleistung um **mehr als 0,7 Notenstufen** voneinander ab, erscheint ein Hinweis in der Matrix und in der Notenübersicht.
 
@@ -433,9 +434,9 @@ Umschalter / Link zu den Szenarien: das **aktive** Szenario steuert die Noten be
 
 Bei **reinen Punkte-Kriterien** (z. B. 11 × max. 6 → Max. 66):
 
-- Spalte **Punkte** = **echte Rohpunktesumme**, nicht „Erfüllung × 100“  
-- % = Rohpunkte / Max  
-- Interne Notenfindung kann weiter über eine 0–100-Skala laufen; Anzeige und PDF-Header nutzen die echten Maxima  
+- **%** = gewichtete Erfüllung über alle Teilleistungen (TL-Gewichte berücksichtigt)  
+- Spalte **Punkte** = Erfüllung × Rohpunkte-Maximum (z. B. 66,7 % × 48 = 32,0 von 48), damit Punkte und % zusammenpassen; die echten Rohsummen stehen in den TL-Spalten  
+- Die Gesamtnote entsteht aus den Teilnoten ([§12.1](#121-was-steuert-das-szenario)); Anzeige und PDF-Header nutzen die echten Maxima  
 
 ---
 
@@ -448,8 +449,11 @@ Seite: **Notenszenarien** (nicht bei StA manuell; Portfolio wenn Punkte/Prozent-
 | Kontext | Wirkung |
 |---------|---------|
 | Klausur / THE / Punkte | Punkte → Note über Schwellen des aktiven Schemas |
-| Portfolio Punkte/Prozent | Erfüllung (unit) × Schema-Max → `calculateGrade` mit aktivem Schema |
-| Portfolio reine Note-TLs | linear 5−4·unit, **unabhängig** vom Szenario |
+| StA Punkte/Prozent | Erfüllung × Schema-Max → Note über das aktive Schema |
+| Portfolio Punkte/Prozent-TL | **Teilnote** je TL: Erfüllung × Schema-Max → Note über das aktive Schema |
+| Portfolio reine Note-TL | Teilnote linear aus den Note-Kriterien, **unabhängig** vom Szenario |
+| Portfolio **Gesamtnote** | gewichtetes Notenmittel der Teilnoten → Notenstufe ([§12.5](#125-notenmittel-und-rundung)) |
+| StA reine Note-Kriterien | gewichtetes Notenmittel → Notenstufe, **unabhängig** vom Szenario |
 
 ### 12.2 Portfolio-Presets
 
@@ -474,9 +478,28 @@ Diagramme: vergrößern, PNG speichern.
 
 ### 12.4 Grenzfälle
 
-- Markierung, wenn der Abstand zur nächsten Note klein ist  
-- Defaults: z. B. ≤ 2 Punkte (bei Max 100 Schema) bzw. ≤ 0,1 Notengrade  
+- Markierung, wenn der Abstand zur nächstbesseren Note klein ist – gemessen in derselben Größe, aus der die Note entsteht  
+- Punkte-Noten (Klausur, THE, StA-Punkte): Abstand in Punkten, Default ≤ 2 Punkte bei Max 100  
+- Notenmittel (Portfolio, StA-Noten): Abstand in Notengraden vom abgeschnittenen Mittel bis zur besseren Stufe (Mittel 2,4 → 2,3; ab 2,1 → 2,0 ⇒ „0,3 → 2,0“), Default ≤ 0,1  
 - In der Notenübersicht einstellbar  
+
+### 12.5 Notenmittel und Rundung
+
+Notenmittel (Portfolio-Gesamtnote, StA mit Note-Kriterien, Korrektorenmittel) werden nach **RaPO Bayern / APO der OTH Regensburg** auf eine Notenstufe gebracht:
+
+1. Notenmittel auf **eine Dezimalstelle abschneiden** (nicht runden): 2,16 → 2,1; 4,04 → 4,0  
+2. Über 4,0 → **5,0** (nicht bestanden): 4,1 → 5,0  
+3. Sonst nächste Notenstufe, bei Gleichstand die bessere: 2,1 → 2,0; 2,2 → 2,3; 1,5 → 1,3  
+
+Beispiel Portfolio (Gewichte 60/40): Teilnoten 5,0 und 3,0 → 4,2 → **5,0**.
+
+**Umstellung ab v0.4.75:** Bis v0.4.74 galt „nächste Stufe, erst ab 4,5 nicht bestanden“, und Korrektorenmittel blieben ungerundet. Beim ersten Öffnen eines älteren Projekts zeigt ExamGrade einmalig die geänderten Noten (alt → neu), falls es welche gibt. Bereits exportierte HISinOne-Dateien und manuelle Überschreibungen bleiben unverändert.
+
+Szenario-Presets bei anderem Maximum werden exakt skaliert (Max 75 → Bestehen ab 37,5).
+
+**Portfolio-Note 5,0, obwohl das Teilnoten-Mittel 4,2 ist?** Richtig nach RaPO/APO: Notenmittel über 4,0 sind nicht bestanden.
+
+**StA: „Kriterien nutzen unterschiedliche Skalen“?** Eine Studienarbeit braucht genau eine Skala. Unter Einstellungen bei einem Kriterium die Skala wählen – sie gilt dann für alle. Werte vorher prüfen, sie werden nicht umgerechnet.
 
 ---
 
@@ -620,7 +643,9 @@ Header → Schriftgröße „Groß“ oder „Sehr groß“.
 | **Orphan** | Antritt/Punkte-Matrikel ohne Treffer in HISinOne |
 | **Teilleistung (TL)** | Bestandteil einer Portfolioprüfung |
 | **Teilkriterium** | Einzelkriterium innerhalb einer TL oder StA |
-| **Unit / Erfüllung** | Normierte Leistung 0…1 (bzw. %) |
+| **Erfüllung** | Gewichteter Anteil der erreichten an den erreichbaren Kriterienwerten (0–100 %) |
+| **Notenmittel** | Ungerundeter gewichteter Durchschnitt von Noten; wird nach RaPO auf eine Notenstufe gebracht |
+| **Ausgleich** | Nicht bestandene Teilleistung durch andere TLs ausgleichbar (je Prüfung einstellbar) |
 | **Notenszenario** | Bestehensgrenze und Schwellen für den Notenschlüssel |
 | **No-Show / nicht angetreten** | Angemeldet, aber nicht bewertet; leere Note im Export |
 | **Override** | Manuell gesetzte Note statt berechneter Note |

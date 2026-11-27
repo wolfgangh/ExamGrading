@@ -66,7 +66,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
   const [nameInput, setNameInput] = useState("");
   const [examNumber, setExamNumber] = useState("");
   const [semester, setSemester] = useState(() => currentSemesterLabel());
-  const [examType, setExamType] = useState<ExamTypeValue>("the");
+  const [examType, setExamType] = useState<ExamTypeValue>("elektr_p");
   const [moodleRoundStep, setMoodleRoundStep] =
     useState<MoodlePointsRoundStep>(DEFAULT_MOODLE_ROUND_STEP);
   const [lecturers, setLecturers] = useState<string[]>([DEFAULT_LECTURER]);
@@ -91,7 +91,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     setNameInput("");
     setExamNumber("");
     setSemester(currentSemesterLabel());
-    setExamType("the");
+    setExamType("elektr_p");
     setMoodleRoundStep(DEFAULT_MOODLE_ROUND_STEP);
     setLecturers([DEFAULT_LECTURER]);
     setSubAreas([emptySubAreaRow()]);

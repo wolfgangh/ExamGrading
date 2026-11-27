@@ -1,3 +1,4 @@
+import { GRADE_RULES_VERSION } from "@/lib/grades/grade-average";
 import { createId } from "@/lib/id";
 import { defaultGradeSchema } from "@/lib/grades/schema";
 import { createDefaultScenarios } from "@/lib/grades/scenarios";
@@ -44,7 +45,7 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
   const now = new Date().toISOString();
   const displayName = resolveExamDisplayName(input.name);
 
-  const examType = input.examType ?? "the";
+  const examType = input.examType ?? "elektr_p";
   const isHisManual = isHisManualAssessmentExam(examType);
 
   let subAreas: SubArea[];
@@ -69,6 +70,7 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     createdAt: now,
     updatedAt: now,
     schemaVersion: 2,
+    gradeRulesVersion: GRADE_RULES_VERSION,
     name: displayName,
     examNumber: input.examNumber?.trim() ?? "",
     semester: input.semester?.trim() ?? "",

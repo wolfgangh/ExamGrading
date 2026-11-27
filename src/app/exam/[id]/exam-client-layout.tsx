@@ -6,6 +6,7 @@ import { ExamSidebar } from "@/components/layout/exam-sidebar";
 import { SummaryPanel } from "@/components/layout/summary-panel";
 import { ExamProvider, useExamContext } from "@/components/exam/exam-context";
 import { BackupBanner } from "@/components/exam/backup-banner";
+import { GradeRulesDialog } from "@/components/exam/grade-rules-dialog";
 import { Badge } from "@/components/ui/badge";
 import { isBackupStale } from "@/lib/backup-status";
 
@@ -79,6 +80,7 @@ function ExamShell({
         }
       />
       <BackupBanner />
+      <GradeRulesDialog />
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <ExamSidebar
           examId={examId}
