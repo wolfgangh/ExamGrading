@@ -95,7 +95,7 @@ Kernobjekt: **`ExamProject`** (`src/lib/types.ts`).
 Wichtige Felder (vereinfacht):
 
 - Identität: `id`, `name`, `examNumber`, `semester`, `lecturers[]`, `examType`, `schemaVersion`  
-- Teilnehmerliste: `hisSources[]` – HISinOne-Dateien (inkl. `originalXlsxBase64`) und höchstens eine **manuelle Teilnehmerliste** (`kind: "manual"`, ohne Vorlage, immer letzte Quelle, `programCode` je Zeile); abgeleitet `hisRows`. Logik: `lib/manual-participants.ts` (Hinzufügen/Bearbeiten/Löschen, Einlesen aus Text/Excel/CSV, Übernahme bei HISinOne-Import → `Student.takenOverFromManual`, einmalige Migration alter StA/Portfolio-Extras über `manualExtrasMigrated`). Export: HISinOne-XLSX nur für HISinOne-Dateien; `lib/excel/export-grade-list.ts` = Excel-Notenliste aller Teilnehmenden  
+- Teilnehmerliste: `hisSources[]` – HISinOne-Dateien (inkl. `originalXlsxBase64`) und höchstens eine **manuelle Teilnehmerliste** (`kind: "manual"`, ohne Vorlage, immer letzte Quelle, `programCode` je Zeile); abgeleitet `hisRows`. Logik: `lib/manual-participants.ts` (Hinzufügen/Bearbeiten/Löschen, Einlesen aus Text/Excel/CSV, Übernahme bei HISinOne-Import → `Student.takenOverFromManual`, einmalige Migration alter StA/Portfolio-Extras über `manualExtrasMigrated`). Export: HISinOne-XLSX nur für HISinOne-Dateien; `lib/excel/export-grade-list.ts` = Excel-Notenliste aller Teilnehmer  
 - `attendance[]`, `points[]` (inkl. `criterionValues`, `portfolioGrades`, `portfolioGradesByLecturer`), `students{}` (inkl. `groupId`)  
 - StA/Portfolio: `criteria[]`, `portfolioComponents[]`, `portfolioPerLecturerGrading`, `studentGroups[]`  
 - Noten: `gradeSchema`, `gradeScenarios[]`, `activeScenarioId`  
@@ -119,7 +119,9 @@ Migrationen: `migrateExamProject` in `lib/grades/scenarios.ts` (Schema-Versionen
 | `lib/grades/*` | Schwellen, Szenarien, Totals, Portfolio, StA-Kriterien, Open Grading, Notenspiegel, scenario-comparison |
 | `lib/charts/*` | SVG→PNG-Export, Canvas-Balken für PDF |
 | `lib/matching/*` | Orphans, Merge, Dismiss, Undo |
-| `lib/pdf/*` | PDF-Generierung (Noten, Notenspiegel, Szenarienvergleich, …) |
+| `lib/pdf/*` | PDF-Generierung (Noten, Notenspiegel, Szenarienvergleich, …); Kopf über `drawOthHeader` aus dem Briefkopf |
+| `lib/letterhead.ts` | „Mein Briefkopf“ (localStorage `examgrade-letterhead`, Datei-Export/-Import, Logo-Cache für jsPDF, HTML-/LaTeX-Kopf) – Seite `/briefkopf` |
+| `lib/notenspiegel/*` | Notenspiegel als eigenständige HTML (`notenspiegel-html.ts`, interaktive SVG ohne Bibliothek) und Quarto-Paket (`notenspiegel-quarto.ts`; Vorlage `public/briefkopf/notenspiegel.qmd`, Platzhalter + `daten.json`, Observable JS) |
 | `lib/student-groups.ts` | Gruppenfilter und Zuordnung |
 | `lib/validations.ts` | Export-Gates (fachlich) |
 | `lib/download.ts` | Blob-Downloads inkl. Teams-Fallback |
@@ -167,7 +169,7 @@ Details: [SECURITY.md](../SECURITY.md).
 
 Bei Releases `package.json`, `app-version.ts` und README-Footer abstimmen.
 
-**Stand dieser Doku:** App v0.4.76.
+**Stand dieser Doku:** App v0.4.77.
 
 **Noten aus Punkten:** `calculateGrade` vergleicht exakte Punkte mit `minPoints` (≥, Epsilon gegen FP). Kein `Math.ceil`/ROUNDUP auf ganze Punkte vor der Zuordnung.
 

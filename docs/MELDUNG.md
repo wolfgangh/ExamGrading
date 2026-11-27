@@ -20,7 +20,7 @@ In der laufenden App (ab v0.4.60): Footer → **Feedback & Fehler melden**
 **Nicht** in Issues oder Anhängen:
 
 - Matrikelnummern, Namen, Notenlisten  
-- Vollständige JSON-/ZIP-Projektsicherungen mit Studierenden  
+- Vollständige JSON-/ZIP-Projektsicherungen mit Studenten  
 - Screenshots, auf denen personenbezogene Daten lesbar sind  
 
 Technische Infos (App-Version, Browser, Prüfungs**form** ohne Personen) sind willkommen.

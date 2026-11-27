@@ -210,7 +210,7 @@ export default function DetailPointsPage() {
             Detailpunkte (Matrix)
           </h1>
           <p className="text-muted-foreground">
-            Einzelpunkte je Aufgabe für alle Studierenden. Gesamtpunkte und
+            Einzelpunkte je Aufgabe für alle Studenten. Gesamtpunkte und
             Teilgebietssummen werden berechnet.
           </p>
         </div>

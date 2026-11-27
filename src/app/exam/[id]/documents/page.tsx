@@ -39,6 +39,10 @@ import {
   filterGradeChangeRows,
 } from "@/lib/pdf/export-grade-changes-pdf";
 import { exportNotenspiegelPdf } from "@/lib/pdf/export-notenspiegel-pdf";
+import { exportNotenspiegelHtml } from "@/lib/notenspiegel/notenspiegel-html";
+import { exportNotenspiegelQuarto } from "@/lib/notenspiegel/notenspiegel-quarto";
+import { notenspiegelHasTaskData } from "@/lib/grades/notenspiegel";
+import { ensureLetterheadAssets } from "@/lib/letterhead";
 import { exportNotenspiegelExcel } from "@/lib/excel/export-notenspiegel";
 import { exportHisExcel } from "@/lib/excel/export-his";
 import {
@@ -68,6 +72,7 @@ import { cn, formatGrade, formatPoints } from "@/lib/utils";
 import { HISINONE_LABEL, type PointsRecord } from "@/lib/types";
 import { validateForExport } from "@/lib/validations";
 import {
+  Download,
   FileSpreadsheet,
   FileText,
   GitMerge,
@@ -109,6 +114,7 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [includeCriterionRaw, setIncludeCriterionRaw] = useState(false);
+  const [spiegelTasks, setSpiegelTasks] = useState(false);
 
   const manualRows = useMemo(
     () => (rows ? filterManualGradeRows(rows) : []),
@@ -462,7 +468,7 @@ export default function DocumentsPage() {
             )}
             {hisSources.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Keine {HISINONE_LABEL}-Datei – Teilnehmende der manuellen
+                Keine {HISINONE_LABEL}-Datei – Teilnehmer der manuellen
                 Liste über die Excel-Notenliste unten melden; sonst unter Import die Noteneintragsdatei(en)
                 einlesen.
               </p>
@@ -598,11 +604,11 @@ export default function DocumentsPage() {
             </p>
             <div className="space-y-1.5 border-t pt-3">
               <p className="text-sm font-medium">
-                Excel-Notenliste (alle Teilnehmenden)
+                Excel-Notenliste (alle Teilnehmer)
               </p>
               <p className="text-xs text-muted-foreground">
                 Matrikel, Name, Studiengang, Quelle ({HISINONE_LABEL} / manuell),
-                Note, Bemerkung – für Teilnehmende ohne {HISINONE_LABEL}-Datei
+                Note, Bemerkung – für Teilnehmer ohne {HISINONE_LABEL}-Datei
                 {manualCount > 0 ? ` (${manualCount} in der manuellen Liste)` : ""}.
               </p>
               <Button
@@ -849,11 +855,44 @@ export default function DocumentsPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">5. Notenspiegel</CardTitle>
             <CardDescription>
-              Aggregierte Notenverteilung und Kennzahlen zum aktiven Szenario –
-              ohne personenbezogene Daten. PDF oder Excel.
+              Notenverteilung, Kennzahlen (Mittelwert, Median, Quantile) und
+              Punkteverteilung zum aktiven Szenario – ohne personenbezogene
+              Daten. Kopf aus{" "}
+              <Link href="/briefkopf" className="underline underline-offset-2">
+                Mein Briefkopf
+              </Link>
+              .
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
+            {notenspiegelHasTaskData(project) && (
+              <label className="flex w-full cursor-pointer items-center gap-2 text-sm">
+                <Checkbox
+                  checked={spiegelTasks}
+                  onCheckedChange={(v) => setSpiegelTasks(v === true)}
+                />
+                Auswertung je Aufgabe / Teilgebiet
+              </label>
+            )}
+            <Button
+              size="sm"
+              variant="default"
+              disabled={busy != null || !notenspiegelReady}
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "spiegel-html",
+                  () =>
+                    exportNotenspiegelHtml(project, rows, stats, {
+                      includeTasks: spiegelTasks,
+                    }),
+                  "Notenspiegel (HTML, interaktiv) heruntergeladen."
+                );
+              }}
+            >
+              <FileText className="size-4" />
+              {busy === "spiegel-html" ? "…" : "HTML (interaktiv)"}
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -862,7 +901,12 @@ export default function DocumentsPage() {
                 if (!stats) return;
                 run(
                   "spiegel-pdf",
-                  () => exportNotenspiegelPdf(project, rows, stats),
+                  async () => {
+                    await ensureLetterheadAssets();
+                    exportNotenspiegelPdf(project, rows, stats, {
+                      includeTasks: spiegelTasks,
+                    });
+                  },
                   "Notenspiegel (PDF) heruntergeladen."
                 );
               }}
@@ -885,6 +929,26 @@ export default function DocumentsPage() {
             >
               <FileSpreadsheet className="size-4" />
               {busy === "spiegel-xlsx" ? "…" : "Excel"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy != null || !notenspiegelReady}
+              title="ZIP mit Quarto-Vorlage (.qmd), daten.json, Kopf und Logo – zum Anpassen und Rendern mit Quarto (HTML/PDF)"
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "spiegel-quarto",
+                  () =>
+                    exportNotenspiegelQuarto(project, rows, stats, {
+                      includeTasks: spiegelTasks,
+                    }),
+                  "Quarto-Paket heruntergeladen (quarto render notenspiegel.qmd)."
+                );
+              }}
+            >
+              <Download className="size-4" />
+              {busy === "spiegel-quarto" ? "…" : "Quarto-Paket (Anpassung)"}
             </Button>
             {stats && stats.graded <= 0 && (
               <p className="text-xs text-muted-foreground">

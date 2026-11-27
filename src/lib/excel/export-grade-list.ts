@@ -51,7 +51,7 @@ export function buildGradeListRows(
 
 /**
  * Excel-Notenliste (Matrikel, Name, Studiengang, Note, Bemerkung) – v. a. für
- * Teilnehmende ohne HISinOne-Datei (manuelle Teilnehmerliste).
+ * Teilnehmer ohne HISinOne-Datei (manuelle Teilnehmerliste).
  */
 export async function exportGradeListExcel(
   project: ExamProject,
@@ -59,7 +59,7 @@ export async function exportGradeListExcel(
 ): Promise<void> {
   const list = buildGradeListRows(rows);
   if (list.length === 0) {
-    throw new Error("Keine Teilnehmenden in der Teilnehmerliste.");
+    throw new Error("Keine Teilnehmer in der Teilnehmerliste.");
   }
   const ExcelJS = await import("exceljs");
   const wb = new ExcelJS.Workbook();

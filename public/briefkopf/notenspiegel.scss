@@ -1,0 +1,25 @@
+/*-- scss:defaults --*/
+// ExamGrade – Notenspiegel (angelehnt an quarto-oth-hoessl-single.scss)
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap');
+
+$font-family-sans-serif: 'Lato', Tahoma, sans-serif;
+$body-color: #22282f;
+$link-color: #447099;
+$primary: #447099;
+$headings-font-weight: 700;
+
+/*-- scss:rules --*/
+h2 {
+  border-bottom: 1px solid #dde3ea;
+  padding-bottom: .3rem;
+  margin-top: 2rem;
+}
+
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+.callout-note {
+  font-size: .9rem;
+  color: #5b6470;
+}

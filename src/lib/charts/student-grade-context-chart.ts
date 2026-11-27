@@ -62,7 +62,7 @@ export function cohortGradesFromRows(
 }
 
 /**
- * Notenverteilung der Kohorte mit Markierung der Studierenden-Note.
+ * Notenverteilung der Kohorte mit Markierung der Studenten-Note.
  * PNG data-URL für PDF-Einbettung.
  */
 export function renderStudentGradeContextChartPng(opts: {

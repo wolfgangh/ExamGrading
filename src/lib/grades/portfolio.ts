@@ -133,7 +133,7 @@ export type PortfolioProjectSlice = Pick<
 >;
 
 export type PortfolioGradeContext = {
-  /** Gruppe des Studierenden (für gruppenweise deaktivierte Kriterien) */
+  /** Gruppe des Studenten (für gruppenweise deaktivierte Kriterien) */
   groupId?: string | null;
   /** Optional: nur diese Teilleistung (Füllstand / Missing) */
   componentId?: string | null;

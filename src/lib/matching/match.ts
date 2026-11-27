@@ -363,7 +363,7 @@ function portfolioComponentDetailsForRow(
 }
 
 /**
- * Baut die angereicherte Studierendenliste:
+ * Baut die angereicherte Studentenliste:
  * HIS = Master, Antritte + Punkte per Matrikelnummer gematcht.
  * Noten nach aktivem Szenario.
  */
@@ -807,7 +807,7 @@ export function buildEnrichedRows(project: ExamProject): EnrichedStudentRow[] {
     });
   }
 
-  // Manuell angelegte Studierende (ohne HIS/Antritt/Punkte-Import)
+  // Manuell angelegte Studenten (ohne HIS/Antritt/Punkte-Import)
   for (const [rawKey, stored] of Object.entries(project.students ?? {})) {
     const key = normalizeMatriculation(rawKey);
     if (!key || seen.has(key)) continue;

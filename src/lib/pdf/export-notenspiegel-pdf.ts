@@ -5,6 +5,7 @@ import type {
 } from "@/lib/types";
 import {
   buildNotenspiegelData,
+  type NotenspiegelOptions,
   formatShareDe,
 } from "@/lib/grades/notenspiegel";
 import { renderGradeDistributionChartPng } from "@/lib/charts/grade-distribution-export-chart";
@@ -71,13 +72,14 @@ function drawNotenspiegelMeta(
 export function exportNotenspiegelPdf(
   project: ExamProject,
   rows: EnrichedStudentRow[],
-  stats: ExamStatistics
+  stats: ExamStatistics,
+  options: NotenspiegelOptions = {}
 ): void {
   if (stats.graded <= 0) {
     throw new Error("Keine bewerteten Teilnehmer – Notenspiegel nicht sinnvoll.");
   }
 
-  const data = buildNotenspiegelData(project, rows, stats);
+  const data = buildNotenspiegelData(project, rows, stats, options);
   const chartPng = renderGradeDistributionChartPng(data, {
     width: 1400,
     height: 620,
@@ -299,6 +301,66 @@ export function exportNotenspiegelPdf(
         2: { halign: "right", cellWidth: 16 },
         3: { halign: "right", cellWidth: 24 },
         4: { halign: "right", cellWidth: 22 },
+      },
+      margin: { left: PDF_MARGIN, right: PDF_MARGIN },
+    });
+    y = getLastTableY(doc, y) + 10;
+  }
+
+  // Auswertung je Aufgabe / Teilgebiet (optional)
+  if (data.tasks && data.tasks.length > 0) {
+    if (y > 230) {
+      doc.addPage();
+      y = PDF_MARGIN + 16;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(
+      pdfText(
+        data.tasks[0].kind === "task"
+          ? "Auswertung je Aufgabe"
+          : "Auswertung je Teilgebiet"
+      ),
+      PDF_MARGIN,
+      y
+    );
+    y += 3;
+    const fp = (v: number | null) => (v != null ? formatPoints(v) : "–");
+    autoTable(doc, {
+      startY: y,
+      head: [[
+        data.tasks[0].kind === "task" ? "Aufgabe" : "Teilgebiet",
+        "Max.",
+        "n",
+        "Mittelwert",
+        "Median",
+        "Q25",
+        "Q75",
+        "Lösungsquote",
+      ]],
+      body: data.tasks.map((t) => [
+        pdfText(t.label),
+        formatPoints(t.maxPoints),
+        String(t.n),
+        fp(t.mean),
+        fp(t.median),
+        fp(t.q25),
+        fp(t.q75),
+        t.solveRate != null
+          ? `${(t.solveRate * 100).toFixed(1).replace(".", ",")} %`
+          : "–",
+      ]),
+      styles: { font: "helvetica", fontSize: 8.5, cellPadding: 1.6 },
+      headStyles: { fillColor: [68, 112, 153], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      columnStyles: {
+        1: { halign: "right" },
+        2: { halign: "right" },
+        3: { halign: "right" },
+        4: { halign: "right" },
+        5: { halign: "right" },
+        6: { halign: "right" },
+        7: { halign: "right" },
       },
       margin: { left: PDF_MARGIN, right: PDF_MARGIN },
     });

@@ -114,7 +114,7 @@ function validateInput(
 }
 
 /**
- * Teilnehmende zur manuellen Liste hinzufügen.
+ * Teilnehmer zur manuellen Liste hinzufügen.
  * Abgelehnt: Pflichtfeld fehlt, Matrikelnummer schon in HISinOne/manueller
  * Liste oder doppelt in der Eingabe.
  */
@@ -465,7 +465,7 @@ export type ParsedParticipants = {
 };
 
 /**
- * Tabelle (Zeilen × Zellen) → Teilnehmende. Mit Kopfzeile: Spalten nach Namen;
+ * Tabelle (Zeilen × Zellen) → Teilnehmer. Mit Kopfzeile: Spalten nach Namen;
  * ohne: Reihenfolge Matrikelnummer, Nachname, Vorname, Studiengang, E-Mail, Versuch.
  */
 export function parseParticipantMatrix(matrix: unknown[][]): ParsedParticipants {

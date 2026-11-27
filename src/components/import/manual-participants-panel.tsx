@@ -257,7 +257,7 @@ type EditDraft = {
   attempt: string;
 };
 
-/** Tabelle der manuellen Teilnehmenden mit Bearbeiten/Löschen. */
+/** Tabelle der manuellen Teilnehmer mit Bearbeiten/Löschen. */
 function ParticipantTable({
   project,
   setProject,
@@ -274,7 +274,7 @@ function ParticipantTable({
   if (rows.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Noch keine manuell erfassten Teilnehmenden.
+        Noch keine manuell erfassten Teilnehmer.
       </p>
     );
   }
@@ -418,7 +418,7 @@ function ParticipantTable({
 }
 
 /**
- * Manuelle Teilnehmerliste: Teilnehmende ohne HISinOne-Datei
+ * Manuelle Teilnehmerliste: Teilnehmer ohne HISinOne-Datei
  * (Einzelformular, Liste einfügen, Excel/CSV, Tabelle).
  */
 export function ManualParticipantsPanel({
