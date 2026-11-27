@@ -40,7 +40,7 @@ export function SummaryPanel({
     warn?: boolean;
   }[] = hisOnly
     ? [
-        { label: "Anmeldungen (HIS)", value: String(stats.registered) },
+        { label: "Teilnehmerliste", value: String(stats.registered) },
         { label: "Bewertet", value: String(stats.graded) },
         { label: "Exportbereit", value: String(stats.exportReady) },
         { label: "Ø Note", value: formatGrade(stats.averageGrade) },
@@ -65,7 +65,7 @@ export function SummaryPanel({
         },
       ]
     : [
-        { label: "Anmeldungen (HIS)", value: String(stats.registered) },
+        { label: "Teilnehmerliste", value: String(stats.registered) },
         {
           label: "Antritte gematcht",
           value: String(stats.attended),

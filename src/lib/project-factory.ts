@@ -30,6 +30,8 @@ export interface CreateExamInput {
   subAreas?: CatalogSubArea[];
   /** THE/elektrP: Moodle-Import-Rundung (Default 0,5) */
   moodlePointsRoundStep?: MoodlePointsRoundStep;
+  /** Teilnehmer-Quelle (Standard: HISinOne) */
+  participantSources?: { his: boolean; manual: boolean };
 }
 
 function toSubAreas(defs: CatalogSubArea[]): SubArea[] {
@@ -89,6 +91,11 @@ export function createEmptyExamProject(input: CreateExamInput): ExamProject {
     identityDismissals: [],
     importLogs: [],
     // THE/elektrP: Moodle-Punkte standardmäßig auf 0,5 aufrunden
+    participantSources:
+      input.participantSources &&
+      (input.participantSources.his || input.participantSources.manual)
+        ? input.participantSources
+        : { his: true, manual: false },
     moodlePointsRoundStep: isOnlineStyleExam(examType)
       ? (input.moodlePointsRoundStep ?? DEFAULT_MOODLE_ROUND_STEP)
       : undefined,

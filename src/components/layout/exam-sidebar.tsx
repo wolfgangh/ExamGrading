@@ -12,7 +12,6 @@ import {
   FileSpreadsheet,
   FileText,
   GitMerge,
-  Grid3x3,
   HardDrive,
   Layers,
   ListChecks,
@@ -34,6 +33,7 @@ import { useExamContext } from "@/components/exam/exam-context";
 import {
   buildWorkflowSteps,
   workflowProgress,
+  type WorkflowStep,
 } from "@/lib/workflow-steps";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { examUsesGradeScenarios } from "@/lib/grades/scenarios";
@@ -44,63 +44,72 @@ type NavItem = {
   href: string;
   label: string;
   icon: typeof BarChart3;
+  /** weitere Routen, die zu diesem Eintrag gehören (z. B. Punkte-Reiter) */
+  also?: string[];
 };
 
-function buildNav(
+type NavGroup = { label: string | null; items: NavItem[] };
+
+/** Gegliederte Navigation: Vorbereitung · Bewertung · Noten · Abschluss · Einstellungen */
+function buildNavGroups(
   examType?: ExamType,
   project?: ExamProject | null
-): NavItem[] {
-  const items: NavItem[] = [
+): NavGroup[] {
+  const prep: NavItem[] = [
     { href: "overview", label: "Übersicht", icon: BarChart3 },
-    { href: "import", label: "Importe", icon: FileSpreadsheet },
+    { href: "import", label: "Import", icon: FileSpreadsheet },
   ];
-
   if (examType && isOnlineStyleExam(examType)) {
-    items.push({ href: "matching", label: "Zuordnung", icon: GitMerge });
+    prep.push({ href: "matching", label: "Zuordnung", icon: GitMerge });
   }
 
+  const assess: NavItem[] = [];
   if (examType && isStaCriteriaExam(examType)) {
-    items.push({
-      href: "assessment",
-      label: "Kriterienbewertung",
-      icon: ClipboardList,
-    });
+    assess.push({ href: "assessment", label: "Kriterien", icon: ClipboardList });
   } else if (examType && isPortfolioExam(examType)) {
-    items.push({
-      href: "assessment",
-      label: "Teilnoten",
-      icon: ClipboardList,
-    });
+    assess.push({ href: "assessment", label: "Teilnoten", icon: ClipboardList });
   } else if (!(examType && isStaManualExam(examType))) {
-    items.push({ href: "points", label: "Punkteerfassung", icon: PenLine });
-    items.push({
-      href: "detail-points",
-      label: "Detailpunkte",
-      icon: Grid3x3,
-    });
+    assess.push({ href: "points", label: "Punkte", icon: PenLine, also: ["detail-points"] });
   }
 
-  items.push({ href: "grades", label: "Notenübersicht", icon: Table2 });
-
+  const grades: NavItem[] = [
+    { href: "grades", label: "Notenübersicht", icon: Table2 },
+  ];
   const showScenarios = project
     ? examUsesGradeScenarios(project)
-    : Boolean(
-        examType &&
-          !isStaManualExam(examType) &&
-          !isPortfolioExam(examType)
-      );
-
+    : Boolean(examType && !isStaManualExam(examType) && !isPortfolioExam(examType));
   if (showScenarios) {
-    items.push({ href: "scenarios", label: "Notenszenarien", icon: Layers });
+    grades.push({ href: "scenarios", label: "Notenszenarien", icon: Layers });
   }
 
-  items.push(
-    { href: "documents", label: "Dokumente", icon: FileText },
-    { href: "export", label: "Sicherung", icon: HardDrive },
-    { href: "settings", label: "Einstellungen", icon: Settings }
-  );
+  return [
+    { label: "Vorbereitung", items: prep },
+    ...(assess.length ? [{ label: "Bewertung", items: assess }] : []),
+    { label: "Noten", items: grades },
+    {
+      label: "Abschluss",
+      items: [
+        { href: "documents", label: "Dokumente", icon: FileText },
+        { href: "export", label: "Sicherung", icon: HardDrive },
+      ],
+    },
+    { label: null, items: [{ href: "settings", label: "Einstellungen", icon: Settings }] },
+  ];
+}
 
-  return items;
+/** Status je Navigationseintrag aus den Workflow-Schritten */
+function navStatus(
+  item: NavItem,
+  base: string,
+  steps: WorkflowStep[]
+): "done" | "open" | null {
+  const paths = [item.href, ...(item.also ?? [])].map((h) => `${base}/${h}`);
+  const related = steps.filter((st) => {
+    const path = st.href.split(/[?#]/)[0];
+    return paths.includes(path);
+  });
+  if (related.length === 0) return null;
+  return related.every((st) => st.done) ? "done" : "open";
 }
 
 export function ExamSidebar({
@@ -117,7 +126,7 @@ export function ExamSidebar({
   const pathname = usePathname();
   const base = `/exam/${examId}`;
   const { project, rows, stats } = useExamContext();
-  const nav = buildNav(examType ?? project?.examType, project);
+  const groups = buildNavGroups(examType ?? project?.examType, project);
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -219,28 +228,66 @@ export function ExamSidebar({
           </p>
         </div>
       )}
-      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
-        {nav.map(({ href, label, icon: Icon }) => {
-          const path = `${base}/${href}`;
-          const active = pathname === path || pathname.startsWith(path + "/");
-          return (
-            <Link
-              key={href}
-              href={path}
-              title={label}
-              className={cn(
-                "flex items-center gap-2 rounded-lg text-sm transition-colors",
-                compact ? "justify-center px-2 py-2.5" : "px-2.5 py-2",
-                active
-                  ? "bg-primary text-primary-foreground"
-                  : "text-foreground hover:bg-muted"
-              )}
-            >
-              <Icon className="size-4 shrink-0" />
-              {!compact && <span className="truncate">{label}</span>}
-            </Link>
-          );
-        })}
+      <nav className="min-h-0 flex-1 overflow-y-auto p-2">
+        {groups.map((g, gi) => (
+          <div
+            key={g.label ?? `g${gi}`}
+            className={cn(gi > 0 && "mt-3", g.label === null && "border-t pt-3")}
+          >
+            {g.label && !compact && (
+              <p className="px-2.5 pb-1 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                {g.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {g.items.map((item) => {
+                const { href, label, icon: Icon } = item;
+                const paths = [href, ...(item.also ?? [])].map((h) => `${base}/${h}`);
+                const active = paths.some(
+                  (p) => pathname === p || pathname.startsWith(p + "/")
+                );
+                const status = navStatus(item, base, steps);
+                return (
+                  <Link
+                    key={href}
+                    href={`${base}/${href}`}
+                    title={
+                      status === "done"
+                        ? `${label} – erledigt`
+                        : status === "open"
+                          ? `${label} – offen`
+                          : label
+                    }
+                    className={cn(
+                      "relative flex items-center gap-2 rounded-lg text-sm transition-colors",
+                      compact ? "justify-center px-2 py-2.5" : "px-2.5 py-2",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-muted"
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    {!compact && <span className="min-w-0 flex-1 truncate">{label}</span>}
+                    {status && (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          compact ? "absolute right-1 top-1 size-2 rounded-full" : "text-xs",
+                          status === "done" &&
+                            (compact ? "bg-emerald-500" : active ? "text-primary-foreground" : "text-emerald-600 dark:text-emerald-400"),
+                          status === "open" &&
+                            (compact ? "bg-amber-500" : active ? "text-primary-foreground" : "text-amber-600 dark:text-amber-400")
+                        )}
+                      >
+                        {compact ? null : status === "done" ? "✓" : "●"}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {progress && !compact && (

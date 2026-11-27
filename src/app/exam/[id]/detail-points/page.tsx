@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { PageHeader, StatusNotice } from "@/components/layout/page-kit";
+import { PointsTabs } from "@/components/points/points-tabs";
+import { useParams, useSearchParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import { PointsMatrix } from "@/components/points/points-matrix";
 import { QuestionSubareaMapper } from "@/components/points/question-subarea-mapper";
@@ -37,10 +39,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  PageSectionNav,
-  SECTION_SCROLL_MT,
-} from "@/components/layout/page-section-nav";
+import { SECTION_SCROLL_MT } from "@/components/layout/page-section-nav";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Lock, LockOpen, RefreshCw } from "lucide-react";
 import type { PointsRecord } from "@/lib/types";
@@ -55,6 +54,8 @@ export default function DetailPointsPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [search, setSearch] = useState("");
   const [onlyOpen, setOnlyOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const showEvaluation = searchParams.get("tab") === "auswertung";
   /** Accordion value: ["subareas"] open, [] closed */
   const [subMapOpen, setSubMapOpen] = useState<string[]>(["subareas"]);
 
@@ -105,6 +106,9 @@ export default function DetailPointsPage() {
   if (!project || !effectiveProject) return null;
 
   const taskCount = ensureQuestionDefs(effectiveProject).length;
+  const openTaskPeople = project.points.filter(
+    (p) => (p.needsGrading?.length ?? 0) > 0
+  ).length;
   const hasPointsButNoTasks =
     project.points.length > 0 && taskCount === 0;
   const showSubareaMapping = needsSubAreaMapping(effectiveProject);
@@ -204,42 +208,67 @@ export default function DetailPointsPage() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 max-w-2xl">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Detailpunkte (Matrix)
-          </h1>
-          <p className="text-muted-foreground">
-            Einzelpunkte je Aufgabe für alle Studenten. Gesamtpunkte und
-            Teilgebietssummen werden berechnet.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/exam/${id}/import?focus=points`}
-            className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
-          >
-            <RefreshCw className="size-4" />
-            THE neu laden
-          </Link>
+      <PageHeader
+        title="Punkte"
+        description={
+          showEvaluation
+            ? "Auswertung je Aufgabe und Teilgebiet" +
+              (isOnlineStyleExam(project.examType) ? " sowie Bearbeitungsdauer." : ".")
+            : "Einzelpunkte je Aufgabe; Gesamt- und Teilgebietssummen werden berechnet."
+        }
+        action={
+          showEvaluation ? undefined : (
+            <>
+              <Link
+                href={`/exam/${id}/import?focus=points`}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+              >
+                <RefreshCw className="size-4" />
+                Punkte neu laden
+              </Link>
+              <Button
+                type="button"
+                size="sm"
+                variant={unlocked ? "default" : "outline"}
+                onClick={() => setUnlocked((u) => !u)}
+                disabled={taskCount === 0}
+              >
+                {unlocked ? (
+                  <>
+                    <LockOpen className="size-4" /> Bearbeitung aktiv
+                  </>
+                ) : (
+                  <>
+                    <Lock className="size-4" /> Bearbeitung freigeben
+                  </>
+                )}
+              </Button>
+            </>
+          )
+        }
+      />
+      <PointsTabs examId={id} active={showEvaluation ? "auswertung" : "aufgaben"} />
+
+      {!showEvaluation && openTaskPeople > 0 && (
+        <StatusNotice tone="warning">
+          <span className="font-medium">
+            {openTaskPeople} Person(en) mit offener Bewertung („Bewertung notwendig“).
+          </span>{" "}
+          Export und Notenliste bleiben bis dahin gesperrt.{" "}
           <Button
             type="button"
-            variant={unlocked ? "default" : "outline"}
-            onClick={() => setUnlocked((u) => !u)}
-            disabled={taskCount === 0}
+            size="xs"
+            variant="outline"
+            className="ml-1"
+            onClick={() => {
+              setOnlyOpen(true);
+              setUnlocked(true);
+            }}
           >
-            {unlocked ? (
-              <>
-                <LockOpen className="size-4" /> Bearbeitung aktiv
-              </>
-            ) : (
-              <>
-                <Lock className="size-4" /> Bearbeitung freigeben
-              </>
-            )}
+            Nur offene zeigen und bearbeiten
           </Button>
-        </div>
-      </div>
+        </StatusNotice>
+      )}
 
       {hasPointsButNoTasks && (
         <div className="rounded-xl border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-50">
@@ -259,21 +288,8 @@ export default function DetailPointsPage() {
         </div>
       )}
 
-      <PageSectionNav
-        sections={[
-          ...(showSubareaMapping
-            ? [{ id: "teilgebiete", label: "Teilgebiete" }]
-            : []),
-          { id: "punktematrix", label: "Punktematrix" },
-          ...(taskCount > 0
-            ? [{ id: "aufgaben-auswertung", label: "Aufgaben-Auswertung" }]
-            : []),
-          ...(isOnlineStyleExam(project.examType)
-            ? [{ id: "dauer-analyse", label: "Bearbeitungsdauer" }]
-            : []),
-        ]}
-      />
-
+      {!showEvaluation && (
+      <>
       <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Suche Name / Matr.…"
@@ -378,7 +394,16 @@ export default function DetailPointsPage() {
         </CardContent>
       </Card>
 
-      {taskCount > 0 && (
+      </>
+      )}
+
+      {showEvaluation && taskCount === 0 && (
+        <StatusNotice tone="info">
+          Keine Aufgabenpunkte vorhanden – Auswertung je Aufgabe nicht möglich.
+        </StatusNotice>
+      )}
+
+      {showEvaluation && taskCount > 0 && (
         <div id="aufgaben-auswertung" className={SECTION_SCROLL_MT}>
           <QuestionStatsPanel
             questionStats={questionStats}
@@ -387,7 +412,7 @@ export default function DetailPointsPage() {
         </div>
       )}
 
-      {isOnlineStyleExam(project.examType) && (
+      {showEvaluation && isOnlineStyleExam(project.examType) && (
         <div
           id="dauer-analyse"
           className={cn(

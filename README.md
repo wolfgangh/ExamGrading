@@ -4,7 +4,7 @@
 
 © Prof. Dr. Wolfgang Hößl · OTH Regensburg · *Client-seitig · Keine Serverübertragung*
 
-**Aktuelle Version:** 0.4.77 (siehe auch `package.json` und App-Footer)
+**Aktuelle Version:** 0.4.78 (siehe auch `package.json` und App-Footer)
 
 **Noten-Regression:** `npm run test:grades` führt `scripts/grade-constellation-matrix.mts` aus (Konstellationen A–E, Szenarien, Grenzfälle). Workflow: `.grok/workflows/test-grade-constellations.rhai`.
 
@@ -148,4 +148,4 @@ Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Deta
 ## Lizenz & Kontakt
 
 Internes Hochschul-Tool.  
-© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.77
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.78

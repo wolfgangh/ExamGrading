@@ -120,6 +120,8 @@ Migrationen: `migrateExamProject` in `lib/grades/scenarios.ts` (Schema-Versionen
 | `lib/charts/*` | SVG→PNG-Export, Canvas-Balken für PDF |
 | `lib/matching/*` | Orphans, Merge, Dismiss, Undo |
 | `lib/pdf/*` | PDF-Generierung (Noten, Notenspiegel, Szenarienvergleich, …); Kopf über `drawOthHeader` aus dem Briefkopf |
+| `components/layout/page-kit.tsx` | Einheitliches Seitenmuster: `PageHeader` (Titel + Hauptaktion), `StatusNotice`, `MoreOptions` („Weitere Optionen“), `PageTabs`/`useTabParam` (Reiter mit `?tab=`), `StepCard` (Import-Schritte) |
+| `lib/participant-sources.ts` | Teilnehmer-Quelle je Prüfung (`participantSources`: HISinOne/manuell; abgeleitet aus Daten, mindestens eine aktiv) – steuert Import-Schritte und Notenmeldung |
 | `lib/letterhead.ts` | „Mein Briefkopf“ (localStorage `examgrade-letterhead`, Datei-Export/-Import, Logo-Cache für jsPDF, HTML-/LaTeX-Kopf) – Seite `/briefkopf` |
 | `lib/notenspiegel/*` | Notenspiegel als eigenständige HTML (`notenspiegel-html.ts`, interaktive SVG ohne Bibliothek) und Quarto-Paket (`notenspiegel-quarto.ts`; Vorlage `public/briefkopf/notenspiegel.qmd`, Platzhalter + `daten.json`, Observable JS) |
 | `lib/student-groups.ts` | Gruppenfilter und Zuordnung |
@@ -169,7 +171,7 @@ Details: [SECURITY.md](../SECURITY.md).
 
 Bei Releases `package.json`, `app-version.ts` und README-Footer abstimmen.
 
-**Stand dieser Doku:** App v0.4.77.
+**Stand dieser Doku:** App v0.4.78.
 
 **Noten aus Punkten:** `calculateGrade` vergleicht exakte Punkte mit `minPoints` (≥, Epsilon gegen FP). Kein `Math.ceil`/ROUNDUP auf ganze Punkte vor der Zuordnung.
 

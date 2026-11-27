@@ -25,6 +25,8 @@ import {
 import { exportGradesListPdf } from "@/lib/pdf/export-grades-pdf";
 import { isPortfolioExam, isStaCriteriaExam } from "@/lib/types";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MoreOptions, PageHeader, StatusNotice } from "@/components/layout/page-kit";
+import { getParticipantSources } from "@/lib/participant-sources";
 import {
   exportManualGradesPdf,
   filterManualGradeRows,
@@ -150,6 +152,7 @@ export default function DocumentsPage() {
     [project, rows]
   );
   const validationBlocked = validation.some((i) => i.level === "error");
+  const sources = project ? getParticipantSources(project) : { his: true, manual: false };
 
   if (!project) return null;
 
@@ -219,20 +222,38 @@ export default function DocumentsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <div className="max-w-2xl">
-        <h1 className="text-2xl font-semibold tracking-tight">Dokumente</h1>
-        <p className="text-muted-foreground">
-          Empfohlener Ablauf: Notenliste → {HISINONE_LABEL}-Excel hochladen →
-          ggf. manuelle Notenmeldung. Zuerst JSON-Sicherung unter{" "}
-          <Link
-            href={`/exam/${id}/export`}
-            className="font-medium text-foreground underline"
-          >
-            Sicherung
-          </Link>
+      <PageHeader
+        title="Dokumente"
+        description="Notenmeldung, Notenspiegel und interne Unterlagen. Vorher die JSON-Sicherung erstellen."
+      />
+
+      {!validationBlocked && !gradingLocked && !orphansLocked && (
+        <StatusNotice tone="success">
+          Export-Prüfung: keine Sperren – alle Dokumente verfügbar
+          {validation.filter((i) => i.level === "warning").length > 0
+            ? ` (${validation.filter((i) => i.level === "warning").length} Hinweis(e) unten)`
+            : ""}
           .
-        </p>
-      </div>
+        </StatusNotice>
+      )}
+      {validation.filter((i) => i.level === "warning").length > 0 && (
+        <MoreOptions label={`Hinweise der Export-Prüfung (${validation.filter((i) => i.level === "warning").length})`}>
+          <ul className="space-y-1.5 text-sm">
+            {validation
+              .filter((i) => i.level === "warning")
+              .map((item, i) => (
+                <li key={`${item.message}-${i}`} className="flex flex-wrap items-start justify-between gap-2">
+                  <span>{item.message}</span>
+                  {item.href && (
+                    <Link href={item.href} className="text-primary underline-offset-2 hover:underline">
+                      {item.actionLabel ?? "Öffnen"}
+                    </Link>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </MoreOptions>
+      )}
 
       {validation.some((i) => i.level === "error") && (
         <div
@@ -375,68 +396,19 @@ export default function DocumentsPage() {
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* 1 Notenliste */}
-        <Card className="surface-panel">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">1. Notenliste</CardTitle>
-            <CardDescription>
-              Alle Teilnehmer inkl. No-Shows, mit Unterschriftsfeldern und
-              dokumentierten Matrikel-Prüfungen. Teilnoten je Teilleistung in der
-              Haupttabelle; Rohwerte optional.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {project &&
-              ((isPortfolioExam(project.examType) &&
-                project.portfolioCriteriaMode) ||
-                (isStaCriteriaExam(project.examType) &&
-                  (project.criteria?.length ?? 0) > 0)) && (
-                <label className="flex cursor-pointer items-start gap-2 text-sm">
-                  <Checkbox
-                    checked={includeCriterionRaw}
-                    onCheckedChange={(v) =>
-                      setIncludeCriterionRaw(v === true)
-                    }
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="font-medium">
-                      Rohwerte der Teilkriterien anhängen
-                    </span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Zusätzliche Tabelle(n) mit K1, K2, … (bei vielen Kriterien
-                      in Abschnitten, ohne horizontalen Überlauf).
-                    </span>
-                  </span>
-                </label>
-              )}
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy != null || rows.length === 0 || !pdfAllowed}
-              onClick={() =>
-                run(
-                  "grades",
-                  () =>
-                    exportGradesListPdf(project, rows, {
-                      includeCriterionRawValues: includeCriterionRaw,
-                    }),
-                  "Notenliste heruntergeladen."
-                )
-              }
-            >
-              <FileText className="size-4" />
-              {busy === "grades" ? "…" : "PDF erzeugen"}
-            </Button>
-          </CardContent>
-        </Card>
-
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Notenmeldung</h2>
+          <p className="text-sm text-muted-foreground">Noten an das Prüfungsamt bzw. in HISinOne melden.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+        {(sources.his || hisSources.length > 0) && (
+        <>
         {/* 2 HISinOne */}
         <Card className="surface-panel">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
-              2. {HISINONE_LABEL} Excel
+              {HISINONE_LABEL} Excel
               {hisSources.length > 1 && (
                 <Badge
                   variant="default"
@@ -602,10 +574,20 @@ export default function DocumentsPage() {
             <p className="text-xs text-muted-foreground">
               Bei älteren Projekten Originaldatei unter Import erneut einlesen.
             </p>
-            <div className="space-y-1.5 border-t pt-3">
-              <p className="text-sm font-medium">
-                Excel-Notenliste (alle Teilnehmer)
-              </p>
+          </CardContent>
+        </Card>
+
+        </>
+        )}
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Excel-Notenliste</CardTitle>
+            <CardDescription>
+              Alle Teilnehmer mit Note – Notenmeldung für die manuelle Teilnehmerliste.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">
                 Matrikel, Name, Studiengang, Quelle ({HISINONE_LABEL} / manuell),
                 Note, Bemerkung – für Teilnehmer ohne {HISINONE_LABEL}-Datei
@@ -613,7 +595,7 @@ export default function DocumentsPage() {
               </p>
               <Button
                 size="sm"
-                variant={hisSources.length === 0 ? "default" : "outline"}
+                variant={!sources.his ? "default" : "outline"}
                 disabled={
                   busy != null || !pdfAllowed || project.hisRows.length === 0
                 }
@@ -631,12 +613,11 @@ export default function DocumentsPage() {
             </div>
           </CardContent>
         </Card>
-
         {/* 3 Manuelle Notenmeldung */}
         <Card className="surface-panel">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
-              3. Manuelle Notenmeldung
+              Manuelle Notenmeldung
               {manualRows.length > 0 && (
                 <Badge variant="secondary" className="ml-2 font-normal">
                   {manualRows.length}
@@ -726,13 +707,199 @@ export default function DocumentsPage() {
           </CardContent>
         </Card>
 
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Veröffentlichung</h2>
+          <p className="text-sm text-muted-foreground">Notenspiegel ohne personenbezogene Daten.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+        {/* 5 Notenspiegel – neben Notenänderungen */}
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Notenspiegel</CardTitle>
+            <CardDescription>
+              Notenverteilung, Kennzahlen (Mittelwert, Median, Quantile) und
+              Punkteverteilung zum aktiven Szenario – ohne personenbezogene
+              Daten. Kopf aus{" "}
+              <Link href="/briefkopf" className="underline underline-offset-2">
+                Mein Briefkopf
+              </Link>
+              .
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            {notenspiegelHasTaskData(project) && (
+              <label className="flex w-full cursor-pointer items-center gap-2 text-sm">
+                <Checkbox
+                  checked={spiegelTasks}
+                  onCheckedChange={(v) => setSpiegelTasks(v === true)}
+                />
+                Auswertung je Aufgabe / Teilgebiet
+              </label>
+            )}
+            <Button
+              size="sm"
+              variant="default"
+              disabled={busy != null || !notenspiegelReady}
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "spiegel-html",
+                  () =>
+                    exportNotenspiegelHtml(project, rows, stats, {
+                      includeTasks: spiegelTasks,
+                    }),
+                  "Notenspiegel (HTML, interaktiv) heruntergeladen."
+                );
+              }}
+            >
+              <FileText className="size-4" />
+              {busy === "spiegel-html" ? "…" : "HTML (interaktiv)"}
+            </Button>
+            <MoreOptions label="Weitere Formate (PDF, Excel, Quarto-Paket)" className="w-full">
+            <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy != null || !notenspiegelReady}
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "spiegel-pdf",
+                  async () => {
+                    await ensureLetterheadAssets();
+                    exportNotenspiegelPdf(project, rows, stats, {
+                      includeTasks: spiegelTasks,
+                    });
+                  },
+                  "Notenspiegel (PDF) heruntergeladen."
+                );
+              }}
+            >
+              <FileText className="size-4" />
+              {busy === "spiegel-pdf" ? "…" : "PDF"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy != null || !notenspiegelReady}
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "spiegel-xlsx",
+                  () => exportNotenspiegelExcel(project, rows, stats),
+                  "Notenspiegel (Excel) heruntergeladen."
+                );
+              }}
+            >
+              <FileSpreadsheet className="size-4" />
+              {busy === "spiegel-xlsx" ? "…" : "Excel"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy != null || !notenspiegelReady}
+              title="ZIP mit Quarto-Vorlage (.qmd), daten.json, Kopf und Logo – zum Anpassen und Rendern mit Quarto (HTML/PDF)"
+              onClick={() => {
+                if (!stats) return;
+                run(
+                  "spiegel-quarto",
+                  () =>
+                    exportNotenspiegelQuarto(project, rows, stats, {
+                      includeTasks: spiegelTasks,
+                    }),
+                  "Quarto-Paket heruntergeladen (quarto render notenspiegel.qmd)."
+                );
+              }}
+            >
+              <Download className="size-4" />
+              {busy === "spiegel-quarto" ? "…" : "Quarto-Paket (Anpassung)"}
+            </Button>
+            </div>
+            </MoreOptions>
+            {stats && stats.graded <= 0 && (
+              <p className="text-xs text-muted-foreground">
+                Noch keine bewerteten Teilnehmer.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Intern</h2>
+          <p className="text-sm text-muted-foreground">Unterlagen nur für Prüfer und Prüfungsausschuss.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+        {/* 1 Notenliste */}
+        <Card className="surface-panel">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Notenliste (PDF)</CardTitle>
+            <CardDescription>
+              Alle Teilnehmer inkl. No-Shows, mit Unterschriftsfeldern und
+              dokumentierten Matrikel-Prüfungen. Teilnoten je Teilleistung in der
+              Haupttabelle; Rohwerte optional.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {project &&
+              ((isPortfolioExam(project.examType) &&
+                project.portfolioCriteriaMode) ||
+                (isStaCriteriaExam(project.examType) &&
+                  (project.criteria?.length ?? 0) > 0)) && (
+                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={includeCriterionRaw}
+                    onCheckedChange={(v) =>
+                      setIncludeCriterionRaw(v === true)
+                    }
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-medium">
+                      Rohwerte der Teilkriterien anhängen
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Zusätzliche Tabelle(n) mit K1, K2, … (bei vielen Kriterien
+                      in Abschnitten, ohne horizontalen Überlauf).
+                    </span>
+                  </span>
+                </label>
+              )}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy != null || rows.length === 0 || !pdfAllowed}
+              onClick={() =>
+                run(
+                  "grades",
+                  () =>
+                    exportGradesListPdf(project, rows, {
+                      includeCriterionRawValues: includeCriterionRaw,
+                    }),
+                  "Notenliste heruntergeladen."
+                )
+              }
+            >
+              <FileText className="size-4" />
+              {busy === "grades" ? "…" : "PDF erzeugen"}
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* 4 Durchfaller – neben manueller Notenmeldung */}
         <Card className="surface-panel">
           <CardHeader className="pb-2">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <CardTitle className="text-base">
-                  4. Durchfaller / Zweitkorrektur
+                  Durchfaller / Zweitkorrektur
                   {failerRows.length > 0 && (
                     <Badge variant="secondary" className="ml-2 font-normal">
                       {scStatus.filled}/{scStatus.total} erfasst
@@ -850,121 +1017,13 @@ export default function DocumentsPage() {
           </CardContent>
         </Card>
 
-        {/* 5 Notenspiegel – neben Notenänderungen */}
-        <Card className="surface-panel">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">5. Notenspiegel</CardTitle>
-            <CardDescription>
-              Notenverteilung, Kennzahlen (Mittelwert, Median, Quantile) und
-              Punkteverteilung zum aktiven Szenario – ohne personenbezogene
-              Daten. Kopf aus{" "}
-              <Link href="/briefkopf" className="underline underline-offset-2">
-                Mein Briefkopf
-              </Link>
-              .
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            {notenspiegelHasTaskData(project) && (
-              <label className="flex w-full cursor-pointer items-center gap-2 text-sm">
-                <Checkbox
-                  checked={spiegelTasks}
-                  onCheckedChange={(v) => setSpiegelTasks(v === true)}
-                />
-                Auswertung je Aufgabe / Teilgebiet
-              </label>
-            )}
-            <Button
-              size="sm"
-              variant="default"
-              disabled={busy != null || !notenspiegelReady}
-              onClick={() => {
-                if (!stats) return;
-                run(
-                  "spiegel-html",
-                  () =>
-                    exportNotenspiegelHtml(project, rows, stats, {
-                      includeTasks: spiegelTasks,
-                    }),
-                  "Notenspiegel (HTML, interaktiv) heruntergeladen."
-                );
-              }}
-            >
-              <FileText className="size-4" />
-              {busy === "spiegel-html" ? "…" : "HTML (interaktiv)"}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy != null || !notenspiegelReady}
-              onClick={() => {
-                if (!stats) return;
-                run(
-                  "spiegel-pdf",
-                  async () => {
-                    await ensureLetterheadAssets();
-                    exportNotenspiegelPdf(project, rows, stats, {
-                      includeTasks: spiegelTasks,
-                    });
-                  },
-                  "Notenspiegel (PDF) heruntergeladen."
-                );
-              }}
-            >
-              <FileText className="size-4" />
-              {busy === "spiegel-pdf" ? "…" : "PDF"}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy != null || !notenspiegelReady}
-              onClick={() => {
-                if (!stats) return;
-                run(
-                  "spiegel-xlsx",
-                  () => exportNotenspiegelExcel(project, rows, stats),
-                  "Notenspiegel (Excel) heruntergeladen."
-                );
-              }}
-            >
-              <FileSpreadsheet className="size-4" />
-              {busy === "spiegel-xlsx" ? "…" : "Excel"}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy != null || !notenspiegelReady}
-              title="ZIP mit Quarto-Vorlage (.qmd), daten.json, Kopf und Logo – zum Anpassen und Rendern mit Quarto (HTML/PDF)"
-              onClick={() => {
-                if (!stats) return;
-                run(
-                  "spiegel-quarto",
-                  () =>
-                    exportNotenspiegelQuarto(project, rows, stats, {
-                      includeTasks: spiegelTasks,
-                    }),
-                  "Quarto-Paket heruntergeladen (quarto render notenspiegel.qmd)."
-                );
-              }}
-            >
-              <Download className="size-4" />
-              {busy === "spiegel-quarto" ? "…" : "Quarto-Paket (Anpassung)"}
-            </Button>
-            {stats && stats.graded <= 0 && (
-              <p className="text-xs text-muted-foreground">
-                Noch keine bewerteten Teilnehmer.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
         {/* 6 Notenänderungen */}
         <Card className="surface-panel">
           <CardHeader className="pb-2">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <CardTitle className="text-base">
-                  6. Notenänderungen
+                  Notenänderungen
                   {changeRows.length > 0 && (
                     <Badge variant="secondary" className="ml-2 font-normal">
                       {changeRows.length}
@@ -1041,7 +1100,8 @@ export default function DocumentsPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
