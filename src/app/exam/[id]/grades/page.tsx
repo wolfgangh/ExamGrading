@@ -37,10 +37,8 @@ import {
   formatPoints,
   formatStat,
 } from "@/lib/utils";
-import {
-  PageSectionNav,
-  SECTION_SCROLL_MT,
-} from "@/components/layout/page-section-nav";
+import { MoreOptions, PageHeader } from "@/components/layout/page-kit";
+import { SECTION_SCROLL_MT } from "@/components/layout/page-section-nav";
 import {
   Card,
   CardContent,
@@ -50,12 +48,10 @@ import {
 } from "@/components/ui/card";
 import {
   computeFailerAnalysis,
-  computeStatistics,
   defaultBorderlineMax,
   resolveNextGradeUnit,
 } from "@/lib/grades/statistics";
 import {
-  ensureScenarios,
   formatThresholdDual,
   visibleScenarios,
   withActiveScenario,
@@ -68,26 +64,9 @@ import {
 } from "@/lib/grades/portfolio";
 import { examUsesGradeScenarios } from "@/lib/grades/scenarios";
 import {
-  computeGradeBuckets,
-  computeScenarioImpact,
-} from "@/lib/grades/scenario-impact";
-import { buildEnrichedRows } from "@/lib/matching/match";
-import {
-  ScenarioGradeBucketChart,
-  ScenarioGradeDistributionChart,
-  shortScenarioLabel,
-} from "@/components/charts/grade-distribution-chart";
-import { ExpandableChart } from "@/components/charts/expandable-chart";
-import {
   hasOpenGrading,
   openGradingSummary,
 } from "@/lib/grades/open-grading";
-import { exportNotenspiegelPdf } from "@/lib/pdf/export-notenspiegel-pdf";
-import { exportNotenspiegelExcel } from "@/lib/excel/export-notenspiegel";
-import {
-  canAccessProtectedExport,
-} from "@/lib/backup-status";
-import { hasUnresolvedOrphans } from "@/lib/matching/orphan-resolution";
 import {
   Table,
   TableBody,
@@ -96,7 +75,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { FileSpreadsheet, FileText, ListChecks, UserRound } from "lucide-react";
+import { FileText, ListChecks, UserRound } from "lucide-react";
 import {
   availableStudentPerformanceSections,
   defaultStudentPerformanceSections,
@@ -132,8 +111,6 @@ export default function GradesPage() {
   const [noShowOnly, setNoShowOnly] = useState(false);
   const [orphanOnly, setOrphanOnly] = useState(false);
   const [showFailerPanel, setShowFailerPanel] = useState(false);
-  const [spiegelBusy, setSpiegelBusy] = useState<string | null>(null);
-  const [spiegelMsg, setSpiegelMsg] = useState<string | null>(null);
   const [groupFilter, setGroupFilter] = useState<GroupFilterId>("all");
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [perfPdfBusy, setPerfPdfBusy] = useState(false);
@@ -176,42 +153,6 @@ export default function GradesPage() {
     () => (project ? visibleScenarios(project) : []),
     [project]
   );
-
-  /** Stats + Buckets je sichtbares Szenario für Vergleichsgrafiken */
-  const scenarioChartSeries = useMemo(() => {
-    if (!project || scenarios.length === 0 || !examUsesGradeScenarios(project))
-      return [];
-    const all = ensureScenarios(project);
-    return scenarios.map((sc) => {
-      const scRows = buildEnrichedRows({
-        ...project,
-        gradeSchema: sc.schema,
-        gradeScenarios: all,
-        activeScenarioId: sc.id,
-      });
-      const scStats = computeStatistics(scRows, sc.schema, undefined, project);
-      return {
-        key: sc.id,
-        label: shortScenarioLabel(sc.name, sc.passThreshold),
-        stats: scStats,
-        buckets: computeGradeBuckets(scRows),
-        passThreshold: sc.passThreshold,
-      };
-    });
-  }, [project, scenarios]);
-
-  const impactVs40 = useMemo(() => {
-    if (!project || scenarios.length < 2 || !examUsesGradeScenarios(project))
-      return null;
-    const a =
-      scenarios.find((s) => s.id === project.activeScenarioId) ?? scenarios[0];
-    const b =
-      scenarios.find((s) => s.id !== a.id && !s.editable) ??
-      scenarios.find((s) => s.id !== a.id) ??
-      scenarios[1];
-    if (!b) return null;
-    return computeScenarioImpact(project, a.id, b.id);
-  }, [project, scenarios]);
 
   const nextGradeUnit = useMemo(() => resolveNextGradeUnit(rows), [rows]);
   const defaultBl = useMemo(
@@ -260,37 +201,6 @@ export default function GradesPage() {
         }).length
       : 0;
   const gradingLocked = hasOpenGrading(project);
-  const backupOk = canAccessProtectedExport(project);
-  const orphansLocked = hasUnresolvedOrphans(project, rows);
-  const notenspiegelReady =
-    !gradingLocked &&
-    !orphansLocked &&
-    backupOk &&
-    stats != null &&
-    stats.graded > 0;
-
-  const runNotenspiegel = (key: "pdf" | "xlsx", fn: () => void | Promise<void>) => {
-    if (!notenspiegelReady || !stats) return;
-    setSpiegelBusy(key);
-    setSpiegelMsg(null);
-    void (async () => {
-      try {
-        await fn();
-        setSpiegelMsg(
-          key === "pdf"
-            ? "Notenspiegel (PDF) heruntergeladen."
-            : "Notenspiegel (Excel) heruntergeladen."
-        );
-      } catch (e) {
-        setSpiegelMsg(
-          e instanceof Error ? e.message : "Export fehlgeschlagen"
-        );
-      } finally {
-        setSpiegelBusy(null);
-      }
-    })();
-  };
-
   const openEdit = (key: string) => {
     const row = rows.find((r) => r.key === key);
     setEditKey(key);
@@ -378,28 +288,13 @@ export default function GradesPage() {
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Notenübersicht
-        </h1>
-        <p className="text-muted-foreground">
-          {usesScenarios
-            ? "Aktives Szenario steuert Noten und Grenzfälle. Auswertung nur intern für Prüfer."
-            : "Gesamtnoten aus Kriterien bzw. Teilnoten. Auswertung nur intern für Prüfer."}
-        </p>
-      </div>
-
-      <PageSectionNav
-        sections={[
-          ...(scenarioChartSeries.length > 0
-            ? [{ id: "szenario-charts", label: "Szenario-Grafiken" }]
-            : []),
-          { id: "kennzahlen", label: "Kennzahlen" },
-          { id: "notenliste", label: "Notenliste" },
-          ...(failerAnalysis && failerAnalysis.count > 0
-            ? [{ id: "durchfaller", label: "Durchfaller" }]
-            : []),
-        ]}
+      <PageHeader
+        title="Notenübersicht"
+        description={
+          usesScenarios
+            ? "Noten nach aktivem Szenario – filtern, prüfen, einzeln überschreiben. Nur intern."
+            : "Gesamtnoten aus Kriterien bzw. Teilnoten – filtern, prüfen, einzeln überschreiben. Nur intern."
+        }
       />
 
       {gradingLocked && (
@@ -419,7 +314,7 @@ export default function GradesPage() {
             href={`/exam/${id}/detail-points`}
             className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
           >
-            Zu Detailpunkten
+            Zu den Punkten
           </Link>
         </div>
       )}
@@ -480,7 +375,7 @@ export default function GradesPage() {
             "gap-1"
           )}
         >
-          Notenszenarien verwalten
+          Szenarien vergleichen
         </Link>
         {portfolioUsesGradeScenarios(project) && (
           <p className="w-full text-xs text-muted-foreground">
@@ -489,71 +384,6 @@ export default function GradesPage() {
           </p>
         )}
       </div>
-      )}
-
-      {scenarioChartSeries.length > 0 && (
-        <div
-          id="szenario-charts"
-          className={cn("grid gap-4 lg:grid-cols-2", SECTION_SCROLL_MT)}
-        >
-          <Card className="surface-panel min-w-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                Notenverteilung im Szenario-Vergleich
-              </CardTitle>
-              <CardDescription>
-                {scenarioChartSeries.length > 1
-                  ? `Gruppierte Balken je Note · ${scenarioChartSeries
-                      .map((s) => s.label)
-                      .join(" · ")}`
-                  : "Anteil je Note (aktives Szenario)"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ExpandableChart
-                title="Notenverteilung im Szenario-Vergleich"
-                description={
-                  scenarioChartSeries.length > 1
-                    ? scenarioChartSeries.map((s) => s.label).join(" · ")
-                    : "Anteil je Note"
-                }
-                filenameBase={`ExamGrade_${project.name || "Pruefung"}_Szenarien_Notenverteilung`}
-              >
-                <ScenarioGradeDistributionChart
-                  series={scenarioChartSeries}
-                  mode="share"
-                  activeKey={project.activeScenarioId}
-                />
-              </ExpandableChart>
-            </CardContent>
-          </Card>
-          <Card className="surface-panel min-w-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                Notenstufen im Szenario-Vergleich
-              </CardTitle>
-              <CardDescription>
-                sehr gut … nicht ausreichend
-                {scenarioChartSeries.length > 1
-                  ? " · Szenarien nebeneinander"
-                  : ""}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ExpandableChart
-                title="Notenstufen im Szenario-Vergleich"
-                description="sehr gut … nicht ausreichend"
-                filenameBase={`ExamGrade_${project.name || "Pruefung"}_Szenarien_Notenstufen`}
-              >
-                <ScenarioGradeBucketChart
-                  series={scenarioChartSeries}
-                  mode="count"
-                  activeKey={project.activeScenarioId}
-                />
-              </ExpandableChart>
-            </CardContent>
-          </Card>
-        </div>
       )}
 
       {stats && (
@@ -615,163 +445,10 @@ export default function GradesPage() {
               );
             })}
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <span className="text-xs text-muted-foreground">Notenspiegel</span>
-            <div className="flex flex-wrap gap-1.5">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={!notenspiegelReady || spiegelBusy != null}
-                title={
-                  !backupOk
-                    ? "Zuerst Projektsicherung"
-                    : gradingLocked
-                      ? "Zuerst alle Aufgaben bewerten"
-                      : stats.graded <= 0
-                        ? "Noch keine Noten"
-                        : "Notenspiegel als PDF"
-                }
-                onClick={() =>
-                  runNotenspiegel("pdf", () =>
-                    exportNotenspiegelPdf(project, rows, stats)
-                  )
-                }
-              >
-                <FileText className="size-3.5" />
-                {spiegelBusy === "pdf" ? "…" : "PDF"}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={!notenspiegelReady || spiegelBusy != null}
-                title={
-                  !backupOk
-                    ? "Zuerst Projektsicherung"
-                    : gradingLocked
-                      ? "Zuerst alle Aufgaben bewerten"
-                      : stats.graded <= 0
-                        ? "Noch keine Noten"
-                        : "Notenspiegel als Excel"
-                }
-                onClick={() =>
-                  runNotenspiegel("xlsx", () =>
-                    exportNotenspiegelExcel(project, rows, stats)
-                  )
-                }
-              >
-                <FileSpreadsheet className="size-3.5" />
-                {spiegelBusy === "xlsx" ? "…" : "Excel"}
-              </Button>
-            </div>
-            {spiegelMsg && (
-              <p className="max-w-[16rem] text-right text-xs text-muted-foreground">
-                {spiegelMsg}
-              </p>
-            )}
-          </div>
         </div>
       )}
 
-      {impactVs40 && (
-        <Card className="surface-panel border-primary/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              Szenario-Effekt: {impactVs40.scenarioA.name.replace(" (Standard)", "")}{" "}
-              → {impactVs40.scenarioB.name.replace(" (Standard)", "")}
-            </CardTitle>
-            <CardDescription>
-              Positiv = bessere Note (kleinere Zahl) beim Wechsel von aktivem
-              Szenario zum Vergleich. Details unter Notenszenarien.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-3 text-sm">
-            <span className="rounded-lg bg-emerald-100 px-2 py-1 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
-              besser: {impactVs40.improved}
-            </span>
-            <span className="rounded-lg bg-rose-100 px-2 py-1 text-rose-900 dark:bg-rose-950 dark:text-rose-100">
-              schlechter: {impactVs40.worsened}
-            </span>
-            <span className="rounded-lg border px-2 py-1">
-              unverändert: {impactVs40.unchanged}
-            </span>
-            <span className="rounded-lg bg-emerald-50 px-2 py-1 dark:bg-emerald-950/40">
-              neu bestanden: {impactVs40.newlyPassed}
-            </span>
-            <span className="rounded-lg bg-rose-50 px-2 py-1 dark:bg-rose-950/40">
-              neu durchgefallen: {impactVs40.newlyFailed}
-            </span>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">
-        <div className="grid gap-1">
-          <Label className="text-xs">
-            Grenzfälle (bis nächste Note, {unitLabelShort})
-          </Label>
-          <Select
-            value={borderlineFilter}
-            onValueChange={(v) =>
-              v && setBorderlineFilter(v as BorderlineFilter)
-            }
-          >
-            <SelectTrigger className="w-52">
-              <SelectValue>
-                {borderlineFilter === "off"
-                  ? `Markierung ≤ ${String(defaultBl).replace(".", ",")} ${unitLabelShort}`
-                  : borderlineFilter === "custom"
-                    ? `≤ ${String(borderlineCustom ?? defaultBl).replace(".", ",")} ${unitLabelShort}`
-                    : `≤ ${String(borderlineFilter).replace(".", ",")} ${unitLabelShort}`}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="off">
-                Standard (≤ {String(defaultBl).replace(".", ",")}{" "}
-                {unitLabelShort})
-              </SelectItem>
-              {nextGradeUnit === "grade" ? (
-                <>
-                  <SelectItem value="0.05">≤ 0,05 Notengrade</SelectItem>
-                  <SelectItem value="0.1">≤ 0,1 Notengrade</SelectItem>
-                  <SelectItem value="0.15">≤ 0,15 Notengrade</SelectItem>
-                </>
-              ) : (
-                <>
-                  <SelectItem value="0.5">≤ 0,5 Punkte</SelectItem>
-                  <SelectItem value="1">≤ 1,0 Punkte</SelectItem>
-                  <SelectItem value="2">≤ 2,0 Punkte</SelectItem>
-                  <SelectItem value="3">≤ 3,0 Punkte</SelectItem>
-                </>
-              )}
-              <SelectItem value="custom">Benutzerdefiniert…</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="max-w-xs text-[0.625rem] text-muted-foreground">
-            Markierung: Abstand zur nächsten Note ≤ Schwelle
-            {nextGradeUnit === "grade"
-              ? " (Notengrade, z. B. 0,1)."
-              : " (Schema-Punkte)."}
-          </p>
-        </div>
-        {borderlineFilter === "custom" && (
-          <div className="grid gap-1">
-            <Label className="text-xs">
-              Max. Abstand ({unitLabelShort})
-            </Label>
-            <Input
-              type="number"
-              step={nextGradeUnit === "grade" ? "0.05" : "0.1"}
-              min={0}
-              className="w-24"
-              value={borderlineCustom ?? defaultBl}
-              onChange={(e) =>
-                setBorderlineCustom(Number(e.target.value) || 0)
-              }
-            />
-          </div>
-        )}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3">
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -797,7 +474,7 @@ export default function GradesPage() {
             checked={orphanOnly}
             onChange={(e) => setOrphanOnly(e.target.checked)}
           />
-          Antritt ohne HIS
+          Antritt ohne Teilnehmerliste
         </label>
         {failerAnalysis.count > 0 && (
           <Button
@@ -837,107 +514,6 @@ export default function GradesPage() {
           </span>
         </div>
       </div>
-
-      {failerAnalysis.count > 0 && (
-        <Card
-          id="durchfaller"
-          className={cn(
-            "border-rose-200 bg-rose-50/40 dark:border-rose-900 dark:bg-rose-950/20",
-            SECTION_SCROLL_MT
-          )}
-        >
-          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
-            <div className="min-w-0 space-y-1">
-              <CardTitle className="text-base">
-                Durchfaller-Analyse (nur Prüfer)
-              </CardTitle>
-              <CardDescription>
-                Interne Auswertung – keine Weitergabe an Studenten, kein
-                E-Mail-Versand. Anzahl:{" "}
-                <strong className="text-foreground tabular-nums">
-                  {failerAnalysis.count}
-                </strong>
-              </CardDescription>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              onClick={() => setShowFailerPanel((v) => !v)}
-              aria-expanded={showFailerPanel}
-            >
-              {showFailerPanel ? "Details einklappen" : "Details anzeigen"}
-            </Button>
-          </CardHeader>
-          {showFailerPanel && (
-            <CardContent className="space-y-3">
-              <div className="flex flex-wrap gap-4 text-sm">
-                <span>
-                  Anzahl: <strong>{failerAnalysis.count}</strong>
-                </span>
-                <span>
-                  Ø Punkte:{" "}
-                  <strong>{formatPoints(failerAnalysis.averagePoints)}</strong>
-                </span>
-                <span>
-                  Median:{" "}
-                  <strong>{formatPoints(failerAnalysis.medianPoints)}</strong>
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Nahe Bestehensgrenze (fehlende Punkte):
-              </p>
-              <div className="flex flex-wrap gap-2 text-sm">
-                {failerAnalysis.nearPass.map((n) => (
-                  <span
-                    key={n.within}
-                    className="rounded-md border bg-background px-2 py-1"
-                  >
-                    ≤ {formatPoints(n.within)}: <strong>{n.count}</strong>
-                  </span>
-                ))}
-              </div>
-              {failerAnalysis.rows.length > 0 && (
-                <div className="max-h-48 overflow-auto rounded-lg border bg-background">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Matr.</TableHead>
-                        <TableHead>Punkte</TableHead>
-                        <TableHead>bis Bestehen</TableHead>
-                        <TableHead>Note</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {failerAnalysis.rows.map((r) => (
-                        <TableRow key={r.key}>
-                          <TableCell>
-                            {r.student.lastName}, {r.student.firstName}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {r.key}
-                          </TableCell>
-                          <TableCell className="tabular-nums">
-                            {formatPoints(r.totalPoints)}
-                          </TableCell>
-                          <TableCell className="tabular-nums">
-                            {formatPoints(r.pointsBelowPass)}
-                          </TableCell>
-                          <TableCell className="tabular-nums">
-                            {formatGrade(r.finalGrade)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          )}
-        </Card>
-      )}
 
       {project && supportsStudentGroups(project.examType) && (
         <Card className="surface-panel">
@@ -1056,6 +632,178 @@ export default function GradesPage() {
         }
       />
       </div>
+
+      <MoreOptions label="Grenzfall-Schwelle">
+        <div className="flex flex-wrap items-end gap-3">
+        <div className="grid gap-1">
+          <Label className="text-xs">
+            Grenzfälle (bis nächste Note, {unitLabelShort})
+          </Label>
+          <Select
+            value={borderlineFilter}
+            onValueChange={(v) =>
+              v && setBorderlineFilter(v as BorderlineFilter)
+            }
+          >
+            <SelectTrigger className="w-52">
+              <SelectValue>
+                {borderlineFilter === "off"
+                  ? `Markierung ≤ ${String(defaultBl).replace(".", ",")} ${unitLabelShort}`
+                  : borderlineFilter === "custom"
+                    ? `≤ ${String(borderlineCustom ?? defaultBl).replace(".", ",")} ${unitLabelShort}`
+                    : `≤ ${String(borderlineFilter).replace(".", ",")} ${unitLabelShort}`}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="off">
+                Standard (≤ {String(defaultBl).replace(".", ",")}{" "}
+                {unitLabelShort})
+              </SelectItem>
+              {nextGradeUnit === "grade" ? (
+                <>
+                  <SelectItem value="0.05">≤ 0,05 Notengrade</SelectItem>
+                  <SelectItem value="0.1">≤ 0,1 Notengrade</SelectItem>
+                  <SelectItem value="0.15">≤ 0,15 Notengrade</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="0.5">≤ 0,5 Punkte</SelectItem>
+                  <SelectItem value="1">≤ 1,0 Punkte</SelectItem>
+                  <SelectItem value="2">≤ 2,0 Punkte</SelectItem>
+                  <SelectItem value="3">≤ 3,0 Punkte</SelectItem>
+                </>
+              )}
+              <SelectItem value="custom">Benutzerdefiniert…</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="max-w-xs text-[0.625rem] text-muted-foreground">
+            Markierung: Abstand zur nächsten Note ≤ Schwelle
+            {nextGradeUnit === "grade"
+              ? " (Notengrade, z. B. 0,1)."
+              : " (Schema-Punkte)."}
+          </p>
+        </div>
+        {borderlineFilter === "custom" && (
+          <div className="grid gap-1">
+            <Label className="text-xs">
+              Max. Abstand ({unitLabelShort})
+            </Label>
+            <Input
+              type="number"
+              step={nextGradeUnit === "grade" ? "0.05" : "0.1"}
+              min={0}
+              className="w-24"
+              value={borderlineCustom ?? defaultBl}
+              onChange={(e) =>
+                setBorderlineCustom(Number(e.target.value) || 0)
+              }
+            />
+          </div>
+        )}
+        </div>
+      </MoreOptions>
+
+      {failerAnalysis.count > 0 && (
+        <Card
+          id="durchfaller"
+          className={cn(
+            "border-rose-200 bg-rose-50/40 dark:border-rose-900 dark:bg-rose-950/20",
+            SECTION_SCROLL_MT
+          )}
+        >
+          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
+            <div className="min-w-0 space-y-1">
+              <CardTitle className="text-base">
+                Durchfaller-Analyse (nur Prüfer)
+              </CardTitle>
+              <CardDescription>
+                Interne Auswertung – keine Weitergabe an Studenten, kein
+                E-Mail-Versand. Anzahl:{" "}
+                <strong className="text-foreground tabular-nums">
+                  {failerAnalysis.count}
+                </strong>
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => setShowFailerPanel((v) => !v)}
+              aria-expanded={showFailerPanel}
+            >
+              {showFailerPanel ? "Details einklappen" : "Details anzeigen"}
+            </Button>
+          </CardHeader>
+          {showFailerPanel && (
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-4 text-sm">
+                <span>
+                  Anzahl: <strong>{failerAnalysis.count}</strong>
+                </span>
+                <span>
+                  Ø Punkte:{" "}
+                  <strong>{formatPoints(failerAnalysis.averagePoints)}</strong>
+                </span>
+                <span>
+                  Median:{" "}
+                  <strong>{formatPoints(failerAnalysis.medianPoints)}</strong>
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Nahe Bestehensgrenze (fehlende Punkte):
+              </p>
+              <div className="flex flex-wrap gap-2 text-sm">
+                {failerAnalysis.nearPass.map((n) => (
+                  <span
+                    key={n.within}
+                    className="rounded-md border bg-background px-2 py-1"
+                  >
+                    ≤ {formatPoints(n.within)}: <strong>{n.count}</strong>
+                  </span>
+                ))}
+              </div>
+              {failerAnalysis.rows.length > 0 && (
+                <div className="max-h-48 overflow-auto rounded-lg border bg-background">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Matr.</TableHead>
+                        <TableHead>Punkte</TableHead>
+                        <TableHead>bis Bestehen</TableHead>
+                        <TableHead>Note</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {failerAnalysis.rows.map((r) => (
+                        <TableRow key={r.key}>
+                          <TableCell>
+                            {r.student.lastName}, {r.student.firstName}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {r.key}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {formatPoints(r.totalPoints)}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {formatPoints(r.pointsBelowPass)}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {formatGrade(r.finalGrade)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
+
 
       <Dialog open={!!editKey} onOpenChange={(o) => !o && setEditKey(null)}>
         <DialogContent>

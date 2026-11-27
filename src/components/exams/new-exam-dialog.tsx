@@ -1,8 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Plus, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  BookOpenCheck,
+  ClipboardList,
+  FileQuestion,
+  Home,
+  Layers,
+  Monitor,
+  PenSquare,
+  Plus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -14,49 +24,47 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ComboboxField } from "@/components/ui/combobox-field";
-import { ClearableInput } from "@/components/ui/clearable-input";
 import {
   DEFAULT_LECTURER,
   EXAM_NAME_OPTIONS,
   defaultLecturersForExam,
   findCatalogEntry,
   resolveExamDisplayName,
-  resolveSubAreasForExamName,
-  type CatalogSubArea,
 } from "@/lib/exam-catalog";
 import { LecturerPicker } from "@/components/exam/lecturer-picker";
+import { ParticipantSourceToggle } from "@/components/exam/participant-source-toggle";
 import { createEmptyExamProject } from "@/lib/project-factory";
 import { saveExam } from "@/lib/storage";
 import {
   currentSemesterLabel,
   semesterSelectOptions,
 } from "@/lib/semester";
+import { EXAM_TYPE_LABELS, type ExamType } from "@/lib/types";
 import {
-  EXAM_TYPE_LABELS,
-  isOnlineStyleExam,
-  type ExamType,
-  type MoodlePointsRoundStep,
-} from "@/lib/types";
-import {
-  DEFAULT_MOODLE_ROUND_STEP,
-  MOODLE_ROUND_STEP_OPTIONS,
-} from "@/lib/grades/round-half-points";
+  DEFAULT_PARTICIPANT_SOURCES,
+  type ParticipantSources,
+} from "@/lib/participant-sources";
+import { cn } from "@/lib/utils";
 
-type ExamTypeValue = ExamType;
+/** Einmal je Browser bestätigt: Daten liegen nur lokal */
+const STORAGE_ACK_KEY = "examgrade-local-storage-ack";
 
-function emptySubAreaRow(): CatalogSubArea {
-  return { name: "Gesamt", code: "G", maxPoints: 90 };
-}
+const EXAM_TYPE_TILES: {
+  value: ExamType;
+  short: string;
+  hint: string;
+  Icon: typeof Monitor;
+}[] = [
+  { value: "elektr_p", short: "elektrP", hint: "Elektronische Prüfung vor Ort, Moodle-Antritt und -Punkte", Icon: Monitor },
+  { value: "the", short: "THE", hint: "Take-Home-Exam, Moodle-Antritt und -Punkte", Icon: Home },
+  { value: "written", short: "Klausur", hint: "Punkte je Aufgabe, Notenschlüssel", Icon: PenSquare },
+  { value: "sta_criteria", short: "StA – Kriterien", hint: "Studienarbeit, gewichtete Kriterien", Icon: ClipboardList },
+  { value: "sta_manual", short: "StA – manuell", hint: "Studienarbeit, Note je Person direkt", Icon: BookOpenCheck },
+  { value: "portfolio", short: "Portfolio", hint: "Teilleistungen, gewichtete Teilnoten", Icon: Layers },
+  { value: "other", short: "Sonstige", hint: "Freie Konfiguration", Icon: FileQuestion },
+];
 
 export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -64,70 +72,40 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
   const router = useRouter();
 
   const [nameInput, setNameInput] = useState("");
-  const [examNumber, setExamNumber] = useState("");
   const [semester, setSemester] = useState(() => currentSemesterLabel());
-  const [examType, setExamType] = useState<ExamTypeValue>("elektr_p");
-  const [moodleRoundStep, setMoodleRoundStep] =
-    useState<MoodlePointsRoundStep>(DEFAULT_MOODLE_ROUND_STEP);
+  const [examType, setExamType] = useState<ExamType>("elektr_p");
   const [lecturers, setLecturers] = useState<string[]>([DEFAULT_LECTURER]);
-  const [subAreas, setSubAreas] = useState<CatalogSubArea[]>([
-    emptySubAreaRow(),
-  ]);
+  const [sources, setSources] = useState<ParticipantSources>({
+    ...DEFAULT_PARTICIPANT_SOURCES,
+  });
   const [nameError, setNameError] = useState<string | null>(null);
-  /** Pflicht: lokale Speicherung / Sicherungsrisiko verstanden */
+  const [ackStored, setAckStored] = useState(true);
   const [dataAck, setDataAck] = useState(false);
+  const [showStorageInfo, setShowStorageInfo] = useState(false);
 
-  const showMoodleRound = isOnlineStyleExam(examType);
-  const moodleRoundMeta = MOODLE_ROUND_STEP_OPTIONS.find(
-    (o) => o.value === moodleRoundStep
-  );
-
-  const totalMax = useMemo(
-    () => subAreas.reduce((s, sa) => s + (Number(sa.maxPoints) || 0), 0),
-    [subAreas]
-  );
+  useEffect(() => {
+    try {
+      setAckStored(localStorage.getItem(STORAGE_ACK_KEY) === "1");
+    } catch {
+      setAckStored(false);
+    }
+  }, [open]);
 
   const resetForm = () => {
     setNameInput("");
-    setExamNumber("");
     setSemester(currentSemesterLabel());
     setExamType("elektr_p");
-    setMoodleRoundStep(DEFAULT_MOODLE_ROUND_STEP);
     setLecturers([DEFAULT_LECTURER]);
-    setSubAreas([emptySubAreaRow()]);
+    setSources({ ...DEFAULT_PARTICIPANT_SOURCES });
     setNameError(null);
     setDataAck(false);
+    setShowStorageInfo(false);
   };
 
-  const applyNameAndSubAreas = (raw: string) => {
+  const applyName = (raw: string) => {
     setNameInput(raw);
     setNameError(null);
-    if (!raw.trim()) {
-      setSubAreas([emptySubAreaRow()]);
-      setLecturers([DEFAULT_LECTURER]);
-      return;
-    }
-    setSubAreas(resolveSubAreasForExamName(raw));
-    setLecturers(defaultLecturersForExam(raw));
-  };
-
-  const updateSubArea = (index: number, patch: Partial<CatalogSubArea>) => {
-    setSubAreas((prev) =>
-      prev.map((sa, i) => (i === index ? { ...sa, ...patch } : sa))
-    );
-  };
-
-  const addSubArea = () => {
-    setSubAreas((prev) => [
-      ...prev,
-      { name: "Teilgebiet", code: "T", maxPoints: 0 },
-    ]);
-  };
-
-  const removeSubArea = (index: number) => {
-    setSubAreas((prev) =>
-      prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)
-    );
+    setLecturers(raw.trim() ? defaultLecturersForExam(raw) : [DEFAULT_LECTURER]);
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -137,38 +115,29 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
       setNameError("Bitte Prüfungsname angeben");
       return;
     }
-    if (subAreas.length === 0 || totalMax <= 0) {
-      setNameError("Bitte mindestens ein Teilgebiet mit Punkten angeben");
-      return;
-    }
-    if (!dataAck) {
-      setNameError(
-        "Bitte den Hinweis zur lokalen Speicherung bestätigen."
-      );
+    if (!ackStored && !dataAck) {
+      setNameError("Bitte den Hinweis zur lokalen Speicherung bestätigen.");
       return;
     }
     setNameError(null);
     setSaving(true);
     try {
-      // Katalog nur für Anzeige-Name; Freitext bleibt
+      if (!ackStored) {
+        try {
+          localStorage.setItem(STORAGE_ACK_KEY, "1");
+        } catch {
+          /* ignore */
+        }
+      }
+      // Katalog nur für Anzeige-Name; Teilgebiete werden aus dem Katalog vorbefüllt
       const catalog = findCatalogEntry(trimmed);
       const project = createEmptyExamProject({
         name: catalog ? resolveExamDisplayName(trimmed) : trimmed,
-        examNumber,
         semester,
-        lecturers:
-          lecturers.length > 0 ? lecturers : [DEFAULT_LECTURER],
+        lecturers: lecturers.length > 0 ? lecturers : [DEFAULT_LECTURER],
         examType,
-        moodlePointsRoundStep: isOnlineStyleExam(examType)
-          ? moodleRoundStep
-          : undefined,
-        subAreas: subAreas.map((sa) => ({
-          name: sa.name.trim() || "Teilgebiet",
-          code: sa.code.trim() || "T",
-          maxPoints: Number(sa.maxPoints) || 0,
-        })),
+        participantSources: sources,
       });
-
       await saveExam(project);
       setOpen(false);
       resetForm();
@@ -178,6 +147,23 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
       setSaving(false);
     }
   };
+
+  const storageInfo = (
+    <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed">
+      <li>
+        Alle Prüfungsdaten liegen <strong>nur in diesem Browser</strong> (kein
+        Server, keine automatische Cloud-Sicherung).
+      </li>
+      <li>
+        Die JSON-Sicherung nach Import und nach den Noten herunterladen und
+        sicher ablegen (Menü „Sicherung“).
+      </li>
+      <li>
+        <strong>Ohne Sicherung gehen die Daten verloren</strong>, z. B. beim
+        Leeren des Browser-Speichers oder auf einem anderen Gerät.
+      </li>
+    </ul>
+  );
 
   return (
     <Dialog
@@ -189,11 +175,7 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
     >
       <DialogTrigger
         render={
-          <Button
-            size="sm"
-            className="max-w-full shrink"
-            title="Neue Prüfung anlegen"
-          >
+          <Button size="sm" className="max-w-full shrink" title="Neue Prüfung anlegen">
             <Plus className="size-4 shrink-0" />
             <span className="truncate">
               <span className="sm:hidden">Neu</span>
@@ -202,41 +184,61 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
           </Button>
         }
       />
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Neue Prüfung anlegen</DialogTitle>
           <DialogDescription>
-            Katalogauswahl oder Freitext. Die Prüfungsnummer kann auch später
-            aus der HISinOne-Datei übernommen werden. Bestehensgrenze und
-            Notenszenarien legen Sie unter Einstellungen fest.
+            Prüfungsnummer, Teilgebiete, Rundung und Notenschlüssel lassen sich
+            danach unter Einstellungen anpassen.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={onSubmit} className="grid gap-3">
+        <form onSubmit={onSubmit} className="grid gap-4">
           <ComboboxField
             label="Prüfungsname"
             required
             clearable
             value={nameInput}
-            onChange={applyNameAndSubAreas}
+            onChange={applyName}
             options={EXAM_NAME_OPTIONS}
             placeholder="z. B. Finanzierung und Investition (FI)"
           />
-          {nameError && (
-            <p className="text-sm text-destructive">{nameError}</p>
-          )}
 
           <div className="grid gap-1.5">
-            <Label htmlFor="examNumber">Prüfungsnummer</Label>
-            <ClearableInput
-              id="examNumber"
-              value={examNumber}
-              onChange={setExamNumber}
-              placeholder="optional – oder aus HISinOne-Import"
-              clearLabel="Prüfungsnummer löschen"
-            />
+            <Label>Prüfungsform</Label>
+            <div
+              role="radiogroup"
+              aria-label="Prüfungsform"
+              className="grid gap-2 sm:grid-cols-2"
+            >
+              {EXAM_TYPE_TILES.map(({ value, short, hint, Icon }) => {
+                const active = examType === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    title={EXAM_TYPE_LABELS[value]}
+                    onClick={() => setExamType(value)}
+                    className={cn(
+                      "flex items-start gap-2.5 rounded-lg border-2 px-3 py-2 text-left transition-colors",
+                      active
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:bg-muted"
+                    )}
+                  >
+                    <Icon className={cn("mt-0.5 size-4 shrink-0", active ? "text-primary" : "text-muted-foreground")} aria-hidden />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{short}</span>
+                      <span className="block text-xs text-muted-foreground">{hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <ComboboxField
               label="Semester"
               value={semester}
@@ -246,241 +248,68 @@ export function NewExamDialog({ onCreated }: { onCreated?: () => void }) {
               clearable
             />
             <div className="grid gap-1.5">
-              <Label>Prüfungstyp</Label>
-              <Select
-                value={examType}
-                onValueChange={(v) => {
-                  if (!v) return;
-                  const t = v as ExamTypeValue;
-                  setExamType(t);
-                  // Beim Wechsel zu THE/elektrP Standard-Rundung setzen
-                  if (
-                    isOnlineStyleExam(t) &&
-                    !isOnlineStyleExam(examType)
-                  ) {
-                    setMoodleRoundStep(DEFAULT_MOODLE_ROUND_STEP);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Typ wählen">
-                    {EXAM_TYPE_LABELS[examType]}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="the">
-                    {EXAM_TYPE_LABELS.the}
-                  </SelectItem>
-                  <SelectItem value="elektr_p">
-                    {EXAM_TYPE_LABELS.elektr_p}
-                  </SelectItem>
-                  <SelectItem value="written">
-                    {EXAM_TYPE_LABELS.written}
-                  </SelectItem>
-                  <SelectItem value="sta_criteria">
-                    {EXAM_TYPE_LABELS.sta_criteria}
-                  </SelectItem>
-                  <SelectItem value="sta_manual">
-                    {EXAM_TYPE_LABELS.sta_manual}
-                  </SelectItem>
-                  <SelectItem value="portfolio">
-                    {EXAM_TYPE_LABELS.portfolio}
-                  </SelectItem>
-                  <SelectItem value="other">
-                    {EXAM_TYPE_LABELS.other}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Teilnehmer-Quelle</Label>
+              <ParticipantSourceToggle
+                value={sources}
+                size="sm"
+                onToggle={(key) =>
+                  setSources((prev) => {
+                    const next = { ...prev, [key]: !prev[key] };
+                    return next.his || next.manual ? next : prev;
+                  })
+                }
+              />
             </div>
           </div>
 
-          {showMoodleRound && (
-            <div className="grid gap-1.5 rounded-lg border bg-muted/30 px-3 py-3">
-              <Label htmlFor="new-moodle-round">
-                Moodle-/THE-Punkte runden
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Beim Import werden Aufgabenpunkte auf das gewählte Raster
-                aufgerundet (Standard: 0,5). Später unter Einstellungen
-                änderbar.
-              </p>
-              <Select
-                value={String(moodleRoundStep)}
-                onValueChange={(v) => {
-                  if (!v) return;
-                  setMoodleRoundStep(
-                    v === "none" ? "none" : v === "0.25" ? 0.25 : 0.5
-                  );
-                }}
+          <LecturerPicker value={lecturers} onChange={setLecturers} id="new-exam-lecturers" />
+
+          {nameError && <p className="text-sm text-destructive">{nameError}</p>}
+
+          {ackStored ? (
+            <p className="text-xs text-muted-foreground">
+              Daten liegen nur in diesem Browser – regelmäßig sichern.{" "}
+              <button
+                type="button"
+                className="text-primary underline-offset-2 hover:underline"
+                onClick={() => setShowStorageInfo((v) => !v)}
               >
-                <SelectTrigger id="new-moodle-round" className="w-full">
-                  <SelectValue>
-                    {moodleRoundMeta?.label ?? "Rundung wählen"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {MOODLE_ROUND_STEP_OPTIONS.map((o) => (
-                    <SelectItem key={String(o.value)} value={String(o.value)}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {moodleRoundMeta && (
-                <p className="rounded-md border border-border/80 bg-background px-2.5 py-2 text-xs leading-relaxed">
-                  <span className="font-medium">Beispiel: </span>
-                  {moodleRoundMeta.example}
-                </p>
-              )}
+                {showStorageInfo ? "Weniger" : "Mehr dazu"}
+              </button>
+              {showStorageInfo && <span className="mt-1 block">{storageInfo}</span>}
+            </p>
+          ) : (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm" role="note">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
+                <div className="min-w-0 space-y-1.5">
+                  <p className="font-medium text-amber-950 dark:text-amber-100">Lokale Datenspeicherung</p>
+                  <div className="text-amber-950/90 dark:text-amber-50/90">{storageInfo}</div>
+                  <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-md border border-amber-500/30 bg-background/60 px-2.5 py-2">
+                    <Checkbox
+                      checked={dataAck}
+                      onCheckedChange={(v) => {
+                        setDataAck(v === true);
+                        if (v === true) setNameError(null);
+                      }}
+                      className="mt-0.5"
+                      aria-required
+                    />
+                    <span className="text-xs leading-snug text-foreground">
+                      Verstanden: Die Daten existieren nur lokal und müssen
+                      gesichert werden (wird in diesem Browser nur einmal gefragt).
+                    </span>
+                  </label>
+                </div>
+              </div>
             </div>
           )}
 
-          <LecturerPicker
-            value={lecturers}
-            onChange={setLecturers}
-            id="new-exam-lecturers"
-          />
-
-          {/* Teilgebiete */}
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <Label>Teilgebiete</Label>
-                <p className="text-xs text-muted-foreground">
-                  FI und MAP werden vorbefüllt; sonst Gesamt oder eigene
-                  Gebiete. Summe:{" "}
-                  <span className="font-medium text-foreground">
-                    {totalMax} Punkte
-                  </span>
-                </p>
-              </div>
-              <Button type="button" size="sm" variant="outline" onClick={addSubArea}>
-                <Plus className="size-3.5" />
-                Gebiet
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {subAreas.map((sa, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[1fr_4.5rem_5rem_auto] items-end gap-1.5"
-                >
-                  <div className="grid gap-1">
-                    {index === 0 && (
-                      <span className="text-xs text-muted-foreground">Name</span>
-                    )}
-                    <Input
-                      value={sa.name}
-                      onChange={(e) =>
-                        updateSubArea(index, { name: e.target.value })
-                      }
-                      placeholder="Name"
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    {index === 0 && (
-                      <span className="text-xs text-muted-foreground">Kürzel</span>
-                    )}
-                    <Input
-                      value={sa.code}
-                      onChange={(e) =>
-                        updateSubArea(index, { code: e.target.value })
-                      }
-                      placeholder="Code"
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    {index === 0 && (
-                      <span className="text-xs text-muted-foreground">Max.</span>
-                    )}
-                    <Input
-                      type="number"
-                      step="0.5"
-                      min={0}
-                      value={sa.maxPoints}
-                      onChange={(e) =>
-                        updateSubArea(index, {
-                          maxPoints: Number(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={subAreas.length <= 1}
-                    onClick={() => removeSubArea(index)}
-                    aria-label="Teilgebiet entfernen"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div
-            className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm"
-            role="note"
-          >
-            <div className="flex items-start gap-2">
-              <AlertTriangle
-                className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400"
-                aria-hidden
-              />
-              <div className="min-w-0 space-y-1.5">
-                <p className="font-medium text-amber-950 dark:text-amber-100">
-                  Lokale Datenspeicherung
-                </p>
-                <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-amber-950/90 dark:text-amber-50/90">
-                  <li>
-                    Alle Prüfungsdaten liegen <strong>nur in diesem Browser</strong>{" "}
-                    (lokal, kein Server). Es gibt keine automatische
-                    Cloud-Sicherung.
-                  </li>
-                  <li>
-                    Bitte in den Workflow-Schritten{" "}
-                    <strong>Sicherung nach Import</strong> und{" "}
-                    <strong>Sicherung nach Noten</strong> die JSON-Projektsicherung
-                    herunterladen und sicher ablegen.
-                  </li>
-                  <li>
-                    <strong>Ohne Sicherung gehen die Daten verloren</strong>, wenn
-                    der Browser geschlossen, der Speicher geleert oder die App in
-                    einem anderen Browser bzw. auf einem anderen Gerät geöffnet
-                    wird.
-                  </li>
-                </ul>
-                <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-md border border-amber-500/30 bg-background/60 px-2.5 py-2">
-                  <Checkbox
-                    checked={dataAck}
-                    onCheckedChange={(v) => {
-                      setDataAck(v === true);
-                      if (v === true) setNameError(null);
-                    }}
-                    className="mt-0.5"
-                    aria-required
-                  />
-                  <span className="text-xs leading-snug text-foreground">
-                    Ich habe verstanden: Die Daten existieren nur lokal im
-                    Browser und müssen gesichert werden; ohne Sicherung droht
-                    Datenverlust (z. B. beim Schließen des Browsers).
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
-
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Abbrechen
             </Button>
-            <Button type="submit" disabled={saving || !dataAck}>
+            <Button type="submit" disabled={saving || (!ackStored && !dataAck)}>
               {saving ? "Speichern…" : "Anlegen"}
             </Button>
           </DialogFooter>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useExamContext } from "@/components/exam/exam-context";
 import { createId } from "@/lib/id";
 import type {
@@ -69,6 +70,12 @@ import {
 } from "@/components/ui/table";
 import { Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { PageHeader, PageTabs, useTabParam } from "@/components/layout/page-kit";
+import { ParticipantSourceToggle } from "@/components/exam/participant-source-toggle";
+import {
+  getParticipantSources,
+  toggleParticipantSource,
+} from "@/lib/participant-sources";
 import { useParams } from "next/navigation";
 import { rebuildScenariosForMaxPoints } from "@/lib/grades/scenarios";
 import {
@@ -96,6 +103,24 @@ import { hasSubstantialData } from "@/lib/backup-status";
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>();
   const { project, setProject } = useExamContext();
+  const settingsTabsAll = useMemo(() => {
+    if (!project) return [{ id: "allgemein", label: "Allgemein" }];
+    const t = project.examType;
+    const staCrit = isStaCriteriaExam(t);
+    const portfolio = isPortfolioExam(t);
+    const hisManual = isHisManualAssessmentExam(t);
+    return [
+      { id: "allgemein", label: "Allgemein" },
+      ...(staCrit || portfolio || !hisManual ? [{ id: "bewertung", label: "Bewertung" }] : []),
+      ...(examUsesGradeScenarios(project) || (portfolio && project.portfolioCriteriaMode)
+        ? [{ id: "notenschluessel", label: "Notenschlüssel" }]
+        : []),
+      ...(supportsStudentGroups(t) ? [{ id: "gruppen", label: "Gruppen" }] : []),
+      ...(isOnlineStyleExam(t) ? [{ id: "import", label: "Import" }] : []),
+    ];
+  }, [project]);
+  const [tab, setTab] = useTabParam(settingsTabsAll);
+  const settingsTabs = settingsTabsAll;
   if (!project) return null;
 
   const gradingLocked = hasOpenGrading(project);
@@ -325,30 +350,40 @@ export default function SettingsPage() {
   return (
     <div
       className={cn(
-        "mx-auto space-y-6",
+        "mx-auto space-y-5",
         isStaCrit || isPortfolio ? "max-w-5xl" : "max-w-3xl"
       )}
     >
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Einstellungen
-        </h1>
-        <p className="text-muted-foreground">
-          Metadaten, Teilgebiete und Notenschema (analog Excel „Definitionen“ /
-          „Notenszenarien“).
-        </p>
-      </div>
+      <PageHeader
+        title="Einstellungen"
+        description="Stammdaten, Bewertungsstruktur und Notenschlüssel dieser Prüfung."
+      />
+      <PageTabs tabs={settingsTabs} value={tab} onChange={setTab} />
 
-      {isStaCrit ? (
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+      {tab === "allgemein" && (
+        <>
           {metaCard}
-          {scenariosCard}
-        </div>
-      ) : (
-        metaCard
+          <Card className="surface-panel">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Teilnehmer-Quelle</CardTitle>
+              <CardDescription>
+                Steuert die Import-Schritte und die Notenmeldung (HISinOne-Excel
+                bzw. Excel-Notenliste). Beide aktiv = beides.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ParticipantSourceToggle
+                value={getParticipantSources(project)}
+                onToggle={(key) =>
+                  setProject((prev) => toggleParticipantSource(prev, key))
+                }
+              />
+            </CardContent>
+          </Card>
+        </>
       )}
 
-      {isOnlineStyleExam(project.examType) && (
+      {tab === "import" && isOnlineStyleExam(project.examType) && (
         <Card className="surface-panel">
           <CardHeader>
             <CardTitle className="text-base">Moodle- / THE-Import</CardTitle>
@@ -409,7 +444,7 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {showGroups && (
+      {tab === "gruppen" && showGroups && (
         <Card className="surface-panel">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
@@ -492,7 +527,7 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {isStaCrit && (
+      {tab === "bewertung" && isStaCrit && (
         <Card className="surface-panel">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
@@ -684,7 +719,7 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {isPortfolio && (
+      {tab === "bewertung" && isPortfolio && (
         <Card className="surface-panel">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
@@ -1232,7 +1267,7 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {!isHisManual && (
+      {tab === "bewertung" && !isHisManual && (
       <Card className="surface-panel">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -1319,8 +1354,8 @@ export default function SettingsPage() {
       )}
 
       {/* THE/Klausur/Portfolio: Szenarien unterhalb; bei STA bereits neben Metadaten */}
-      {!isStaCrit && scenariosCard}
-      {isPortfolio && !scenariosCard && project.portfolioCriteriaMode && (
+      {tab === "notenschluessel" && scenariosCard}
+      {tab === "notenschluessel" && isPortfolio && !scenariosCard && project.portfolioCriteriaMode && (
         <Card className="surface-panel">
           <CardHeader>
             <CardTitle className="text-base">Notenszenarien</CardTitle>

@@ -2,6 +2,18 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  MoreOptions,
+  PageHeader,
+  PageTabs,
+  useTabParam,
+} from "@/components/layout/page-kit";
+
+const SCENARIO_TABS = [
+  { id: "festlegen", label: "Festlegen" },
+  { id: "vergleich", label: "Vergleich" },
+  { id: "auswirkung", label: "Auswirkung" },
+];
 import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import {
@@ -82,6 +94,8 @@ export default function ScenariosPage() {
   const [onlyChanged, setOnlyChanged] = useState(true);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
+  const scenarioTabs = SCENARIO_TABS;
+  const [tab, setTab] = useTabParam(SCENARIO_TABS);
 
   const allScenarios = useMemo(
     () => (project ? ensureScenarios(project) : []),
@@ -187,17 +201,33 @@ export default function ScenariosPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <div className="max-w-2xl">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Notenszenarien
-        </h1>
-        <p className="text-muted-foreground">
-          {isPortfolioScenarios
-            ? "Portfolio (Punkte/Prozent): Grenzen relativ zum Maximum (typ. 100). Anzeige immer in Punkten und Prozent. Das aktive Szenario steuert Teil- und Gesamtnoten."
-            : "Vergleich der Bestehensgrenzen. Das aktive Szenario steuert Noten, Export und Grenzfälle."}{" "}
-          Nur intern – keine Studenten-Kommunikation.
-        </p>
-      </div>
+      <PageHeader
+        title="Notenszenarien"
+        description={
+          isPortfolioScenarios
+            ? "Bestehensgrenzen festlegen und vergleichen (relativ zum Maximum). Das aktive Szenario steuert Teil- und Gesamtnoten. Nur intern."
+            : "Bestehensgrenzen festlegen und vergleichen. Das aktive Szenario steuert Noten, Export und Grenzfälle. Nur intern."
+        }
+        action={
+          comparisonBundle && comparisonBundle.columns.length > 0 ? (
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                type="button"
+                size="sm"
+                className="gap-1.5"
+                disabled={exportBusy}
+                onClick={runPdfExport}
+              >
+                <FileDown className="size-4" />
+                Vergleich als PDF
+              </Button>
+              {exportMsg && (
+                <span className="text-xs text-muted-foreground">{exportMsg}</span>
+              )}
+            </div>
+          ) : undefined
+        }
+      />
 
       {!usesScenarios && (
         <div className="rounded-xl border border-muted bg-muted/40 px-3 py-2.5 text-sm">
@@ -224,12 +254,15 @@ export default function ScenariosPage() {
             href={`/exam/${id}/detail-points`}
             className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
           >
-            Zu Detailpunkten
+            Zu den Punkten
           </Link>
         </div>
       )}
 
-      {/* Aktive Schwellen + Szenario-Wahl */}
+      <PageTabs tabs={scenarioTabs} value={tab} onChange={setTab} />
+
+      {/* Reiter „Festlegen“: aktive Schwelle + Szenario-Wahl */}
+      {tab === "festlegen" && (
       <Card className="surface-panel">
         <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1 space-y-2">
@@ -308,6 +341,7 @@ export default function ScenariosPage() {
               })}
             </div>
 
+            <MoreOptions label="Freies Szenario und eigene Grenzen" className="w-full sm:max-w-xl">
             {editable && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-1.5">
                 <Switch
@@ -532,12 +566,15 @@ export default function ScenariosPage() {
                 )}
               </div>
             )}
+            </MoreOptions>
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Vergleich links | Impact rechts */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
+      <div className="grid gap-4">
+        {tab === "vergleich" && (
         <Card className="surface-panel min-w-0">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Direktvergleich</CardTitle>
@@ -646,8 +683,9 @@ export default function ScenariosPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
-        {impact && scenarios.length >= 2 ? (
+        {tab !== "auswirkung" ? null : impact && scenarios.length >= 2 ? (
           <Card className="surface-panel min-w-0">
             <CardHeader className="pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -728,7 +766,7 @@ export default function ScenariosPage() {
       </div>
 
       {/* Verteilungen: Stufen zuerst (Entscheidung), dann Noten – Tabelle | Chart */}
-      {comparisonBundle && comparisonBundle.columns.length > 0 && (
+      {tab === "vergleich" && comparisonBundle && comparisonBundle.columns.length > 0 && (
         <div className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -739,22 +777,6 @@ export default function ScenariosPage() {
                 Zuerst Notenstufen (Bestehen/Durchfallen), dann feine
                 Notenverteilung – jeweils Tabelle neben Grafik.
               </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="default"
-                className="gap-1.5"
-                disabled={exportBusy}
-                onClick={runPdfExport}
-              >
-                <FileDown className="size-4" />
-                PDF Export
-              </Button>
-              {exportMsg && (
-                <span className="text-xs text-muted-foreground">{exportMsg}</span>
-              )}
             </div>
           </div>
 
@@ -990,7 +1012,7 @@ export default function ScenariosPage() {
         </div>
       )}
 
-      {impact && scenarios.length >= 2 && (
+      {tab === "auswirkung" && impact && scenarios.length >= 2 && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
           <Card className="surface-panel h-fit min-w-0">
             <CardHeader className="pb-2">

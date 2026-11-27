@@ -40,6 +40,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { MoreOptions, PageHeader, StatusNotice } from "@/components/layout/page-kit";
 import {
   Dialog,
   DialogContent,
@@ -315,16 +316,17 @@ export default function MatchingPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <div className="max-w-2xl">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Matrikel-Zuordnung
-        </h1>
-        <p className="text-muted-foreground">
-          THE / elektronische Prüfung: manuelle Zusammenführung bei Tippfehlern.
-          Merges und Ablehnungen können dokumentiert aufgehoben werden – danach
-          ist erneut eine JSON-Sicherung nötig.
-        </p>
-      </div>
+      <PageHeader
+        title="Zuordnung"
+        description="Antritte und Punkte ohne Treffer in der Teilnehmerliste prüfen – meist Tippfehler in der Moodle-Matrikel."
+      />
+
+      {onlineStyle && unresolved.length === 0 && (
+        <StatusNotice tone="success">
+          <span className="font-medium">Alles zugeordnet.</span> Keine offenen
+          Fälle – Notenliste und Export sind nicht durch die Zuordnung gesperrt.
+        </StatusNotice>
+      )}
 
       {!onlineStyle && (
         <div
@@ -457,7 +459,8 @@ export default function MatchingPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="space-y-4">
+        <MoreOptions label="Manuell zusammenführen (Orphan und Matrikel selbst wählen)">
         <Card className="surface-panel">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Manuell zusammenführen</CardTitle>
@@ -519,6 +522,7 @@ export default function MatchingPage() {
             </Button>
           </CardContent>
         </Card>
+        </MoreOptions>
 
         <Card className="surface-panel">
           <CardHeader className="pb-2">
@@ -583,6 +587,9 @@ export default function MatchingPage() {
         </Card>
       </div>
 
+      <MoreOptions
+        label={`Protokoll: Zusammenführungen (${activeMerges.length}), Ablehnungen (${activeDismissals.length}), Dokumentation`}
+      >
       {/* Aktive Listen + Audit nebeneinander (freier Platz nutzen) */}
       <div
         className={
@@ -758,6 +765,7 @@ export default function MatchingPage() {
           </CardContent>
         </Card>
       </div>
+      </MoreOptions>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">

@@ -5,13 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import { ImportDropzone } from "@/components/import/import-dropzone";
 import { ImportPreviewDialog } from "@/components/import/import-preview-dialog";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   loadWorkbookFromFile,
@@ -37,6 +30,7 @@ import {
   getMoodlePointsRoundStep,
   isMoodleRoundStepActive,
   moodleRoundImportWarning,
+  moodleRoundStepLabel,
 } from "@/lib/grades/round-half-points";
 import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import type {
@@ -57,12 +51,16 @@ import {
 import { ManualParticipantsPanel } from "@/components/import/manual-participants-panel";
 import {
   getHisinoneSources,
+  listManualParticipants,
   takeOverManualParticipantsByHis,
 } from "@/lib/manual-participants";
 import {
-  PageSectionNav,
-  SECTION_SCROLL_MT,
-} from "@/components/layout/page-section-nav";
+  getParticipantSources,
+  toggleParticipantSource,
+} from "@/lib/participant-sources";
+import { ParticipantSourceToggle } from "@/components/exam/participant-source-toggle";
+import { MoreOptions, PageHeader, StepCard } from "@/components/layout/page-kit";
+import { SECTION_SCROLL_MT } from "@/components/layout/page-section-nav";
 import { cn } from "@/lib/utils";
 
 type PreviewState = {
@@ -151,6 +149,7 @@ function withHisTakeover(p: ExamProject): ExamProject {
 export default function ImportPage() {
   const { project, setProject } = useExamContext();
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [openSteps, setOpenSteps] = useState<Set<string> | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [keepOverrides, setKeepOverrides] = useState(true);
   const [replaceAllPoints, setReplaceAllPoints] = useState(true);
@@ -545,57 +544,46 @@ export default function ImportPage() {
     await exportPointsTemplate(project);
   };
 
-  return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Importe</h1>
-        <p className="text-muted-foreground">
-          {isHisManual
-            ? "Teilnehmerliste aus HISinOne-Datei(en) und/oder manuell erfassen (StA / Portfolio)."
-            : isKlausur
-              ? "Klausur: Teilnehmerliste (HISinOne-Datei und/oder manuell), dann Punkte-Vorlage ausfüllen und importieren."
-              : "Teilnehmerliste (HISinOne-Dateien, ggf. mehrere Studiengänge, und/oder manuell), Antrittsliste und Punkte. Matching über Matrikelnummer / Anmeldename."}
-        </p>
+  const sources = getParticipantSources(project);
+  const manualCount = listManualParticipants(project).length;
+  const hisCount = hisSources.reduce((n, s) => n + s.rows.length, 0);
+  const roundStep = getMoodlePointsRoundStep(project);
+  const participantSummary =
+    project.hisRows.length > 0
+      ? `${project.hisRows.length} Person(en)` +
+        (sources.his && sources.manual
+          ? ` · ${hisCount} HISinOne, ${manualCount} manuell`
+          : "")
+      : "noch keine Teilnehmer";
+
+  type ImportStep = {
+    id: string;
+    title: string;
+    done: boolean;
+    summary: string;
+    body: React.ReactNode;
+  };
+
+  const participantBody = (
+    <>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm font-medium">Quelle:</span>
+        <ParticipantSourceToggle
+          value={sources}
+          onToggle={(key) =>
+            setProject((prev) => toggleParticipantSource(prev, key))
+          }
+        />
       </div>
-
-      <PageSectionNav
-        sections={[
-          { id: "import-his", label: "HISinOne" },
-          { id: "import-manual", label: "Manuell" },
-          ...(isHisManual
-            ? []
-            : isKlausur
-              ? [
-                  { id: "import-vorlage", label: "Vorlage" },
-                  { id: "points-import", label: "Punkte" },
-                ]
-              : [
-                  { id: "import-antritt", label: "Antritt" },
-                  { id: "points-import", label: "Punkte" },
-                ]),
-        ]}
-      />
-
-      <div
-        className={
-          isHisManual
-            ? "grid gap-4"
-            : isKlausur
-              ? "grid gap-4 md:grid-cols-2"
-              : "grid gap-4 md:grid-cols-3"
-        }
-      >
+      {sources.his && (
         <div id="import-his" className={cn("space-y-2", SECTION_SCROLL_MT)}>
           <ImportDropzone
-            label="1. Teilnehmerliste: HISinOne-Datei"
-            description="Eine oder mehrere Dateien (z. B. MEB + MBW). Wird ergänzt, nicht überschrieben. Ohne HISinOne-Daten: manuelle Teilnehmerliste unten."
+            label="HISinOne-Datei"
+            description="Eine oder mehrere Noteneintrags-Dateien (z. B. MEB + MBW). Wird ergänzt, nicht überschrieben."
             multiple
             onFiles={handleHisFiles}
           />
-          <StatusLine
-            count={project.hisRows.length}
-            log={lastByType("his")}
-          />
+          <StatusLine count={hisCount} log={lastByType("his")} />
           {hisSources.length > 0 && (
             <div className="space-y-1 rounded-lg border p-2 text-xs">
               {hisSources.map((s) => (
@@ -616,7 +604,7 @@ export default function ImportPage() {
                     onClick={() =>
                       setProject((prev) => removeHisSource(prev, s.id))
                     }
-                    aria-label="HIS-Quelle entfernen"
+                    aria-label="HISinOne-Datei entfernen"
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
@@ -625,152 +613,249 @@ export default function ImportPage() {
             </div>
           )}
         </div>
+      )}
+      {sources.manual ? (
+        <ManualParticipantsPanel
+          id="import-manual"
+          className={SECTION_SCROLL_MT}
+          project={project}
+          setProject={setProject}
+        />
+      ) : (
+        <MoreOptions
+          label={`Einzelne Teilnehmer manuell ergänzen${manualCount ? ` (${manualCount})` : ""}`}
+        >
+          <ManualParticipantsPanel
+            id="import-manual"
+            project={project}
+            setProject={setProject}
+          />
+        </MoreOptions>
+      )}
+    </>
+  );
 
-        {isHisManual ? null : isKlausur ? (
-          <div className="space-y-3">
-            <Card
-              id="import-vorlage"
-              className={cn("surface-panel border-dashed", SECTION_SCROLL_MT)}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">2. Punkte-Vorlage</CardTitle>
-                <CardDescription>
-                  Excel mit allen HIS-Personen zum Ausfüllen der Punkte.
-                  Extra-Zeilen für Teilnehmer ohne HIS-Anmeldung.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!canExportTemplate}
-                  onClick={() => void downloadTemplate()}
-                >
-                  <Download className="size-4" />
-                  Vorlage herunterladen
-                </Button>
-                {!canExportTemplate && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Zuerst HIS importieren.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+  const steps: ImportStep[] = [
+    {
+      id: "teilnehmer",
+      title: "Teilnehmerliste",
+      done: project.hisRows.length > 0,
+      summary: participantSummary,
+      body: participantBody,
+    },
+  ];
 
-            <div
-              ref={pointsRef}
-              className={cn("space-y-2", SECTION_SCROLL_MT)}
-              id="points-import"
+  if (isKlausur) {
+    steps.push({
+      id: "punkte",
+      title: "Punktevorlage und Punkte",
+      done: project.points.length > 0,
+      summary:
+        project.points.length > 0
+          ? `${project.points.length} Punkte-Datensätze`
+          : "Vorlage herunterladen, ausfüllen, importieren",
+      body: (
+        <div
+          ref={pointsRef}
+          id="points-import"
+          className={cn("space-y-3", SECTION_SCROLL_MT)}
+        >
+          <p className="text-sm text-muted-foreground">
+            Teilgebiete und Maximalpunkte vorher prüfen:{" "}
+            <a
+              href={`/exam/${project.id}/settings?tab=bewertung`}
+              className="font-medium text-primary underline-offset-2 hover:underline"
             >
-              <ImportDropzone
-                label={
-                  project.points.length > 0
-                    ? "3. Punkte aktualisieren (Vorlage)"
-                    : "3. Punkte importieren (Vorlage)"
-                }
-                description="Ausgefüllte Klausur-Vorlage (Matrikelnummer + Gesamtpunkte). Personen ohne HIS möglich."
-                onFile={handlePoints}
-              />
-              <StatusLine
-                count={project.points.length}
-                log={lastByType("points")}
-              />
-            </div>
+              Einstellungen › Bewertung
+            </a>
+            .
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!canExportTemplate}
+              onClick={() => void downloadTemplate()}
+            >
+              <Download className="size-4" />
+              Punktevorlage herunterladen
+            </Button>
+            {!canExportTemplate && (
+              <span className="text-xs text-muted-foreground">
+                Zuerst die Teilnehmerliste anlegen.
+              </span>
+            )}
           </div>
-        ) : (
-          <>
-            <div
-              id="import-antritt"
-              className={cn("space-y-2", SECTION_SCROLL_MT)}
-            >
-              <ImportDropzone
-                label={
-                  project.attendance.length > 0
-                    ? "2. Antritt neu laden (ersetzt Liste)"
-                    : "2. Antritt zur Prüfung"
-                }
-                description="Moodle: E-Mail, Datum, Name, Vorname, Matrikelnummer. Erneuter Import ersetzt die Antrittsliste."
-                onFile={handleAttendance}
-              />
-              <StatusLine
-                count={project.attendance.length}
-                log={lastByType("attendance")}
-              />
-            </div>
-            <div
-              ref={pointsRef}
-              className={cn("space-y-2", SECTION_SCROLL_MT)}
-              id="points-import"
-            >
-              <ImportDropzone
-                label={
-                  project.points.length > 0
-                    ? "3. Punkte aktualisieren (Moodle / THE)"
-                    : "3. Punkte (Moodle / THE)"
-                }
-                description={
-                  project.points.length > 0
-                    ? "THE/Moodle erneut importieren (Match: Anmeldename). Overrides optional behalten."
-                    : "Moodle THE: Nachname, Vorname, Anmeldename, Bewertung/90 – Match über Anmeldename (zuerst Antritt laden)."
-                }
-                onFile={handlePoints}
-              />
-              <StatusLine
-                count={project.points.length}
-                log={lastByType("points")}
-              />
-            </div>
-          </>
-        )}
-      </div>
+          <ImportDropzone
+            label={
+              project.points.length > 0
+                ? "Punkte aktualisieren"
+                : "Ausgefüllte Vorlage importieren"
+            }
+            description="Matrikelnummer + Punkte; Personen außerhalb der Teilnehmerliste möglich."
+            onFile={handlePoints}
+          />
+          <StatusLine count={project.points.length} log={lastByType("points")} />
+        </div>
+      ),
+    });
+  } else if (!isHisManual) {
+    steps.push(
+      {
+        id: "antritt",
+        title: "Antrittsliste (Moodle)",
+        done: project.attendance.length > 0,
+        summary:
+          project.attendance.length > 0
+            ? `${project.attendance.length} Antritte`
+            : "Moodle-Export „Antritt zur Prüfung“",
+        body: (
+          <div
+            id="import-antritt"
+            className={cn("space-y-2", SECTION_SCROLL_MT)}
+          >
+            <ImportDropzone
+              label={
+                project.attendance.length > 0
+                  ? "Antritt neu laden (ersetzt Liste)"
+                  : "Antrittsliste importieren"
+              }
+              description="Moodle: E-Mail, Datum, Name, Vorname, Matrikelnummer."
+              onFile={handleAttendance}
+            />
+            <StatusLine
+              count={project.attendance.length}
+              log={lastByType("attendance")}
+            />
+          </div>
+        ),
+      },
+      {
+        id: "punkte",
+        title: "Punkte (Moodle / THE)",
+        done: project.points.length > 0,
+        summary:
+          project.points.length > 0
+            ? `${project.points.length} Punkte-Datensätze`
+            : "Moodle-Bewertungsexport",
+        body: (
+          <div
+            ref={pointsRef}
+            id="points-import"
+            className={cn("space-y-2", SECTION_SCROLL_MT)}
+          >
+            <p className="text-sm text-muted-foreground">
+              Rundung beim Import:{" "}
+              <span className="font-medium text-foreground">
+                {moodleRoundStepLabel(roundStep)}
+              </span>{" "}
+              (
+              <a
+                href={`/exam/${project.id}/settings?tab=import`}
+                className="text-primary underline-offset-2 hover:underline"
+              >
+                ändern
+              </a>
+              )
+            </p>
+            <ImportDropzone
+              label={
+                project.points.length > 0
+                  ? "Punkte aktualisieren"
+                  : "Punkte importieren"
+              }
+              description={
+                project.points.length > 0
+                  ? "Erneut importieren (Match: Anmeldename). Overrides optional behalten."
+                  : "Moodle THE: Nachname, Vorname, Anmeldename, Bewertung/90 – Match über Anmeldename (zuerst Antritt laden)."
+              }
+              onFile={handlePoints}
+            />
+            <StatusLine
+              count={project.points.length}
+              log={lastByType("points")}
+            />
+          </div>
+        ),
+      }
+    );
+  }
 
-      <ManualParticipantsPanel
-        id="import-manual"
-        className={cn("surface-panel", SECTION_SCROLL_MT)}
-        project={project}
-        setProject={setProject}
+  const firstOpen = steps.findIndex((st) => !st.done);
+  const expanded =
+    openSteps ?? new Set([steps[firstOpen >= 0 ? firstOpen : 0].id]);
+  const toggleStep = (id: string) => {
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setOpenSteps(next);
+  };
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-5">
+      <PageHeader
+        title="Import"
+        description={
+          isHisManual
+            ? "Teilnehmerliste anlegen – aus HISinOne und/oder manuell."
+            : isKlausur
+              ? "Teilnehmerliste anlegen, dann Punktevorlage ausfüllen und importieren."
+              : "Teilnehmerliste, Antrittsliste und Punkte aus Moodle – in dieser Reihenfolge."
+        }
       />
 
-      <Card className="surface-panel">
-        <CardHeader>
-          <CardTitle className="text-base">Import-Protokoll</CardTitle>
-          <CardDescription>Letzte Importe und Warnungen</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {project.importLogs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Noch keine Importe durchgeführt.
-            </p>
-          ) : (
-            project.importLogs.slice(0, 10).map((log, i) => (
-              <div
-                key={`${log.at}-${i}`}
-                className="flex flex-wrap items-start justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
-              >
-                <div>
-                  <p className="font-medium">
-                    {log.type === "his"
-                      ? "HIS"
-                      : log.type === "attendance"
-                        ? "Antritt"
-                        : "Punkte"}{" "}
-                    · {log.fileName}
-                  </p>
-                  <p className="text-muted-foreground">
-                    {new Date(log.at).toLocaleString("de-DE")} · {log.rowCount}{" "}
-                    Zeilen
-                    {log.warnings.length
-                      ? ` · ${log.warnings.length} Warnungen`
-                      : ""}
-                  </p>
-                </div>
-                <Badge variant="outline">{log.rowCount}</Badge>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+      <div className="space-y-3">
+        {steps.map((st, i) => (
+          <StepCard
+            key={st.id}
+            id={`schritt-${st.id}`}
+            index={i + 1}
+            title={st.title}
+            status={st.done ? "done" : "open"}
+            summary={st.summary}
+            open={expanded.has(st.id)}
+            onToggle={() => toggleStep(st.id)}
+          >
+            {st.body}
+          </StepCard>
+        ))}
+      </div>
+
+      <MoreOptions label={`Import-Protokoll (${project.importLogs.length})`}>
+        {project.importLogs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Noch keine Importe durchgeführt.
+          </p>
+        ) : (
+          project.importLogs.slice(0, 10).map((log, i) => (
+            <div
+              key={`${log.at}-${i}`}
+              className="rounded-lg border px-3 py-2 text-sm"
+            >
+              <p className="font-medium">
+                {log.type === "his"
+                  ? "HISinOne"
+                  : log.type === "attendance"
+                    ? "Antritt"
+                    : "Punkte"}{" "}
+                · {log.fileName}
+              </p>
+              <p className="text-muted-foreground">
+                {new Date(log.at).toLocaleString("de-DE")} · {log.rowCount}{" "}
+                Zeilen
+              </p>
+              {log.warnings.length > 0 && (
+                <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
+                  {log.warnings.slice(0, 6).map((w, j) => (
+                    <li key={j}>{w}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))
+        )}
+      </MoreOptions>
 
       <ImportPreviewDialog
         open={!!preview}

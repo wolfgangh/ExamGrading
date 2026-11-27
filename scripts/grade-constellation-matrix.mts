@@ -81,6 +81,10 @@ import { buildGradeListRows } from "../src/lib/excel/export-grade-list.ts";
 import { filterManualGradeRows } from "../src/lib/pdf/export-manual-grades-pdf.ts";
 import { readFileSync } from "node:fs";
 import {
+  getParticipantSources,
+  toggleParticipantSource,
+} from "../src/lib/participant-sources.ts";
+import {
   buildNotenspiegelData,
   distributionStats,
   notenspiegelHasTaskData,
@@ -1760,6 +1764,34 @@ function spiegelProject() {
       h.includes("Dr. B") && h.includes(DEFAULT_LETTERHEAD.subjectLine) &&
       tex.includes("A \\& B") && tex.includes("50 \\% Test") && tex.includes("{123456}"),
     "Briefkopf-Datei und Köpfe"
+  );
+}
+
+// ========== U: Teilnehmer-Quelle und neuer Anlege-Dialog ==========
+{
+  // U1: Standard HISinOne, Ableitung aus Daten, letzte Quelle bleibt aktiv
+  const fresh: any = createEmptyExamProject({ name: "X", semester: "WiSe 2026/27" });
+  const legacyManual: any = { ...addManualParticipants(createEmptyExamProject({ name: "Y" }), [
+    { matriculationNumber: "5100001", lastName: "A", firstName: "B" },
+  ]).project, participantSources: undefined };
+  const legacyEmpty: any = { ...createEmptyExamProject({ name: "Z" }), participantSources: undefined };
+  const toggledOff = toggleParticipantSource(fresh, "his");
+  const both = toggleParticipantSource(fresh, "manual");
+  check(
+    "U1",
+    getParticipantSources(fresh).his && !getParticipantSources(fresh).manual &&
+      getParticipantSources(legacyManual).manual && !getParticipantSources(legacyManual).his &&
+      getParticipantSources(legacyEmpty).his &&
+      toggledOff === fresh &&
+      getParticipantSources(both).his && getParticipantSources(both).manual,
+    "Quelle: Standard, Ableitung, Mindestens-eine-Regel"
+  );
+  // U2: Katalog-Teilgebiete ohne Eingabe im Dialog (FI vorbefüllt)
+  const fi = createEmptyExamProject({ name: "Finanzierung und Investition", examType: "written" });
+  check(
+    "U2",
+    fi.subAreas.length >= 1 && fi.gradeSchema.maxPoints > 0 && fi.participantSources?.his === true,
+    `FI-Teilgebiete: ${fi.subAreas.map((s) => s.code + "/" + s.maxPoints).join(", ")}`
   );
 }
 

@@ -461,6 +461,11 @@ export interface ExamProject {
    * (siehe lib/grades/grade-average). Fehlt = 1 (bis v0.4.74).
    */
   gradeRulesVersion?: number;
+  /**
+   * Teilnehmer-Quelle: HISinOne-Datei(en) und/oder manuelle Liste.
+   * Fehlt = aus vorhandenen Daten abgeleitet (Standard: HISinOne).
+   */
+  participantSources?: { his: boolean; manual: boolean };
   /** Bisherige manuelle „Extras“ wurden in die manuelle Teilnehmerliste übernommen */
   manualExtrasMigrated?: boolean;
   /** Studentengruppen (StA / Portfolio) */

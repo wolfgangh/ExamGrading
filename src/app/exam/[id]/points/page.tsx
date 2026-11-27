@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-kit";
+import { PointsTabs } from "@/components/points/points-tabs";
 import { useParams } from "next/navigation";
 import { useExamContext } from "@/components/exam/exam-context";
 import { StudentsTable } from "@/components/grades/students-table";
@@ -146,47 +148,41 @@ export default function PointsPage() {
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Punkteerfassung
-          </h1>
-          <p className="text-muted-foreground">
-            {isKlausur
-              ? "Gesamtpunkte und Teilgebietspunkte manuell bearbeiten (Dezimaltrenner: Komma oder Punkt, je nach Tastatur/System). Vorlage-Import bleibt optional."
-              : "Gesamtpunkte sind berechnet und nicht editierbar. Detailpunkte (Aufgaben) in der Detailansicht oder per THE-Import."}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {isKlausur && project.hisRows.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void exportPointsTemplate(project)}
-            >
-              <Download className="size-4" />
-              Punkte-Vorlage
-            </Button>
-          )}
-          {!isKlausur && (
+      <PageHeader
+        title="Punkte"
+        description={
+          isKlausur
+            ? "Gesamt- und Teilgebietspunkte direkt bearbeiten (Tab oder Verlassen speichert)."
+            : "Gesamtpunkte werden aus den Aufgabenpunkten berechnet."
+        }
+        action={
+          <>
+            {isKlausur && project.hisRows.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void exportPointsTemplate(project)}
+              >
+                <Download className="size-4" />
+                Punktevorlage
+              </Button>
+            )}
             <Link
-              href={`/exam/${id}/detail-points`}
-              className={cn(buttonVariants(), "gap-1.5")}
+              href={`/exam/${id}/import?focus=points`}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
             >
-              <ListChecks className="size-4" />
-              Matrix-Detailansicht
+              <RefreshCw className="size-4" />
+              {isKlausur ? "Punkte importieren" : "Punkte neu laden"}
             </Link>
-          )}
-          <Link
-            href={`/exam/${id}/import?focus=points`}
-            className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
-          >
-            <RefreshCw className="size-4" />
-            {isKlausur ? "Punkte importieren" : "Punkte neu laden"}
-          </Link>
-        </div>
-      </div>
+          </>
+        }
+      />
+      <PointsTabs
+        examId={id}
+        active="gesamt"
+        showTasks={!isKlausur || (project.questionDefs?.length ?? 0) > 0}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         {!isKlausur && (

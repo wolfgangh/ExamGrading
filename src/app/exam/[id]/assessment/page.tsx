@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
+import { MoreOptions, PageHeader } from "@/components/layout/page-kit";
 import { staCriteriaMixedScales } from "@/lib/grades/sta-criteria";
 import { ParticipantSourceBadges } from "@/components/exam/participant-source-badges";
 import { STA_MIXED_SCALES_MESSAGE } from "@/lib/validations";
@@ -798,37 +799,41 @@ export default function AssessmentPage() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {isPortfolio ? "Teilnoten (Portfolio)" : "Kriterienbewertung"}
-          </h1>
-          <p className="text-muted-foreground">
-            {isPortfolio
-              ? portfolioCriteriaMode
-                ? perLecturer
-                  ? "Kriterien je Teilleistung und Dozent; Teilnote = Mittel der Dozenten-Noten; Gesamtnote gewichtet. Pro Gruppe können Kriterien deaktiviert werden."
-                  : "Kriterien je Teilleistung → berechnete Teilnote; Gesamtnote gewichtet. Pro Gruppe können einzelne Kriterien deaktiviert werden (zählen dann nicht)."
-                : perLecturer
-                  ? "Jeder Dozent vergibt Teilnoten; Teilnote = Mittel der Dozenten (gleichgewichtet). Gesamtnote = gewichteter Mittelwert der Teilleistungen (nächste deutsche Note)."
-                  : "Teilnoten je Teilleistung eintragen. Gesamtnote = gewichteter Mittelwert, gerundet auf die nächste deutsche Note (1,0 … 5,0)."
-              : "Werte je Kriterium eintragen (Skala pro Spalte: % / Note / Punkte). Gesamtwert und Note werden gewichtet berechnet (Notenschlüssel unter Szenarien). Hover auf ⓘ im Spaltenkopf für Details."}
-          </p>
-        </div>
-        <Link
-          href={`/exam/${id}/settings`}
-          className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
-        >
-          <Settings className="size-4" />
-          {isPortfolio ? "Teilleistungen / Gruppen" : "Kriterien / Gruppen"}
-        </Link>
-      </div>
+      <PageHeader
+        title={isPortfolio ? "Teilnoten" : "Kriterien"}
+        description={
+          isPortfolio
+            ? portfolioCriteriaMode
+              ? perLecturer
+                ? "Kriterien je Teilleistung und Korrektor bewerten; Teilnote = Mittel der Korrektoren, Gesamtnote gewichtet."
+                : "Kriterien je Teilleistung bewerten; daraus Teilnote und gewichtete Gesamtnote."
+              : perLecturer
+                ? "Jeder Korrektor vergibt Teilnoten; Teilnote = Mittel der Korrektoren, Gesamtnote gewichtet."
+                : "Teilnoten je Teilleistung eintragen; Gesamtnote = gewichtetes Mittel."
+            : "Werte je Kriterium eintragen; Note nach Notenschlüssel. Details zur Skala im Spaltenkopf (ⓘ)."
+        }
+        action={
+          <Link
+            href={`/exam/${id}/settings?tab=bewertung`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+          >
+            <Settings className="size-4" />
+            {isPortfolio ? "Teilleistungen bearbeiten" : "Kriterien bearbeiten"}
+          </Link>
+        }
+      />
 
       {isPortfolio && portfolioCriteriaMode ? (
-        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+        <div
+          className={cn(
+            "grid grid-cols-1 items-start gap-4",
+            (project.studentGroups?.length ?? 0) > 0 && "md:grid-cols-2"
+          )}
+        >
+          {(project.studentGroups?.length ?? 0) > 0 && (
           <Card className="surface-panel min-w-0">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Gruppe wählen</CardTitle>
+              <CardTitle className="text-base">Gruppe</CardTitle>
               <CardDescription>
                 Nur Studenten der gewählten Gruppe in der Matrix – Farben
                 zeigen den Füllstand
@@ -854,6 +859,7 @@ export default function AssessmentPage() {
               />
             </CardContent>
           </Card>
+          )}
 
           <Card className="surface-panel min-w-0">
             <CardHeader className="pb-2">
@@ -965,6 +971,8 @@ export default function AssessmentPage() {
                   )}
                 </div>
               )}
+              {(project.studentGroups?.length ?? 0) > 0 && (
+              <MoreOptions label="Gruppenoptionen (Gruppenleistung, Kriterien je Gruppe)">
               {concreteGroupSelected && (
                 <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2.5">
                   <div className="flex items-start justify-between gap-3">
@@ -1133,13 +1141,15 @@ export default function AssessmentPage() {
                   deaktivieren.
                 </p>
               )}
+              </MoreOptions>
+              )}
             </CardContent>
           </Card>
         </div>
-      ) : (
+      ) : (project.studentGroups?.length ?? 0) === 0 ? null : (
         <Card className="surface-panel">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Gruppe wählen</CardTitle>
+            <CardTitle className="text-base">Gruppe</CardTitle>
             <CardDescription>
               {isPortfolio
                 ? "Nur Studenten der gewählten Gruppe – Farben zeigen den Füllstand aller Teilleistungen."
@@ -1161,6 +1171,7 @@ export default function AssessmentPage() {
               }}
             />
             {isPortfolio && concreteGroupSelected && (
+              <MoreOptions label="Gruppenoptionen (Gruppenleistung)">
               <div className="space-y-2 rounded-lg border bg-muted/30 px-3 py-2.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-0.5">
@@ -1195,6 +1206,7 @@ export default function AssessmentPage() {
                   Aktuelle TL-Werte auf Gruppe übernehmen
                 </Button>
               </div>
+              </MoreOptions>
             )}
           </CardContent>
         </Card>

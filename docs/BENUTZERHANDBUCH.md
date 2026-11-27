@@ -2,7 +2,7 @@
 
 Vollständige Anleitung für Prüfer – Einstieg und Nachschlagewerk.
 
-**App-Version:** 0.4.77  
+**App-Version:** 0.4.78  
 **Zielgruppe:** Personen, die Prüfungen bewerten und Noten an HISinOne bzw. die Studienabteilung melden  
 **Datenschutz:** Alle Prüfungsdaten bleiben **im Browser** (IndexedDB). Es gibt **keine** Übertragung von Notenlisten an einen App-Server.
 
@@ -18,9 +18,9 @@ Vollständige Anleitung für Prüfer – Einstieg und Nachschlagewerk.
 4. [Prüfungstypen im Überblick](#4-prüfungstypen-im-überblick)
 5. [Navigation und Workflow](#5-navigation-und-workflow)
 6. [Einstellungen](#6-einstellungen)
-7. [Importe](#7-importe)
+7. [Import](#7-importe)
 8. [Matrikel-Zuordnung (THE / elektrP)](#8-matrikel-zuordnung-the--elektrp)
-9. [Punkte und Detailpunkte](#9-punkte-und-detailpunkte)
+9. [Punkte](#9-punkte)
 10. [Bewertung (StA und Portfolio)](#10-bewertung-sta-und-portfolio)
 11. [Notenübersicht](#11-notenübersicht)
 12. [Notenszenarien](#12-notenszenarien)
@@ -110,14 +110,15 @@ Pro Prüfung sehen Sie u. a.:
 
 ### 3.2 Neue Prüfung anlegen
 
-Typische Felder:
+Der Dialog fragt nur ab, was zum Anlegen nötig ist:
 
-- Name der Prüfung  
-- Semester  
-- Prüfungsnummer(n)  
-- Dozenten (Liste / Freitext, Chips)  
-- **Prüfungstyp** (entscheidet den gesamten weiteren Ablauf; Voreinstellung: **elektrP**)  
-- ggf. Teilgebiete und Punktemaxima (je nach Typ)
+- **Prüfungsname** (Katalog oder Freitext; bei FI/MAP werden Teilgebiete automatisch vorbefüllt)
+- **Prüfungsform** als Kachel (elektrP, THE, Klausur, StA – Kriterien, StA – manuell, Portfolio, Sonstige; Voreinstellung: **elektrP**)
+- **Semester**
+- **Teilnehmer-Quelle**: Schalter **HISinOne** und **Manuell** (beide an = beides; Voreinstellung: HISinOne)
+- **Dozenten**
+
+Prüfungsnummer, Teilgebiete, Moodle-Rundung und Notenschlüssel stehen danach unter **Einstellungen**. Der Hinweis zur lokalen Datenspeicherung wird je Browser nur einmal bestätigt. Nach dem Anlegen öffnet sich die **Übersicht** mit dem nächsten Schritt.
 
 ### 3.3 Sicherung von der Startseite
 
@@ -140,9 +141,9 @@ Dateinamen der Sicherung typisch: Datum + Name + Schritt (z. B. `…_nach-Note
 
 | Typ | Kurzbeschreibung | Typische Seiten |
 |-----|------------------|-----------------|
-| **THE** | Take-Home, Moodle-Antritt + Punkte | Import, Zuordnung, Punkte, Detailpunkte, Noten, Szenarien, Dokumente |
+| **THE** | Take-Home, Moodle-Antritt + Punkte | Import, Zuordnung, Punkte, Noten, Szenarien, Dokumente |
 | **elektrP** | wie THE (Prüfung vor Ort) | wie THE |
-| **Klausur** | HISinOne + Punkte (Vorlage/Import/manuell) | Import, Punkte, Detailpunkte, Noten, Szenarien, Dokumente |
+| **Klausur** | HISinOne + Punkte (Vorlage/Import/manuell) | Import, Punkte, Noten, Szenarien, Dokumente |
 | **StA – Kriterien** | Gewichtete Kriterien → Note | Import, **Kriterienbewertung**, Noten, ggf. Szenarien, Dokumente |
 | **StA – manuell** | Note je Person manuell | Import, Notenübersicht, Dokumente |
 | **Portfolio** | Teilleistungen, optional Kriterien & Korrektoren | Import, **Teilnoten**, Noten, ggf. Szenarien, Dokumente |
@@ -156,20 +157,19 @@ Dateinamen der Sicherung typisch: Datum + Name + Schritt (z. B. `…_nach-Note
 
 ## 5. Navigation und Workflow
 
-### 5.1 Sidebar-Einträge (je nach Typ)
+### 5.1 Seitenleiste (je nach Prüfungsform)
 
-| Eintrag | Inhalt |
-|---------|--------|
-| Übersicht | Status, nächste Schritte, Kennzahlen |
-| Importe | HISinOne, Antritt, Punkte, manuell Personen |
-| Zuordnung | nur THE/elektrP – Orphans |
-| Punkteerfassung / Detailpunkte | Klausur, THE, elektrP |
-| Kriterienbewertung / Teilnoten | StA-Kriterien bzw. Portfolio |
-| Notenübersicht | Tabelle, Filter, Overrides, Szenario-Umschalter |
-| Notenszenarien | Bestehensgrenzen, Vergleich – nur wenn Punkte/Prozent in die Note eingehen |
-| Dokumente | PDFs, HISinOne-Excel, Notenspiegel |
-| Sicherung | JSON-Download / Status |
-| Einstellungen | Metadaten, Struktur, Gruppen, Dozenten |
+Die Seitenleiste ist in Abschnitte gegliedert; jeder Eintrag zeigt seinen Status (**✓** erledigt, **●** offen).
+
+| Abschnitt | Einträge |
+|-----------|----------|
+| **Vorbereitung** | Übersicht (nächster Schritt, Fortschritt, Verteilungen) · Import (Schritte) · Zuordnung (nur THE/elektrP) |
+| **Bewertung** | Punkte (Reiter Gesamt / je Aufgabe / Auswertung) bzw. Kriterien (StA) bzw. Teilnoten (Portfolio) |
+| **Noten** | Notenübersicht · Notenszenarien (nur wenn Punkte/Prozent in die Note eingehen; Reiter Festlegen / Vergleich / Auswirkung) |
+| **Abschluss** | Dokumente (Notenmeldung, Veröffentlichung, Intern) · Sicherung |
+| unten | Einstellungen (Reiter Allgemein / Bewertung / Notenschlüssel / Gruppen / Import) |
+
+Jede Seite folgt demselben Muster: Titel mit Hauptaktion rechts, Hinweise nur bei offenen Punkten, Selten-Genutztes unter **„Weitere Optionen“** (aufklappbar).
 
 Auf schmalen Bildschirmen ist die Sidebar ein Overlay (Menü-Symbol oben links).
 
@@ -232,9 +232,9 @@ Die **aktive** Bestehensgrenze steuert die Noten bei punkte-/prozentbasierten Pf
 
 ## 7. Importe
 
-Seite: **Importe**.
+Seite: **Import**. Oben wählt man die **Teilnehmer-Quelle** (Schalter HISinOne / Manuell). Darunter stehen nur die passenden **Schritte** – THE/elektrP: 1 Teilnehmerliste → 2 Antritt → 3 Punkte; Klausur: 1 Teilnehmerliste → 2 Punktevorlage und Punkte; StA/Portfolio: 1 Teilnehmerliste. Der nächste offene Schritt ist aufgeklappt, erledigte zeigen eine Kurzinfo. Das Import-Protokoll liegt eingeklappt am Ende.
 
-Die **Teilnehmerliste** einer Prüfung besteht aus den **HISinOne-Dateien** (§7.1) und/oder der **manuellen Teilnehmerliste** (§7.4). Beide Wege sind gleichrangig: Antritt, Punkte, Zuordnung, Statistik, No-Show und Export-Freigabe beziehen sich auf die gesamte Teilnehmerliste.
+Die **Teilnehmerliste**einer Prüfung besteht aus den **HISinOne-Dateien** (§7.1) und/oder der **manuellen Teilnehmerliste** (§7.4). Beide Wege sind gleichrangig: Antritt, Punkte, Zuordnung, Statistik, No-Show und Export-Freigabe beziehen sich auf die gesamte Teilnehmerliste.
 
 ### 7.1 Teilnehmerliste: HISinOne-Datei
 
@@ -251,7 +251,7 @@ Die **Teilnehmerliste** einer Prüfung besteht aus den **HISinOne-Dateien** (§7
 ### 7.3 Punkte
 
 - Moodle-Punkte / Bewertungsexcel oder Klausur-Vorlage  
-- Offene manuelle Aufgaben später unter Detailpunkte schließen  
+- Offene manuelle Aufgaben später unter Punkte › je Aufgabe schließen  
 
 ### 7.4 Manuelle Teilnehmerliste (alle Prüfungsformen)
 
@@ -303,15 +303,17 @@ Solange Orphans ungeprüft sind, bleiben Notenliste und HISinOne-Export **gesper
 
 ---
 
-## 9. Punkte und Detailpunkte
+## 9. Punkte
 
-(Für Klausur, THE, elektrP – nicht primär StA manuell.)
+(Für Klausur, THE, elektrP.) Eine Seite mit Reitern:
 
-| Seite | Nutzen |
-|-------|--------|
-| **Punkteerfassung** | Übersicht / manuelle Gesamtpunkte |
-| **Detailpunkte** | Aufgabenweise Werte, „Bewertung notwendig“ abschließen |
-| Teilgebiet-Mapping | Fragen den Teilgebieten zuordnen (falls genutzt) |
+| Reiter | Nutzen |
+|--------|--------|
+| **Gesamt** | Übersicht; bei Klausuren Gesamt-/Teilgebietspunkte direkt bearbeiten |
+| **je Aufgabe** | Aufgabenweise Werte, „Bewertung notwendig“ abschließen, Teilgebiet-Zuordnung |
+| **Auswertung** | Aufgabenstatistik, Teilgebiete, Bearbeitungsdauer (THE/elektrP) |
+
+Bei offenen Bewertungen steht oben ein Hinweis mit „Nur offene zeigen und bearbeiten“.
 
 **„Bewertung notwendig“:** blockiert den Notenschlüssel und den Export, bis alle betroffenen Aufgaben erledigt sind.
 
@@ -527,7 +529,11 @@ Szenario-Presets bei anderem Maximum werden exakt skaliert (Max 75 → Bestehen 
 
 ## 13. Dokumente und Export
 
-Seite: **Dokumente** (geschützte Exporte erfordern i. d. R. aktuelle **JSON-Sicherung**).
+Seite: **Dokumente** (geschützte Exporte erfordern i. d. R. aktuelle **JSON-Sicherung**). Oben steht das Ergebnis der Export-Prüfung (Sperren mit Link zur Lösung). Die Dokumente sind nach Zweck gegliedert:
+
+- **Notenmeldung:** HISinOne-Excel (nur mit Quelle HISinOne), Excel-Notenliste (Hauptweg bei manueller Teilnehmerliste), manuelle Notenmeldung
+- **Veröffentlichung:** Notenspiegel – HTML als Hauptaktion, PDF/Excel/Quarto unter „Weitere Formate“
+- **Intern:** Notenliste (PDF), Durchfaller/Zweitkorrektur, Notenänderungen
 
 ### 13.1 Notenliste PDF
 
