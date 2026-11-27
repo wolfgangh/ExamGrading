@@ -79,6 +79,28 @@ import {
 } from "../src/lib/manual-participants.ts";
 import { buildGradeListRows } from "../src/lib/excel/export-grade-list.ts";
 import { filterManualGradeRows } from "../src/lib/pdf/export-manual-grades-pdf.ts";
+import { readFileSync } from "node:fs";
+import {
+  buildNotenspiegelData,
+  distributionStats,
+  notenspiegelHasTaskData,
+} from "../src/lib/grades/notenspiegel.ts";
+import {
+  buildNotenspiegelHtml,
+  embedJson,
+  notenspiegelJson,
+} from "../src/lib/notenspiegel/notenspiegel-html.ts";
+import {
+  fillQmdTemplate,
+  notenspiegelPlaceholders,
+} from "../src/lib/notenspiegel/notenspiegel-quarto.ts";
+import {
+  buildHeaderHtml,
+  buildHeaderTex,
+  DEFAULT_LETTERHEAD,
+  letterheadFromFile,
+  letterheadToFile,
+} from "../src/lib/letterhead.ts";
 
 type Status = "pass" | "fail";
 type CaseResult = { id: string; status: Status; message: string };
@@ -1642,6 +1664,102 @@ function manualBaseProject(examType: string = "written") {
     "M7",
     manualRows.length === 1 && manualRows[0].key === "1234567",
     `manuelle Notenmeldung: ${manualRows.map((r) => r.key).join(",")}`
+  );
+}
+
+// ========== N: Notenspiegel (HTML/Quarto) und Briefkopf ==========
+{
+  // N1: Lagemaße ohne Min/Max
+  const d = distributionStats([1, 2, 3, 4, 10]);
+  check(
+    "N1",
+    d.n === 5 && nearly(d.mean, 4, 1e-9) && d.median === 3 && d.q25 === 2 && d.q75 === 4 &&
+      nearly(d.sd, Math.sqrt(12.5), 1e-9) && !("min" in d) && !("max" in d),
+    `stats=${JSON.stringify(d)}`
+  );
+}
+
+function spiegelProject() {
+  let p: any = createEmptyExamProject({ name: "Fin <Test>", examType: "written", semester: "WiSe 2026/27", lecturers: ["Prof. Dr. A"] });
+  const people = Array.from({ length: 12 }, (_, i) => ({ matriculationNumber: String(4100000 + i), lastName: "L" + i, firstName: "F" }));
+  p = addManualParticipants(p, people).project;
+  const max = p.gradeSchema.maxPoints;
+  p.questionDefs = [1, 2].map((k) => ({ id: "q" + k, label: "Aufgabe " + k, maxPoints: max / 2, subAreaId: p.subAreas[0].id }));
+  p.points = people.map((s, i) => {
+    const byQuestion = { q1: Math.min(max / 2, 15 + i * 2), q2: Math.min(max / 2, 10 + i * 2.5) };
+    return { matriculationNumber: s.matriculationNumber, byQuestion, bySubArea: {}, totalPoints: byQuestion.q1 + byQuestion.q2 };
+  });
+  return p;
+}
+
+{
+  // N2: Notenspiegel-Daten – Kennzahlen ohne Min/Max, Aufgaben nur mit Option
+  const p = spiegelProject();
+  const rows = buildEnrichedRows(p);
+  const stats = computeStatistics(rows, p.gradeSchema, undefined, p);
+  const without = buildNotenspiegelData(p, rows, stats);
+  const withTasks = buildNotenspiegelData(p, rows, stats, { includeTasks: true });
+  const labels = without.metrics.map((m) => m.label).join("|");
+  check(
+    "N2",
+    without.tasks === null && withTasks.tasks?.length === 2 && withTasks.tasks[0].kind === "task" &&
+      notenspiegelHasTaskData(p) && without.pointStats?.n === 12 &&
+      labels.includes("Median") && labels.includes("Quantil") && !/Min|Max\./.test(labels) &&
+      without.pointsHistogram.length === 10,
+    `tasks=${withTasks.tasks?.length} labels=${labels}`
+  );
+
+  // N3: HTML – eigenständig, Daten eingebettet, Skript-Ausbruch verhindert, Kopf escaped
+  const html = buildNotenspiegelHtml(withTasks, {
+    headerHtml: buildHeaderHtml(DEFAULT_LETTERHEAD, { names: ["Prof. Dr. A"], subject: "Fin <Test>", logoSrc: null }),
+    color: "#447099",
+  });
+  check(
+    "N3",
+    html.startsWith("<!DOCTYPE html>") && html.includes('id="eg-data"') && html.includes("eg-tasks") &&
+      html.includes("Fin &lt;Test&gt;") && !html.includes("Fin <Test>") &&
+      !/<script[^>]+src=/.test(html) && !/<link[^>]+href=/.test(html),
+    `html length=${html.length}`
+  );
+  check(
+    "N3b",
+    embedJson({ a: "</script><b>" }).includes("\\u003c/script\\u003e"),
+    "embedJson maskiert </script>"
+  );
+
+  // N4: Quarto-Vorlage – Platzhalter ersetzt, Tabellen als Markdown
+  const tpl = readFileSync("public/briefkopf/notenspiegel.qmd", "utf8");
+  const qmd = fillQmdTemplate(tpl, notenspiegelPlaceholders(withTasks));
+  check(
+    "N4",
+    !/\{\{\s*(pruefung|tabelle_noten|tabelle_kennzahlen|tabelle_aufgaben|datum_iso)\s*\}\}/.test(qmd.split("-->")[1] ?? qmd) &&
+      qmd.includes("| Note | Anzahl | Anteil |") && qmd.includes("Aufgabe 1") &&
+      qmd.includes('FileAttachment("daten.json")') && /date: "\d{4}-\d{2}-\d{2}"/.test(qmd),
+    "Quarto-Vorlage gefüllt"
+  );
+  const json = notenspiegelJson(withTasks);
+  check(
+    "N4b",
+    json.format === "examgrade-notenspiegel" && json.aufgaben?.length === 2 &&
+      !JSON.stringify(json).includes("4100000"),
+    "daten.json ohne Matrikelnummern"
+  );
+}
+
+{
+  // N5: Briefkopf – Datei-Roundtrip, Standardwerte, Kopf aus Feldern, keine Dozenten → Briefkopf-Name
+  const lh = { ...DEFAULT_LETTERHEAD, name: "Dr. B", color: "#123456" };
+  const back = letterheadFromFile(letterheadToFile(lh));
+  let bad = false;
+  try { letterheadFromFile('{"format":"x"}'); } catch { bad = true; }
+  const h = buildHeaderHtml(back, { names: [], subject: "" });
+  const tex = buildHeaderTex(back, { names: ["A & B"], subject: "50 % Test" });
+  check(
+    "N5",
+    back.name === "Dr. B" && back.color === "#123456" && bad &&
+      h.includes("Dr. B") && h.includes(DEFAULT_LETTERHEAD.subjectLine) &&
+      tex.includes("A \\& B") && tex.includes("50 \\% Test") && tex.includes("{123456}"),
+    "Briefkopf-Datei und Köpfe"
   );
 }
 

@@ -50,7 +50,7 @@ export function validateForExport(
   if (project.hisRows.length === 0) {
     items.push({
       level: "error",
-      message: `Keine Teilnehmerliste – ${HISINONE_LABEL}-Datei importieren oder Teilnehmende manuell erfassen.`,
+      message: `Keine Teilnehmerliste – ${HISINONE_LABEL}-Datei importieren oder Teilnehmer manuell erfassen.`,
       href: `/exam/${project.id}/import`,
       actionLabel: "Zu Importe",
     });

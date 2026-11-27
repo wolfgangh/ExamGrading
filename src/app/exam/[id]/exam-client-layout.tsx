@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ensureLetterheadAssets } from "@/lib/letterhead";
 import { AppHeader } from "@/components/layout/app-header";
 import { ExamSidebar } from "@/components/layout/exam-sidebar";
 import { SummaryPanel } from "@/components/layout/summary-panel";
@@ -20,6 +21,10 @@ function ExamShell({
   const { project, loading, error, saveStatus, lastSavedAt, stats } =
     useExamContext();
   const [navOpen, setNavOpen] = useState(false);
+  // Briefkopf-Logo vorladen (PDF-Exporte nutzen es synchron)
+  useEffect(() => {
+    void ensureLetterheadAssets();
+  }, []);
 
   if (loading) {
     return (

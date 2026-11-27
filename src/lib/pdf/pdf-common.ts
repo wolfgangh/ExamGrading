@@ -9,6 +9,13 @@ import { normalizeMatriculation } from "@/lib/matching/matriculation";
 import { downloadBlob } from "@/lib/download";
 import { datedExportFilename, formatGrade, formatPoints } from "@/lib/utils";
 import { portfolioDisplayPassAndMax } from "@/lib/grades/portfolio";
+import {
+  cachedLetterheadLogo,
+  darken,
+  headerNames,
+  hexToRgb,
+  loadLetterhead,
+} from "@/lib/letterhead";
 
 export const PDF_MARGIN = 14;
 export const PDF_PAGE_WIDTH = 210;
@@ -83,9 +90,11 @@ export function drawOthHeader(
   const textX = left + 4 + 20;
   const maxTextW = width - 28;
 
-  const names = listLecturers(options?.lecturers);
-  const displayNames =
-    names.length > 0 ? names : ["Prof. Dr. Wolfgang Hößl"];
+  // Austauschbarer Briefkopf („Mein Briefkopf“); Dozenten der Prüfung, sonst Briefkopf-Name
+  const lh = loadLetterhead();
+  const accent = hexToRgb(lh.color);
+  const accentDark = hexToRgb(darken(lh.color));
+  const displayNames = headerNames(lh, listLecturers(options?.lecturers));
 
   // Prüferzeilen: ein Name groß; mehrere mit Umbruch
   doc.setFont("helvetica", "bold");
@@ -95,9 +104,7 @@ export function drawOthHeader(
   const nameLines = doc.splitTextToSize(nameJoined, maxTextW) as string[];
   const nameBlockH = Math.max(5, nameLines.length * 4.5);
 
-  const subject =
-    options?.subjectLine?.trim() ||
-    "Internationale Finanzmärkte und Asset Management";
+  const subject = options?.subjectLine?.trim() || lh.subjectLine;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   const subjectLines = doc.splitTextToSize(
@@ -115,25 +122,37 @@ export function drawOthHeader(
   doc.setDrawColor(221, 227, 234);
   doc.roundedRect(left, top, width, boxH, 2, 2, "FD");
 
-  // Linker blauer Akzent
-  doc.setFillColor(...OTH_BLUE);
+  // Linker Akzent in Hausfarbe
+  doc.setFillColor(...accent);
   doc.rect(left, top, 1.8, boxH, "F");
 
-  // Logo-Platzhalter (OTH-Kasten)
+  // Logo (Briefkopf) – Fallback: Kasten mit Kürzel
   const logoX = left + 4;
-  const logoY = top + Math.max(3.5, (boxH - 15) / 2);
-  doc.setFillColor(...OTH_BLUE_DARK);
-  doc.roundedRect(logoX, logoY, 16, 15, 1, 1, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("OTH", logoX + 8, logoY + 9, { align: "center" });
+  const logo = cachedLetterheadLogo();
+  if (logo) {
+    const maxW = 17;
+    const maxH = Math.min(15, boxH - 4);
+    const ratio = logo.width / Math.max(1, logo.height);
+    const w = Math.min(maxW, maxH * ratio);
+    const h = w / ratio;
+    const fmt = /^data:image\/jpe?g/i.test(logo.dataUrl) ? "JPEG" : "PNG";
+    doc.addImage(logo.dataUrl, fmt, logoX, top + (boxH - h) / 2, w, h);
+  } else {
+    const logoY = top + Math.max(3.5, (boxH - 15) / 2);
+    doc.setFillColor(...accentDark);
+    doc.roundedRect(logoX, logoY, 16, 15, 1, 1, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    const short = (lh.institutionLine.split(/[\s·]+/)[0] || "").slice(0, 5);
+    doc.text(pdfText(short), logoX + 8, logoY + 9, { align: "center" });
+  }
 
-  doc.setTextColor(...OTH_BLUE);
+  doc.setTextColor(...accent);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   doc.text(
-    pdfText("OTH REGENSBURG  ·  FAKULTÄT BUSINESS AND MANAGEMENT"),
+    pdfText(lh.institutionLine.toUpperCase().replace(/\s*·\s*/g, "  ·  ")),
     textX,
     top + 5.5
   );
@@ -156,9 +175,9 @@ export function drawOthHeader(
     y += 4;
   }
 
-  // Blaue Linie unter dem Header
+  // Linie unter dem Header in Hausfarbe
   const lineY = top + boxH + 2;
-  doc.setDrawColor(...OTH_BLUE);
+  doc.setDrawColor(...accent);
   doc.setLineWidth(0.45);
   doc.line(left, lineY, left + width, lineY);
   doc.setLineWidth(0.2);

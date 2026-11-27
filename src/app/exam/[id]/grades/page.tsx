@@ -852,7 +852,7 @@ export default function GradesPage() {
                 Durchfaller-Analyse (nur Prüfer)
               </CardTitle>
               <CardDescription>
-                Interne Auswertung – keine Weitergabe an Studierende, kein
+                Interne Auswertung – keine Weitergabe an Studenten, kein
                 E-Mail-Versand. Anzahl:{" "}
                 <strong className="text-foreground tabular-nums">
                   {failerAnalysis.count}

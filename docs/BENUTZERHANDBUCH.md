@@ -1,12 +1,12 @@
 # Benutzerhandbuch ExamGrade
 
-Vollständige Anleitung für Prüferinnen und Prüfer – Einstieg und Nachschlagewerk.
+Vollständige Anleitung für Prüfer – Einstieg und Nachschlagewerk.
 
-**App-Version:** 0.4.76  
+**App-Version:** 0.4.77  
 **Zielgruppe:** Personen, die Prüfungen bewerten und Noten an HISinOne bzw. die Studienabteilung melden  
 **Datenschutz:** Alle Prüfungsdaten bleiben **im Browser** (IndexedDB). Es gibt **keine** Übertragung von Notenlisten an einen App-Server.
 
-> **Keine Gewähr** für die Richtigkeit der Berechnungen. Ergebnisse vor dem Upload in HISinOne und vor der Weitergabe an Studierende prüfen.
+> **Keine Gewähr** für die Richtigkeit der Berechnungen. Ergebnisse vor dem Upload in HISinOne und vor der Weitergabe an Studenten prüfen.
 
 ---
 
@@ -115,7 +115,7 @@ Typische Felder:
 - Name der Prüfung  
 - Semester  
 - Prüfungsnummer(n)  
-- Dozentinnen/Dozenten (Liste / Freitext, Chips)  
+- Dozenten (Liste / Freitext, Chips)  
 - **Prüfungstyp** (entscheidet den gesamten weiteren Ablauf; Voreinstellung: **elektrP**)  
 - ggf. Teilgebiete und Punktemaxima (je nach Typ)
 
@@ -206,7 +206,7 @@ Seite: **Einstellungen**.
 ### 6.1 Metadaten
 
 - Name, Semester, Prüfungsnummer  
-- Dozentinnen/Dozenten (mehrere möglich – erscheinen in PDFs und Exporten)  
+- Dozenten (mehrere möglich – erscheinen in PDFs und Exporten)  
 
 ### 6.2 Struktur je Typ
 
@@ -255,7 +255,7 @@ Die **Teilnehmerliste** einer Prüfung besteht aus den **HISinOne-Dateien** (§7
 
 ### 7.4 Manuelle Teilnehmerliste (alle Prüfungsformen)
 
-Für Prüfungen, deren Teilnehmende nicht (vollständig) in HISinOne stehen, z. B. in berufsbegleitenden Studiengängen.
+Für Prüfungen, deren Teilnehmer nicht (vollständig) in HISinOne stehen, z. B. in berufsbegleitenden Studiengängen.
 
 **Pflichtfelder:** Matrikelnummer, Nachname, Vorname. **Optional:** Studiengang, E-Mail, Versuch (1–3), Gruppe (StA/Portfolio).
 
@@ -273,7 +273,7 @@ Ohne Kopfzeile gilt die Reihenfolge: Matrikelnummer, Nachname, Vorname, Studieng
 
 **Kennzeichnung:** In Notenübersicht und Bewertungsmatrix tragen Personen der manuellen Liste das Kennzeichen **„manuell“**.
 
-**Notenmeldung:** Für manuelle Teilnehmende gibt es keinen HISinOne-Export. Stattdessen gibt es unter Dokumente die **Excel-Notenliste** und die **manuelle Notenmeldung (PDF)**, siehe §13.
+**Notenmeldung:** Für manuelle Teilnehmer gibt es keinen HISinOne-Export. Stattdessen gibt es unter Dokumente die **Excel-Notenliste** und die **manuelle Notenmeldung (PDF)**, siehe §13.
 
 Bis v0.4.75 bei StA/Portfolio „manuell hinzugefügte Personen“ werden beim Öffnen einmalig in die manuelle Teilnehmerliste übernommen und zählen damit als angemeldet.
 
@@ -323,7 +323,7 @@ Seite: **Kriterienbewertung** bzw. **Teilnoten**.
 
 ### 10.1 Bewertungsmatrix
 
-- Zeilen: Studierende  
+- Zeilen: Studenten  
 - Spalten: Kriterien (StA) bzw. Kriterien je Teilleistung (Portfolio) und berechnete **Teilnote**  
 - **Tab** springt zum nächsten Kriterium; Name kann zur Person verlinken (Notenübersicht → Matrix)  
 - Horizontales Scrollen per Pfeile (wenn viele Spalten)  
@@ -531,7 +531,7 @@ Seite: **Dokumente** (geschützte Exporte erfordern i. d. R. aktuelle **JSON
 
 ### 13.1 Notenliste PDF
 
-- Alle Teilnehmenden inkl. No-Shows  
+- Alle Teilnehmer inkl. No-Shows  
 - **Teilnoten** je Teilleistung in der Haupttabelle  
 - Optional: Checkbox **„Rohwerte der Teilkriterien anhängen“** → zusätzliche Tabelle(n), bei vielen Kriterien in **Abschnitten** (kein horizontaler Überlauf)  
 - Unterschriftenblock, dokumentierte Matrikel-Merges  
@@ -550,14 +550,30 @@ Seite: **Dokumente** (geschützte Exporte erfordern i. d. R. aktuelle **JSON
 
 | Export | Verwendung |
 |--------|------------|
-| **Excel-Notenliste** | alle Teilnehmenden mit Matrikel, Name, Studiengang, Quelle (HISinOne/manuell), Note, Bemerkung – Notenmeldung für die manuelle Teilnehmerliste |
+| **Excel-Notenliste** | alle Teilnehmer mit Matrikel, Name, Studiengang, Quelle (HISinOne/manuell), Note, Bemerkung – Notenmeldung für die manuelle Teilnehmerliste |
 | Manuelle Notenmeldung PDF | Personen ohne HISinOne-Anmeldung: manuelle Teilnehmerliste und Sonderfälle |
 | Durchfaller / Zweitkorrektur PDF | Zweitkorrektur dokumentieren |
 | Notenänderungen PDF | Korrekturen nach Einsicht |
-| Notenspiegel PDF/Excel | aggregiert, ohne Personenliste |
+| **Notenspiegel HTML (interaktiv)** | Standard für die Veröffentlichung, siehe §13.4 |
+| Notenspiegel PDF/Excel | gleicher Inhalt, statisch, ohne Personenliste |
+| Notenspiegel Quarto-Paket | Vorlage zum Anpassen und Rendern mit Quarto, siehe §13.4 |
 | Szenarienvergleich PDF | von der Szenarien-Seite |
 
-### 13.4 Wann Export gesperrt ist
+### 13.4 Notenspiegel (HTML, PDF, Quarto) und Mein Briefkopf
+
+**Inhalt** (alle Formate gleich, ohne personenbezogene Daten): Prüfungsdaten, Kennzahlen (Anmeldungen, Bewertet, No-Shows, Bestehensquote, Durchfaller), für Noten und Punkte jeweils **Mittelwert, Median, 25 %-/75 %-Quantil, Standardabweichung**, Notenverteilung (Einzelnoten und Notenstufen), Punkteverteilung mit Bestehensgrenze, Median und Mittelwert sowie Boxplot. Minimum und Maximum werden bewusst nicht ausgewiesen (in kleinen Gruppen ließen sich Einzelne erkennen).
+
+**Optional:** Checkbox **„Auswertung je Aufgabe / Teilgebiet“** – je Aufgabe Max., n, Mittelwert, Median, Q25/Q75 und Lösungsquote, als Tabelle und Boxplot. Nur sichtbar, wenn Aufgaben- oder Teilgebietspunkte vorliegen.
+
+| Format | Eigenschaften |
+|--------|---------------|
+| **HTML (interaktiv)** | Eine einzelne Datei, sofort nutzbar (Browser, Moodle). Tooltips, Umschalter Anzahl/Prozent und Einzelnoten/Notenstufen. Keine Quarto-Installation nötig. |
+| PDF | Wie bisher aus der App, mit Kopf aus „Mein Briefkopf“ |
+| **Quarto-Paket (Anpassung)** | ZIP mit `notenspiegel.qmd` (Vorlage), `daten.json`, `header.html`, `header.tex`, Logo, SCSS. `quarto render notenspiegel.qmd` → HTML mit interaktiven Diagrammen (Observable JS, kein R/Python), `--to pdf` → PDF. Die Diagramme laden ihre Bibliothek beim Öffnen aus dem Netz. |
+
+**Mein Briefkopf** (Stempel-Symbol oben rechts): Hochschulzeile, Name, Link, Standard-Fachzeile, Hausfarbe und Logo. Er gilt für **alle PDF-Dokumente** und den Notenspiegel. Im Kopf stehen die Dozenten der Prüfung und der Prüfungsname; fehlen sie, gelten Name und Fachzeile aus dem Briefkopf. Optional lassen sich eigene Dateien hinterlegen: HTML-Kopf, LaTeX-Kopf und eine eigene Quarto-Vorlage (`.qmd`; Platzhalter wie `{{pruefung}}`, `{{tabelle_noten}}`, Daten aus `daten.json`). Der Briefkopf wird im Browser gespeichert und lässt sich **als Datei exportieren und importieren**, z. B. für Kollegen.
+
+### 13.5 Wann Export gesperrt ist
 
 Prüfen Sie die Hinweise auf der Dokumente-Seite:
 
@@ -664,7 +680,7 @@ Header → Schriftgröße „Groß“ oder „Sehr groß“.
 |---------|-----------|
 | **HISinOne** | Campus-Management; Noteneintrag über Excel-Vorlage |
 | **Teilnehmerliste** | Alle angemeldeten Personen: HISinOne-Dateien und manuelle Teilnehmerliste |
-| **Manuelle Teilnehmerliste** | In ExamGrade erfasste Teilnehmende ohne HISinOne-Datei |
+| **Manuelle Teilnehmerliste** | In ExamGrade erfasste Teilnehmer ohne HISinOne-Datei |
 | **Orphan** | Antritt/Punkte-Matrikel ohne Treffer in HISinOne |
 | **Teilleistung (TL)** | Bestandteil einer Portfolioprüfung |
 | **Teilkriterium** | Einzelkriterium innerhalb einer TL oder StA |

@@ -830,7 +830,7 @@ export default function AssessmentPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Gruppe wählen</CardTitle>
               <CardDescription>
-                Nur Studierende der gewählten Gruppe in der Matrix – Farben
+                Nur Studenten der gewählten Gruppe in der Matrix – Farben
                 zeigen den Füllstand
                 {portfolioCriteriaMode
                   ? " der gewählten Teilleistung"
@@ -1142,8 +1142,8 @@ export default function AssessmentPage() {
             <CardTitle className="text-base">Gruppe wählen</CardTitle>
             <CardDescription>
               {isPortfolio
-                ? "Nur Studierende der gewählten Gruppe – Farben zeigen den Füllstand aller Teilleistungen."
-                : "Nur Studierende der gewählten Gruppe in der Matrix – schnell wechseln mit den Schaltflächen."}
+                ? "Nur Studenten der gewählten Gruppe – Farben zeigen den Füllstand aller Teilleistungen."
+                : "Nur Studenten der gewählten Gruppe in der Matrix – schnell wechseln mit den Schaltflächen."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

@@ -4,7 +4,7 @@
 
 © Prof. Dr. Wolfgang Hößl · OTH Regensburg · *Client-seitig · Keine Serverübertragung*
 
-**Aktuelle Version:** 0.4.76 (siehe auch `package.json` und App-Footer)
+**Aktuelle Version:** 0.4.77 (siehe auch `package.json` und App-Footer)
 
 **Noten-Regression:** `npm run test:grades` führt `scripts/grade-constellation-matrix.mts` aus (Konstellationen A–E, Szenarien, Grenzfälle). Workflow: `.grok/workflows/test-grade-constellations.rhai`.
 
@@ -37,7 +37,8 @@ Geeignet u. a. für:
 | **Noten** | Szenarien (Bestehensgrenzen), Overrides, Notenspiegel, Szenario-Impact |
 | **Szenarien-Vergleich** | KPIs, Notenstufen + Einzelnoten (Tabelle \| Chart), Durchfaller über Szenarien, **PDF-Export** zum Prüferaustausch |
 | **Diagramme** | Klick zum Vergrößern; **PNG** inkl. Titel/Beschriftung |
-| **Export** | HISinOne-XLSX, Notenliste / Änderungen / Manuell / Durchfaller (PDF), Notenspiegel PDF/Excel, Szenarien-PDF, JSON-Sicherung |
+| **Export** | HISinOne-XLSX, Notenliste / Änderungen / Manuell / Durchfaller (PDF), **Notenspiegel HTML (interaktiv)**/PDF/Excel/Quarto-Paket, Szenarien-PDF, JSON-Sicherung |
+| **Briefkopf** | „Mein Briefkopf“ austauschbar (Felder, Logo, eigene HTML-/LaTeX-/Quarto-Vorlage), als Datei weitergebbar |
 | **Workflow** | Fortschritt, Meilensteine (u. a. Sicherung nach Import / nach Noten); JSON-Dateiname mit **Datum + Schritt** (ohne Uhrzeit) |
 | **Teams** | Website-Tab; robuste Downloads (File-Picker / manueller Link) |
 | **Darstellung** | Hell/Dunkel, Schriftgröße (3 Stufen), hoher Kontrast |
@@ -79,7 +80,7 @@ Beispieldateien: [`sample/`](sample/) (`his-mini.xlsx`, `attendance-mini.xlsx`, 
 
 | Dokument | Zielgruppe |
 |----------|------------|
-| [**Benutzerhandbuch**](docs/BENUTZERHANDBUCH.md) | Prüferinnen und Prüfer – Workflow, Import, Export, Backup, Szenarien |
+| [**Benutzerhandbuch**](docs/BENUTZERHANDBUCH.md) | Prüfer – Workflow, Import, Export, Backup, Szenarien |
 | [**Architektur**](docs/ARCHITEKTUR.md) | Entwicklung – Stack, Module, Datenhaltung |
 | [**Deployment**](docs/DEPLOYMENT.md) | Betrieb – Vercel, Env, Teams, Troubleshooting |
 | [**Security**](SECURITY.md) | Sicherheit – Audit, Auth-Hinweis, Härtung |
@@ -147,4 +148,4 @@ Das Passwort ist im Client-Bundle **lesbar** und nur eine Zugangshürde – Deta
 ## Lizenz & Kontakt
 
 Internes Hochschul-Tool.  
-© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.76
+© Prof. Dr. Wolfgang Hößl · OTH Regensburg · ExamGrade v0.4.77

@@ -16,7 +16,7 @@ Für die Portfolio-Gesamtnote standen zwei Formeln nebeneinander. Laut Doku galt
 
 ## Alternativen
 
-- *Gesamterfüllung × Schema*: eine einzige Rundung und szenarioabhängig, aber die Teilnoten wären dann für Studierende nicht nachvollziehbar, und das entspricht nicht der üblichen Modulbeschreibung „Gewichtung der Teilleistungen“. Abgelehnt.
+- *Gesamterfüllung × Schema*: eine einzige Rundung und szenarioabhängig, aber die Teilnoten wären dann für Studenten nicht nachvollziehbar, und das entspricht nicht der üblichen Modulbeschreibung „Gewichtung der Teilleistungen“. Abgelehnt.
 - *Nächste Stufe ohne Abschneiden*: einfacher, widerspricht aber der RaPO/APO. Abgelehnt.
 
 ## Folgen

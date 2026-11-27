@@ -195,7 +195,7 @@ export default function ScenariosPage() {
           {isPortfolioScenarios
             ? "Portfolio (Punkte/Prozent): Grenzen relativ zum Maximum (typ. 100). Anzeige immer in Punkten und Prozent. Das aktive Szenario steuert Teil- und Gesamtnoten."
             : "Vergleich der Bestehensgrenzen. Das aktive Szenario steuert Noten, Export und Grenzfälle."}{" "}
-          Nur intern – keine Studierenden-Kommunikation.
+          Nur intern – keine Studenten-Kommunikation.
         </p>
       </div>
 
@@ -881,7 +881,7 @@ export default function ScenariosPage() {
                 </div>
                 <ExpandableChart
                   title="Notenverteilung je Szenario"
-                  description="Anteil der Studierenden je Note"
+                  description="Anteil der Studenten je Note"
                   filenameBase={`${fileBase}_Szenarien_Notenverteilung`}
                 >
                   <ScenarioGradeDistributionChart

@@ -1,0 +1,166 @@
+---
+title: "Notenspiegel"
+subtitle: "{{pruefung}}"
+lang: de
+date: "{{datum_iso}}"
+date-format: "DD.MM.YYYY"
+language:
+  title-block-published: "Erstellt am"
+format:
+  html:
+    theme: [cosmo, notenspiegel.scss]
+    include-before-body: header.html
+    toc: false
+    embed-resources: false
+  pdf:
+    documentclass: scrartcl
+    papersize: a4
+    geometry: "margin=2cm, top=3.6cm"
+    include-in-header: header.tex
+execute:
+  echo: false
+---
+
+<!--
+  ExamGrade – Quarto-Vorlage Notenspiegel
+  ========================================
+  Rendern:   quarto render notenspiegel.qmd            (HTML, interaktiv)
+             quarto render notenspiegel.qmd --to pdf   (PDF, statisch)
+
+  Daten:     daten.json (Format "examgrade-notenspiegel", keine Personendaten)
+  Platzhalter (von ExamGrade ersetzt):
+    {{pruefung}} {{nummer}} {{semester}} {{pruefer}} {{szenario}} {{erstellt}} {{datum_iso}}
+    {{tabelle_kennzahlen}} {{tabelle_noten}} {{tabelle_stufen}}
+    {{tabelle_aufgaben}} {{hinweis}}
+  Interaktive Diagramme: Observable JS (in Quarto enthalten, kein R/Python nötig).
+-->
+
+| | |
+|---|---|
+| **Prüfung** | {{pruefung}} |
+| **Prüfungsnummer** | {{nummer}} |
+| **Semester** | {{semester}} |
+| **Prüfer** | {{pruefer}} |
+| **Notenschlüssel** | {{szenario}} |
+
+## Kennzahlen
+
+{{tabelle_kennzahlen}}
+
+## Notenverteilung
+
+::: {.content-visible when-format="html"}
+
+```{ojs}
+D = FileAttachment("daten.json").json()
+viewof modus = Inputs.radio(["Anzahl", "Prozent"], {value: "Anzahl", label: "Darstellung"})
+viewof ansicht = Inputs.radio(["Einzelnoten", "Notenstufen"], {value: "Einzelnoten", label: "Gliederung"})
+```
+
+```{ojs}
+notenDaten = ansicht === "Einzelnoten"
+  ? D.noten.map(d => ({label: d.label, anzahl: d.anzahl, anteil: d.anteil, farbe: d.farbe}))
+  : D.stufen.map(d => ({label: d.stufe, anzahl: d.anzahl, anteil: d.anteil, farbe: d.farbe}))
+
+Plot.plot({
+  height: 320,
+  marginLeft: 50,
+  x: {label: null, domain: notenDaten.map(d => d.label)},
+  y: {label: modus === "Anzahl" ? "Anzahl" : "Anteil (%)", grid: true},
+  marks: [
+    Plot.barY(notenDaten, {
+      x: "label",
+      y: d => modus === "Anzahl" ? d.anzahl : d.anteil * 100,
+      fill: "farbe",
+      tip: true,
+      title: d => `${d.label}\nAnzahl: ${d.anzahl}\nAnteil: ${(d.anteil * 100).toFixed(1).replace(".", ",")} %`
+    }),
+    Plot.ruleY([0])
+  ]
+})
+```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+![](notenverteilung.png){width=100%}
+:::
+
+{{tabelle_noten}}
+
+{{tabelle_stufen}}
+
+::: {.content-visible when-format="html"}
+
+```{ojs}
+D.punkteLage ? md`## Punkteverteilung` : md``
+```
+
+```{ojs}
+punkte = D.punkteLage
+punkte ? Plot.plot({
+  height: 300,
+  marginLeft: 50,
+  x: {label: "Punkte", domain: [0, D.pruefung.maxPunkte]},
+  y: {label: "Anzahl", grid: true},
+  marks: [
+    Plot.rectY(D.punkteHistogramm, {
+      x1: "from", x2: "to", y: "count", inset: 1,
+      fill: d => d.from >= D.pruefung.bestehensgrenze ? "#447099" : "#a9bdd1",
+      tip: true,
+      title: d => `${d.from}–${d.to} Punkte\nAnzahl: ${d.count}`
+    }),
+    Plot.ruleX([D.pruefung.bestehensgrenze], {stroke: "#e11d48", strokeDasharray: "6 4", strokeWidth: 2, tip: true, title: d => `Bestehensgrenze: ${d}`}),
+    Plot.ruleX([punkte.median], {stroke: "#111827", strokeWidth: 2, tip: true, title: d => `Median: ${d.toFixed(1)}`}),
+    Plot.ruleX([punkte.mean], {stroke: "#059669", strokeDasharray: "2 3", strokeWidth: 2, tip: true, title: d => `Mittelwert: ${d.toFixed(1)}`}),
+    Plot.ruleY([0])
+  ]
+}) : html``
+```
+
+```{ojs}
+punkte ? Plot.plot({
+  height: 70,
+  marginLeft: 50,
+  x: {label: "Punkte (Box: 25 %–75 %-Quantil, Strich: Median, Punkt: Mittelwert)", domain: [0, D.pruefung.maxPunkte]},
+  y: {axis: null},
+  marks: [
+    Plot.rect([punkte], {x1: "q25", x2: "q75", y1: 0, y2: 1, fill: "#447099", fillOpacity: 0.25, stroke: "#447099", tip: true,
+      title: d => `n = ${d.n}\nQ25: ${d.q25.toFixed(1)}\nMedian: ${d.median.toFixed(1)}\nMittelwert: ${d.mean.toFixed(1)}\nQ75: ${d.q75.toFixed(1)}`}),
+    Plot.ruleX([punkte.median], {y1: 0, y2: 1, stroke: "#111827", strokeWidth: 2.5}),
+    Plot.dot([punkte], {x: "mean", y: 0.5, fill: "#059669", r: 4})
+  ]
+}) : html``
+```
+
+```{ojs}
+D.aufgaben && D.aufgaben.length ? md`## Auswertung je ${D.aufgaben[0].kind === "task" ? "Aufgabe" : "Teilgebiet"}` : md``
+```
+
+```{ojs}
+aufgaben = (D.aufgaben ?? []).map(a => ({
+  ...a,
+  q25p: a.q25 / a.maxPoints * 100, q75p: a.q75 / a.maxPoints * 100,
+  medianp: a.median / a.maxPoints * 100, meanp: a.mean / a.maxPoints * 100
+}))
+aufgaben.length ? Plot.plot({
+  height: 40 + aufgaben.length * 30,
+  marginLeft: 170,
+  x: {label: "% der Maximalpunkte", domain: [0, 100], grid: true},
+  y: {label: null, domain: aufgaben.map(d => d.label)},
+  marks: [
+    Plot.barX(aufgaben, {y: "label", x1: "q25p", x2: "q75p", fill: "#447099", fillOpacity: 0.25, stroke: "#447099", tip: true,
+      title: d => `${d.label} (max. ${d.maxPoints}, n=${d.n})\nMittelwert: ${d.mean?.toFixed(2)}\nMedian: ${d.median?.toFixed(2)}\nQ25/Q75: ${d.q25?.toFixed(2)} / ${d.q75?.toFixed(2)}\nLösungsquote: ${(d.solveRate * 100).toFixed(1)} %`}),
+    Plot.tickX(aufgaben, {y: "label", x: "medianp", stroke: "#111827", strokeWidth: 2.5}),
+    Plot.dot(aufgaben, {y: "label", x: "meanp", fill: "#059669", r: 4})
+  ]
+}) : html``
+```
+
+:::
+
+{{tabelle_aufgaben}}
+
+::: {.callout-note appearance="minimal"}
+{{hinweis}}
+:::

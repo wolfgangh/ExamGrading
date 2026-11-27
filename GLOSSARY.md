@@ -4,18 +4,18 @@ Begriffe, mit denen ExamGrade aus Bewertungen eine Prüfungsnote bildet (Klausur
 
 ## Language
 
-### Teilnehmende
+### Teilnehmer
 
 **Teilnehmerliste**:
 Alle zu einer Prüfung angemeldeten Personen, gebildet aus den HISinOne-Dateien und der manuellen Teilnehmerliste.
-_Avoid_: Masterliste, HIS-Liste
+_Avoid_: Masterliste, HIS-Liste, Teilnehmende
 
 **HISinOne-Datei**:
 Aus HISinOne exportierte Noteneintrags-Vorlage eines Studiengangs; Quelle und Ziel des formatgetreuen Notenexports.
 _Avoid_: HIS-Quelle, QIS-Liste
 
 **Manuelle Teilnehmerliste**:
-In ExamGrade erfasste Teilnehmende ohne HISinOne-Datei; Notenmeldung über die Excel-Notenliste.
+In ExamGrade erfasste Teilnehmer ohne HISinOne-Datei; Notenmeldung über die Excel-Notenliste.
 _Avoid_: Extras, manuelle Personen
 
 ### Bewertung
@@ -31,6 +31,16 @@ _Avoid_: Teilkriterium, Merkmal
 **Erfüllung**:
 Gewichteter Anteil der erreichten an den erreichbaren Kriterienwerten, 0–100 %.
 _Avoid_: Unit, Fulfillment, Erfüllungsgrad
+
+### Dokumente
+
+**Briefkopf**:
+Austauschbarer Kopf aller Dokumente (Hochschulzeile, Name, Fachzeile, Farbe, Logo), je Browser gespeichert und als Datei weitergebbar.
+_Avoid_: Header, Letterhead, Kopfzeile
+
+**Notenspiegel**:
+Veröffentlichbare, personenfreie Auswertung einer Prüfung mit Notenverteilung und Lagemaßen; als HTML, PDF, Excel oder Quarto-Paket.
+_Avoid_: Notenstatistik, Klausurspiegel
 
 ### Noten
 

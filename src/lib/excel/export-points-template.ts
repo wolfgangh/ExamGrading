@@ -46,7 +46,7 @@ export async function exportPointsTemplate(
   };
   headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
 
-  // Studierende aus HIS (+ bereits bekannte students)
+  // Studenten aus HIS (+ bereits bekannte students)
   const byKey = new Map<string, Student>();
 
   for (const s of Object.values(project.students ?? {})) {

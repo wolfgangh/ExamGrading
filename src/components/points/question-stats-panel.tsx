@@ -76,7 +76,7 @@ export function QuestionStatsPanel({
       <Card className="surface-panel">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">
-            Wie gut kamen die Studierenden mit den Aufgaben zurecht?
+            Wie gut kamen die Studenten mit den Aufgaben zurecht?
           </CardTitle>
           <CardDescription>
             Ø-Erreichungsgrad in % der Maximalpunkte (grün ≥70 %, gelb ≥40 %,

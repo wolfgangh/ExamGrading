@@ -188,7 +188,7 @@ export function computeStatistics(
   };
 }
 
-/** Interne Prüfer-Analyse der Durchfaller (keine Studierenden-Kommunikation) */
+/** Interne Prüfer-Analyse der Durchfaller (keine Studenten-Kommunikation) */
 export function computeFailerAnalysis(
   rows: EnrichedStudentRow[]
 ): FailerAnalysis {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Menu } from "lucide-react";
+import { LogOut, Menu, Stamp } from "lucide-react";
 import { AppearanceControls } from "@/components/layout/appearance-controls";
 import { AppLogo } from "@/components/layout/app-logo";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,14 @@ export function AppHeader({
         </Link>
         <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
           {actions}
+          <Link
+            href="/briefkopf"
+            className="inline-flex size-7 items-center justify-center rounded-md border bg-background hover:bg-muted"
+            title="Mein Briefkopf (Kopf für PDF und Notenspiegel)"
+            aria-label="Mein Briefkopf"
+          >
+            <Stamp className="size-4" />
+          </Link>
           <AppearanceControls />
           <Button
             type="button"

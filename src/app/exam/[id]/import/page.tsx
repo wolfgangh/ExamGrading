@@ -437,7 +437,7 @@ export default function ImportPage() {
     }
     if (Object.keys(project.students).length === 0) {
       warnings.unshift(
-        "Noch keine Studierendenstammdaten – bitte zuerst HIS und Antritt importieren (Match über Anmeldename)."
+        "Noch keine Studentenstammdaten – bitte zuerst HIS und Antritt importieren (Match über Anmeldename)."
       );
     }
 
